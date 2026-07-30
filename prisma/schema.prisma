@@ -12,10 +12,13 @@ datasource db {
 }
 
 model User {
-  id        String   @id
-  name      String
-  createdAt DateTime
-  cats      Cat[]
+  id           String    @id
+  name         String
+  status       String    @default("anonymous") // anonymous | registered
+  email        String?
+  createdAt    DateTime
+  lastActiveAt DateTime?
+  cats         Cat[]
 }
 
 model Cat {
@@ -31,6 +34,8 @@ model Cat {
   personaTags String[]
   role        String? // NPC 分级：function | story | social | background
   goal        String? // 初始目标：earn | friends | explore | chill（影响行为权重）
+  ownerNick   String? // 猫对主人的称呼（"铲屎官"/"老大"…），进日记语气
+  renamedAt   DateTime? // 改名机会只有一次
   appearance  String // 外形描述，生成立绘用
   portraitUrl String? // 定稿立绘，一次生成反复合成
   bio         String
@@ -172,4 +177,20 @@ model Portrait {
   data      Bytes
   mime      String   @default("image/jpeg")
   createdAt DateTime
+}
+
+// 每日结果聚合：/my-cat 今日页直接读这个对象，不从 events 现拼（定义·十）
+model CatDailySummary {
+  id                   String   @id
+  catId                String
+  day                  Int
+  headline             String // 今日标题
+  narrative            String // 80-150 字叙事（即当日日记）
+  interventionResponse String? // 昨日建议回执：你的建议产生了什么影响
+  tomorrowHook         String? // 明日悬念：下一次召回理由
+  stateChanges         Json // 关键状态变化 [{label, delta}]
+  threadProgress       Json // 事件线进度 [{key, label, step, total?}]
+  createdAt            DateTime
+
+  @@unique([catId, day])
 }

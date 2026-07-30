@@ -59,6 +59,14 @@ export default function AdoptPage() {
         ))}
 
         <div>
+          <label htmlFor="ownerNick" className="block text-sm font-medium">让它怎么称呼你</label>
+          <input
+            id="ownerNick" name="ownerNick" maxLength={8} placeholder="比如：铲屎官、老大、麻麻"
+            className="mt-1 w-full rounded-lg border border-[#E0D5C0] px-3 py-2 focus:border-[#F5A623] focus:outline-none"
+          />
+        </div>
+
+        <div>
           <span className="block text-sm font-medium">希望它过什么样的生活</span>
           <div className="mt-1 grid grid-cols-2 gap-2 text-sm">
             {[

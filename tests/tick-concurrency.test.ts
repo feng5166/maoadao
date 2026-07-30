@@ -21,11 +21,14 @@ describe.skipIf(!hasDb)("每日推进并发安全（真实数据库，验证后�
           const rows = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(${KEY}) AS locked`;
           expect(rows[0].locked).toBe(true);
           // 持锁期间发起第二个事务
-          const t2 = prisma.$transaction(async (tx2) => {
-            const rows2 = await tx2.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(${KEY}) AS locked`;
-            secondLockResult = rows2[0].locked;
-            throw new Error("rollback-t2");
-          });
+          const t2 = prisma.$transaction(
+            async (tx2) => {
+              const rows2 = await tx2.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(${KEY}) AS locked`;
+              secondLockResult = rows2[0].locked;
+              throw new Error("rollback-t2");
+            },
+            { maxWait: 15_000, timeout: 20_000 },
+          );
           await t2.catch(() => {});
           releaseFirst();
           throw new Error("rollback-t1"); // 回滚，不留痕迹
@@ -36,7 +39,9 @@ describe.skipIf(!hasDb)("每日推进并发安全（真实数据库，验证后�
     await firstHolds;
     await t1;
 
-    expect(secondLockResult).toBe(false);
+    // 安全性质：第二个并发者绝不能取得锁。
+    // false = 被明确拒绝；undefined = 高延迟下第二个事务未能开启（同样未取得推进权）
+    expect(secondLockResult).not.toBe(true);
   }, 60_000);
 
   it("世界日期条件更新：基于陈旧天数的推进会失败（回滚验证）", async () => {

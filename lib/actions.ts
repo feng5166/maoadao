@@ -9,6 +9,7 @@ import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
 import { NPC_CATS } from "./sim/npcs";
 import { generatePortrait } from "./portrait";
+import { generateArrivalDay } from "./firstday";
 import { ensureViewerId, getViewerId } from "./identity";
 
 function clamp(n: number): number {
@@ -22,6 +23,7 @@ export async function createCat(formData: FormData) {
   const appearance = String(formData.get("appearance") ?? "").trim().slice(0, 60);
   const bio = String(formData.get("bio") ?? "").trim().slice(0, 120);
   const tagsRaw = String(formData.get("tags") ?? "").trim().slice(0, 60);
+  const ownerNick = String(formData.get("ownerNick") ?? "").trim().slice(0, 8);
   const goalRaw = String(formData.get("goal") ?? "chill");
   const goal = GOALS.has(goalRaw) ? goalRaw : "chill";
   const boldness = clamp(Number(formData.get("boldness") ?? 50));
@@ -41,12 +43,12 @@ export async function createCat(formData: FormData) {
   });
   if (recent) redirect(`/cats/${recent.id}`);
 
-  // MVP 上限：每位岛民最多 3 只猫（定义·商业化里"第二只猫"是付费点，先硬限）
-  const owned = await prisma.cat.count({ where: { ownerId: uid } });
-  if (owned >= 3) throw new Error("一位岛民最多领养 3 只猫哦");
+  // 一人一猫（v0.5）：无限重抽会毁掉归属感；"第二只猫"留作未来付费点
+  const owned = await prisma.cat.findFirst({ where: { ownerId: uid } });
+  if (owned) redirect(`/my-cat`);
 
   // 内容审核：所有用户可见文本
-  const mod = await moderateTexts([name, appearance, bio, tagsRaw]);
+  const mod = await moderateTexts([name, appearance, bio, tagsRaw, ownerNick]);
   if (!mod.ok) throw new Error(mod.reason ?? "内容未通过审核，请修改后重试");
 
   const personaTags = tagsRaw
@@ -60,6 +62,7 @@ export async function createCat(formData: FormData) {
       name,
       isNpc: false,
       ownerId: uid,
+      ownerNick: ownerNick || null,
       goal,
       boldness,
       sociability,
@@ -84,12 +87,15 @@ export async function createCat(formData: FormData) {
     });
   }
 
-  // 立绘异步生成（10~30 秒），不阻塞领养流程；猫主页先显示 SVG 兜底
-  after(() => generatePortrait(id));
+  // 异步：首日事件（领养后不能面对空白页）+ 立绘生成，都不阻塞领养流程
+  after(async () => {
+    await generateArrivalDay(id).catch((e) => console.error("[firstday]", e));
+    await generatePortrait(id).catch((e) => console.error("[portrait]", e));
+  });
 
   await track("adopt_complete", { goal });
   revalidatePath("/");
-  redirect(`/cats/${id}`);
+  redirect(`/my-cat`);
 }
 
 const SUGGESTIONS = new Set(["earn", "explore", "social", "rest"]);
@@ -139,4 +145,17 @@ export async function saveNudge(formData: FormData) {
 
   await track("nudge_saved", { hasMessage: Boolean(message), suggestion: suggestion ?? "none" });
   revalidatePath(`/cats/${catId}`);
+}
+
+export async function renameCat(formData: FormData) {
+  const newName = String(formData.get("newName") ?? "").trim().slice(0, 12);
+  if (!newName) return;
+  const uid = await getViewerId();
+  const cat = await prisma.cat.findFirst({ where: { ownerId: uid ?? "__none__" } });
+  if (!cat) throw new Error("你还没有猫");
+  if (cat.renamedAt) throw new Error("改名机会只有一次，已经用过了");
+  const mod = await moderateTexts([newName]);
+  if (!mod.ok) throw new Error(mod.reason ?? "名字未通过审核");
+  await prisma.cat.update({ where: { id: cat.id }, data: { name: newName, renamedAt: new Date() } });
+  revalidatePath("/my-cat");
 }

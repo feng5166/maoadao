@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import Link from "next/link";
+import { getViewerId } from "@/lib/identity";
+import { getViewerCat } from "@/lib/queries";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,11 +10,12 @@ export const metadata: Metadata = {
   description: "领养一只会记住你、自己生活、还会交朋友的 AI 猫。",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const myCat = await getViewerCat(await getViewerId()).catch(() => null);
   return (
     <html lang="zh-CN" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-[#FDF8F0] text-[#3E3226]">
@@ -21,12 +24,26 @@ export default function RootLayout({
             <Link href="/" className="text-lg font-bold tracking-wide">
               🏝️ 猫啊岛
             </Link>
-            <Link
-              href="/adopt"
-              className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-[#E08E0B]"
-            >
-              领养一只猫
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/island" className="text-sm text-[#8A7B65] hover:text-[#E08E0B]">
+                岛屿动态
+              </Link>
+              {myCat ? (
+                <Link
+                  href="/my-cat"
+                  className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-[#E08E0B]"
+                >
+                  我的猫
+                </Link>
+              ) : (
+                <Link
+                  href="/adopt"
+                  className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-[#E08E0B]"
+                >
+                  领养一只猫
+                </Link>
+              )}
+            </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">{children}</main>

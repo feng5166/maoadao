@@ -106,3 +106,72 @@ export async function reflect(cat: SimCat, recentMemories: string[]): Promise<st
   const system = `你是猫啊岛上的一只猫，性格：${cat.personaTags.join("、")}。根据你最近的经历，总结一条你对生活/朋友/自己的新认识。要求：第一人称、30 字以内、像猫会有的朴素感悟、必须基于经历不能编造。直接输出这一句话。`;
   return callLLM(system, `你最近的经历：\n${recentMemories.map((m) => `- ${m}`).join("\n")}`, 100);
 }
+
+export interface OwnerDayInput extends DiaryInput {
+  ownerNick?: string; // 猫怎么称呼主人
+  suggestion?: { label: string; followed: boolean } | null; // 今天消费的主人建议 + 是否有行动采纳
+  activeThreads: { label: string; step: number; total?: number }[];
+}
+
+export interface OwnerDaySummary {
+  headline: string;
+  narrative: string;
+  interventionResponse: string | null;
+  tomorrowHook: string | null;
+}
+
+/** 主人猫的一天：一次调用产出 标题/日记/建议回执/明日悬念（结构化 JSON） */
+export async function narrateOwnerDay(input: OwnerDayInput): Promise<{ summary: OwnerDaySummary; generatedBy: "llm" | "fallback" }> {
+  const factLines = input.facts
+    .map((f) => `- [${SEGMENT_CN[f.segment]}] ${factSummary(f, input.catById)}${f === input.mainFact ? "（今天最重要的事）" : ""}`)
+    .join("\n");
+  const memoryBlock = input.memories.length ? `\n你记得的事：\n${input.memories.map((m) => `- ${m}`).join("\n")}` : "";
+  const nick = input.ownerNick || "主人";
+  const suggestionBlock = input.suggestion
+    ? `\n${nick}昨天建议你「${input.suggestion.label}」，从今天的事实看你${input.suggestion.followed ? "照做了" : "没有照做（猫有自己的主意）"}。`
+    : "";
+  const ownerBlock = input.ownerMessage
+    ? `\n${nick}今天给你留了话：「${input.ownerMessage}」——在日记里自然地回应。`
+    : input.ownerVisited
+      ? `\n${nick}今天来看过你、留了悄悄话——可以提到${nick}来过、心里暖暖的，但不要编内容。`
+      : "";
+  const threadBlock = input.activeThreads.length
+    ? `\n你正在经历的事：${input.activeThreads.map((t) => `${t.label}（第 ${t.step}${t.total ? `/${t.total}` : ""} 步）`).join("；")}`
+    : "";
+
+  const system = `你是猫啊岛上的一只猫。根据今天的事实，输出严格的 JSON（不要多余文字），字段：
+{
+  "headline": "今日标题，12 字内，像连载故事的一集标题",
+  "narrative": "第一人称日记，100-150 字，口语化，符合性格；以「今天最重要的事」为重心；只能基于事实，绝不编造",
+  "interventionResponse": ${input.suggestion ? `"对${nick}昨天建议的回应：一句话说清你有没有听、为什么（第二人称对${nick}说，如'你让我…我…'）"` : "null"},
+  "tomorrowHook": "明日悬念：一句话，基于未完成的事（进行中的事件线/今天留下的疑问），让${nick}明天想回来看。没有合适悬念就写对明天的小期待"
+}`;
+
+  const user = `你的资料：名字 ${input.cat.name}，性格 ${input.cat.personaTags.join("、")}，你叫主人「${nick}」
+今天是猫啊岛第 ${input.day} 天，${input.weather}，你的心情：${input.mood}
+今日事实：
+${factLines}
+${suggestionBlock}${ownerBlock}${threadBlock}${memoryBlock}`;
+
+  const text = await callLLM(system, user, 600);
+  if (text) {
+    try {
+      const jsonStr = text.replace(/^```json?\s*/i, "").replace(/```\s*$/, "");
+      const parsed = JSON.parse(jsonStr) as OwnerDaySummary;
+      if (parsed.narrative && parsed.headline) {
+        return { summary: { ...parsed, interventionResponse: parsed.interventionResponse || null, tomorrowHook: parsed.tomorrowHook || null }, generatedBy: "llm" };
+      }
+    } catch {
+      // fall through
+    }
+  }
+  return {
+    summary: {
+      headline: `第 ${input.day} 天`,
+      narrative: `第 ${input.day} 天，天气${input.weather}。今天：\n${factLines}`,
+      interventionResponse: input.suggestion ? `你建议「${input.suggestion.label}」，它${input.suggestion.followed ? "照做了" : "这次没听"}。` : null,
+      tomorrowHook: input.activeThreads.length ? `${input.activeThreads[0].label}还在继续。` : null,
+    },
+    generatedBy: "fallback",
+  };
+}

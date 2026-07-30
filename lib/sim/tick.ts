@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { runDay, factSummary as factSummaryFor } from "./engine";
-import { narrateDiary, narrateIslandNews, reflect } from "../narrative/narrator";
+import { narrateDiary, narrateIslandNews, narrateOwnerDay, reflect } from "../narrative/narrator";
+import { THREAD_LABELS } from "./threads";
 import type { Fact, SimCat, SimCatState, WorldSnapshot } from "./types";
 
 // 单一岛屿的推进锁 key（pg advisory lock 命名空间）
@@ -250,7 +251,7 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
 
     const jobs = cats
       .filter((cat) => (factsByCat.get(cat.id)?.length ?? 0) > 0)
-      .map(async (cat) => {
+      .map((cat) => async () => {
         const catFacts = factsByCat.get(cat.id)!;
         const mainIdxOfCat = result.mainFactIndexByCat.get(cat.id);
         const mainFact = mainIdxOfCat !== undefined ? result.facts[mainIdxOfCat] : undefined;
@@ -277,20 +278,91 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
           relationHints.push(`和${catById.get(other)?.name}有过节`);
         }
 
-        const { content, generatedBy } = await narrateDiary({
-          cat,
-          day,
-          season,
-          weather,
-          mood,
-          facts: catFacts,
-          mainFact,
-          memories: memRows.map((m) => `（第${m.day}天）${m.content}`),
-          relationHints,
-          ownerMessage: todayNudge?.isPublic ? todayNudge.message ?? undefined : undefined,
-          ownerVisited: Boolean(todayNudge && !todayNudge.isPublic),
-          catById,
-        });
+        let content: string;
+        let generatedBy: "llm" | "fallback";
+        if (!cat.isNpc) {
+          // 主人猫：结构化日报（标题/日记/建议回执/明日悬念）+ 每日摘要
+          const todaySuggestionNudge = nudges.find((n) => n.catId === cat.id && n.suggestion);
+          const SUGGESTION_LABELS: Record<string, string> = { earn: "去赚钱", explore: "去探险", social: "找朋友", rest: "好好休息" };
+          const followed = catFacts.some((f) => f.data.nudged === true);
+          const catRow = await prisma.cat.findUnique({ where: { id: cat.id }, select: { ownerNick: true } });
+          const activeThreadsRows = await prisma.storyline.findMany({ where: { catId: cat.id, status: "active" } });
+          const activeThreads = activeThreadsRows.map((t) => ({
+            label: THREAD_LABELS[t.kind] ?? t.kind,
+            step: t.step,
+            total: t.kind === "lighthouse" ? 7 : undefined,
+          }));
+          const { summary, generatedBy: gb } = await narrateOwnerDay({
+            cat,
+            day,
+            season,
+            weather,
+            mood,
+            facts: catFacts,
+            mainFact,
+            memories: memRows.map((m) => `（第${m.day}天）${m.content}`),
+            relationHints,
+            ownerMessage: todayNudge?.isPublic ? todayNudge.message ?? undefined : undefined,
+            ownerVisited: Boolean(todayNudge && !todayNudge.isPublic),
+            ownerNick: catRow?.ownerNick ?? undefined,
+            suggestion: todaySuggestionNudge?.suggestion
+              ? { label: SUGGESTION_LABELS[todaySuggestionNudge.suggestion] ?? todaySuggestionNudge.suggestion, followed }
+              : null,
+            activeThreads,
+            catById,
+          });
+          content = summary.narrative;
+          generatedBy = gb;
+          // 状态变化聚合（给今日页展示，非 LLM 产物）
+          const coinDelta = catFacts.reduce((a, f) => a + (f.deltas.coins ?? 0), 0);
+          const stateChanges: { label: string; delta: string }[] = [];
+          if (coinDelta !== 0) stateChanges.push({ label: "鱼币", delta: coinDelta > 0 ? `+${coinDelta}` : `${coinDelta}` });
+          const myAffinity = result.affinityChanges.filter((a) => a.catAId === cat.id);
+          for (const a of myAffinity) {
+            const otherName = catById.get(a.catBId)?.name ?? "某只猫";
+            stateChanges.push({ label: `与${otherName}`, delta: a.delta > 0 ? `+${a.delta} ${a.reason}` : `${a.delta} ${a.reason}` });
+          }
+          await prisma.catDailySummary.upsert({
+            where: { catId_day: { catId: cat.id, day } },
+            update: {
+              headline: summary.headline,
+              narrative: summary.narrative,
+              interventionResponse: summary.interventionResponse,
+              tomorrowHook: summary.tomorrowHook,
+              stateChanges,
+              threadProgress: activeThreads,
+            },
+            create: {
+              id: randomUUID(),
+              catId: cat.id,
+              day,
+              headline: summary.headline,
+              narrative: summary.narrative,
+              interventionResponse: summary.interventionResponse,
+              tomorrowHook: summary.tomorrowHook,
+              stateChanges,
+              threadProgress: activeThreads,
+              createdAt: new Date(),
+            },
+          });
+        } else {
+          const r = await narrateDiary({
+            cat,
+            day,
+            season,
+            weather,
+            mood,
+            facts: catFacts,
+            mainFact,
+            memories: memRows.map((m) => `（第${m.day}天）${m.content}`),
+            relationHints,
+            ownerMessage: undefined,
+            ownerVisited: false,
+            catById,
+          });
+          content = r.content;
+          generatedBy = r.generatedBy;
+        }
         // upsert：叙事阶段重试不撞唯一约束；eventIds 保留日记 ← 事实的追溯链
         await prisma.diaryEntry.upsert({
           where: { catId_day: { catId: cat.id, day } },
@@ -308,7 +380,16 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
         });
         return generatedBy;
       });
-    diaries = (await Promise.all(jobs)).length;
+    // 分批执行：全并发会在连接池上互相踩踏（每个任务还带 2-3 个查询）
+    diaries = 0;
+    const BATCH = 6;
+    for (let i = 0; i < jobs.length; i += BATCH) {
+      const settled = await Promise.allSettled(jobs.slice(i, i + BATCH).map((j) => j()));
+      diaries += settled.filter((r) => r.status === "fulfilled").length;
+      for (const r of settled) {
+        if (r.status === "rejected") console.error("[tick] 叙事任务失败:", r.reason?.message?.slice?.(0, 150) ?? r.reason);
+      }
+    }
 
     // 关键节点反思：每 7 天，或当天有事件线落幕的猫
     const resolvedCatIds = new Set(
