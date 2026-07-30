@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CatAvatar } from "@/components/CatAvatar";
+import { Track } from "@/components/Track";
 import { getViewerId } from "@/lib/identity";
 import { getIslandNews, getViewerCat, getWorld } from "@/lib/queries";
 
@@ -15,6 +16,7 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-8 py-6">
+      <Track events={[{ name: "landing_view", props: { hasCat: Boolean(myCat) } }]} />
       <div className="text-center">
         <p className="text-5xl">🏝️</p>
         <h1 className="mt-4 text-2xl font-bold leading-relaxed">
@@ -23,9 +25,9 @@ export default async function HomePage() {
           还会交朋友的 AI 猫
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-[#8A7B65]">
-          它每天在岛上钓鱼、开店、交朋友、卷进各种故事——
+          它会在你离开后继续生活：钓鱼、交朋友、卷进各种故事。
           <br />
-          你不在的时候，它也在认真生活。
+          <span className="font-medium text-[#6B5D48]">明天回来，它会告诉你发生了什么。</span>
         </p>
         {myCat ? (
           <Link

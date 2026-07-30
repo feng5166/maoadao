@@ -1,5 +1,6 @@
 import { createCat } from "@/lib/actions";
 import { SubmitButton } from "@/components/SubmitButton";
+import { Track } from "@/components/Track";
 
 export const maxDuration = 120; // 领养后 after() 里异步生成立绘
 
@@ -12,6 +13,7 @@ const SLIDERS = [
 export default function AdoptPage() {
   return (
     <div className="space-y-6">
+      <Track events={[{ name: "adopt_start" }]} />
       <div>
         <h1 className="text-2xl font-bold">领养一只 AI 猫</h1>
         <p className="mt-1 text-sm text-[#8A7B65]">

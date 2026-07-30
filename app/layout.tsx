@@ -28,6 +28,9 @@ export default async function RootLayout({
               <Link href="/island" className="text-sm text-[#8A7B65] hover:text-[#E08E0B]">
                 岛屿动态
               </Link>
+              <Link href="/account" className="text-sm text-[#8A7B65] hover:text-[#E08E0B]">
+                账户
+              </Link>
               {myCat ? (
                 <Link
                   href="/my-cat"

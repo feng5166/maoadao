@@ -4,6 +4,7 @@ import { prisma } from "../db";
 import { runDay, factSummary as factSummaryFor } from "./engine";
 import { narrateDiary, narrateIslandNews, narrateOwnerDay, reflect } from "../narrative/narrator";
 import { THREAD_LABELS } from "./threads";
+import { dailyEmailHtml, emailEnabled, sendEmail } from "../email";
 import type { Fact, SimCat, SimCatState, WorldSnapshot } from "./types";
 
 // 单一岛屿的推进锁 key（pg advisory lock 命名空间）
@@ -413,6 +414,22 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
         }
       }),
     );
+  }
+
+  // 每日召回邮件：内容钩子而非系统通知（绑定邮箱 + 开通知的主人）
+  if (narrate && emailEnabled()) {
+    const owners = await prisma.user.findMany({
+      where: { emailVerifiedAt: { not: null }, notifyDaily: true, cats: { some: {} } },
+      include: { cats: { take: 1 } },
+    });
+    for (const owner of owners) {
+      const ownerCat = owner.cats[0];
+      if (!ownerCat) continue;
+      const s = await prisma.catDailySummary.findUnique({ where: { catId_day: { catId: ownerCat.id, day } } });
+      if (!s) continue;
+      const hook = s.tomorrowHook ?? s.headline;
+      await sendEmail(owner.email!, `${ownerCat.name}：${s.headline}`, dailyEmailHtml(ownerCat.name, hook)).catch(() => {});
+    }
   }
 
   return { day, weather, eventCount: result.facts.length, diaryCount: diaries, newsCount, directorNotes: result.directorNotes };

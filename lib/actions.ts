@@ -11,6 +11,7 @@ import { NPC_CATS } from "./sim/npcs";
 import { generatePortrait } from "./portrait";
 import { generateArrivalDay } from "./firstday";
 import { ensureViewerId, getViewerId } from "./identity";
+import { cookies } from "next/headers";
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
@@ -93,7 +94,9 @@ export async function createCat(formData: FormData) {
     await generatePortrait(id).catch((e) => console.error("[portrait]", e));
   });
 
-  await track("adopt_complete", { goal });
+  const ref = (await cookies()).get("maoadao_ref")?.value ?? null;
+  await track("adopt_complete", { goal, referred: ref === "share_card" });
+  if (ref === "share_card") await track("referred_adopt_complete", {});
   revalidatePath("/");
   redirect(`/my-cat`);
 }
@@ -143,7 +146,8 @@ export async function saveNudge(formData: FormData) {
     },
   });
 
-  await track("nudge_saved", { hasMessage: Boolean(message), suggestion: suggestion ?? "none" });
+  const priorCount = await prisma.ownerNudge.count({ where: { catId, consumedDay: { not: null } } });
+  await track("intervention_submit", { hasMessage: Boolean(message), suggestion: suggestion ?? "none", first: priorCount === 0 });
   revalidatePath(`/cats/${catId}`);
 }
 

@@ -5,6 +5,7 @@ import { THREAD_LABELS } from "@/lib/sim/threads";
 import { saveNudge } from "@/lib/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getViewerId } from "@/lib/identity";
+import { track } from "@vercel/analytics/server";
 import {
   getActiveStorylines,
   getCat,
@@ -23,8 +24,16 @@ const GOAL_LABELS: Record<string, string> = {
 };
 
 
-export default async function CatPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CatPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}) {
   const { id } = await params;
+  const { from } = await searchParams;
+  if (from === "share_card") await track("share_open", { catId: id }).catch(() => {});
   const cat = await getCat(id);
   if (!cat) notFound();
   const viewerId = await getViewerId();

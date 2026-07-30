@@ -12,13 +12,16 @@ datasource db {
 }
 
 model User {
-  id           String    @id
-  name         String
-  status       String    @default("anonymous") // anonymous | registered
-  email        String?
-  createdAt    DateTime
-  lastActiveAt DateTime?
-  cats         Cat[]
+  id              String    @id
+  name            String
+  status          String    @default("anonymous") // anonymous | registered
+  email           String?   @unique
+  emailVerifiedAt DateTime?
+  notifyDaily     Boolean   @default(true) // 每日故事邮件（绑定邮箱后默认开，可关）
+  recoveryCode    String?   @unique // 零依赖跨设备找回码
+  createdAt       DateTime
+  lastActiveAt    DateTime?
+  cats            Cat[]
 }
 
 model Cat {
@@ -193,4 +196,25 @@ model CatDailySummary {
   createdAt            DateTime
 
   @@unique([catId, day])
+}
+
+// 邮箱验证码（绑定与登录共用）
+model LoginCode {
+  id        String    @id
+  email     String
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime
+
+  @@index([email, code])
+}
+
+// 审核拦截日志：后台抽检"被拦了什么、为什么"
+model ModerationLog {
+  id        String   @id
+  verdict   String // block | error_pass
+  reason    String?
+  input     String
+  createdAt DateTime
 }

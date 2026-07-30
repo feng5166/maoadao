@@ -1,4 +1,12 @@
+import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { prisma } from "./db";
+
+async function logModeration(verdict: string, reason: string | null, input: string) {
+  await prisma.moderationLog
+    .create({ data: { id: randomUUID(), verdict, reason, input: input.slice(0, 300), createdAt: new Date() } })
+    .catch(() => {});
+}
 
 // 用户输入审核：LLM 主审（便宜的 haiku）+ 词表兜底。
 // 审核对象：创建猫的名字/外形/故事/标签、主人留言。
@@ -15,6 +23,7 @@ export async function moderateTexts(texts: string[]): Promise<{ ok: boolean; rea
 
   for (const w of BLOCKLIST) {
     if (combined.toLowerCase().includes(w.toLowerCase())) {
+      await logModeration("block", "词表命中", combined);
       return { ok: false, reason: "内容包含不适合展示的词语" };
     }
   }
@@ -30,12 +39,15 @@ export async function moderateTexts(texts: string[]): Promise<{ ok: boolean; rea
     if (response.stop_reason === "refusal") return { ok: false, reason: "内容未通过审核" };
     const text = response.content.find((b) => b.type === "text")?.text.trim() ?? "PASS";
     if (text.startsWith("BLOCK")) {
-      return { ok: false, reason: text.split(":")[1]?.trim() || "内容未通过审核" };
+      const reason = text.split(":")[1]?.trim() || "内容未通过审核";
+      await logModeration("block", reason, combined);
+      return { ok: false, reason };
     }
     return { ok: true };
   } catch (err) {
     // LLM 挂了不拦好人：词表已兜底，放行
     console.error("[moderation] LLM 审核失败，词表兜底放行:", err instanceof Error ? err.message.slice(0, 120) : err);
+    await logModeration("error_pass", "LLM 审核失败放行", combined);
     return { ok: true };
   }
 }

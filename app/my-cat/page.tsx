@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CatAvatar } from "@/components/CatAvatar";
+import { Track } from "@/components/Track";
 import { SubmitButton } from "@/components/SubmitButton";
 import { renameCat, saveNudge } from "@/lib/actions";
 import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
 import { prisma } from "@/lib/db";
+import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -26,11 +28,21 @@ export default async function MyCatPage() {
   // 来岛第几天：以它的第一条事实为准
   const firstEvent = await prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } });
   const daysOnIsland = Math.max(1, world.day - (firstEvent?.day ?? world.day) + 1);
+  // 活跃时间：连续使用天数与流失分析的数据源
+  after(() =>
+    prisma.user.update({ where: { id: viewerId! }, data: { lastActiveAt: new Date() } }).catch(() => {}),
+  );
+  const funnelEvents: { name: string; props?: Record<string, string | number | boolean> }[] = [
+    { name: "daily_story_view", props: { islandDay: world.day, catDay: daysOnIsland } },
+  ];
+  if (daysOnIsland <= 1) funnelEvents.push({ name: "first_story_view", props: { catId: cat.id } });
+  else funnelEvents.push({ name: "next_day_return", props: { catDay: daysOnIsland } });
   const stateChanges = (summary?.stateChanges ?? []) as { label: string; delta: string }[];
   const threadProgress = (summary?.threadProgress ?? []) as { label: string; step: number; total?: number }[];
 
   return (
     <div className="space-y-5">
+      <Track events={funnelEvents} />
       {/* 顶部：猫的当前状态（不堆数值） */}
       <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 shadow-sm">
         <div className="flex items-center gap-4">
@@ -88,6 +100,8 @@ export default async function MyCatPage() {
       ) : (
         <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 text-center text-sm text-[#A89B85] shadow-sm">
           {cat.name}正在熟悉小岛……它的第一篇故事马上就好，稍后刷新看看。
+          <br />
+          记住：它会在你离开后继续生活。明天回来，它会告诉你发生了什么。
         </div>
       )}
 
