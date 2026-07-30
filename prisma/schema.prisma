@@ -164,3 +164,11 @@ model OwnerNudge {
 
   @@index([catId, consumedDay])
 }
+
+// 定稿立绘：一次生成反复复用（角色一致性的根基），bytes 直存 DB（MVP 规模足够）
+model Portrait {
+  catId     String   @id
+  data      Bytes
+  mime      String   @default("image/jpeg")
+  createdAt DateTime
+}

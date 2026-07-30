@@ -8,7 +8,7 @@ export async function getFeed(limit = 50) {
   const entries = await prisma.diaryEntry.findMany({
     orderBy: [{ day: "desc" }, { createdAt: "desc" }],
     take: limit,
-    include: { cat: { select: { id: true, name: true, isNpc: true } } },
+    include: { cat: { select: { id: true, name: true, isNpc: true, portraitUrl: true } } },
   });
   return entries.map((e) => ({
     id: e.id,
@@ -18,6 +18,7 @@ export async function getFeed(limit = 50) {
     catId: e.cat.id,
     catName: e.cat.name,
     isNpc: e.cat.isNpc,
+    portraitUrl: e.cat.portraitUrl,
   }));
 }
 

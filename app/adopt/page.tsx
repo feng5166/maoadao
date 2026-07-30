@@ -1,5 +1,7 @@
 import { createCat } from "@/lib/actions";
 
+export const maxDuration = 120; // 领养后 after() 里异步生成立绘
+
 const SLIDERS = [
   { name: "boldness", label: "胆量", low: "谨慎", high: "莽" },
   { name: "sociability", label: "社交", low: "独处", high: "自来熟" },

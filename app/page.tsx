@@ -56,7 +56,7 @@ export default async function HomePage() {
               >
                 <div className="flex items-center gap-3">
                   <Link href={`/cats/${entry.catId}`} className="shrink-0">
-                    <CatAvatar id={entry.catId} size={44} />
+                    <CatAvatar id={entry.catId} size={44} portraitUrl={entry.portraitUrl} />
                   </Link>
                   <div className="min-w-0">
                     <Link href={`/cats/${entry.catId}`} className="font-bold hover:text-[#E08E0B]">

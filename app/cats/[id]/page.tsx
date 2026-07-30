@@ -35,10 +35,13 @@ export default async function CatPage({ params }: { params: Promise<{ id: string
     <div className="space-y-6">
       <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 shadow-sm">
         <div className="flex items-start gap-4">
-          <CatAvatar id={cat.id} size={80} />
+          <CatAvatar id={cat.id} size={80} portraitUrl={cat.portraitUrl} />
           <div className="min-w-0">
             <h1 className="text-2xl font-bold">{cat.name}</h1>
             <p className="mt-0.5 text-sm text-[#8A7B65]">{cat.appearance}</p>
+            {!cat.isNpc && !cat.portraitUrl && (
+              <p className="mt-0.5 text-xs text-[#C4A24C]">🎨 专属立绘绘制中，稍后刷新查看</p>
+            )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               {cat.goal && (
                 <span className="rounded-full bg-[#E8F5E9] px-2.5 py-0.5 text-xs text-[#4E7A3A]">

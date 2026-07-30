@@ -2,11 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { track } from "@vercel/analytics/server";
 import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
 import { NPC_CATS } from "./sim/npcs";
+import { generatePortrait } from "./portrait";
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
@@ -64,6 +66,9 @@ export async function createCat(formData: FormData) {
       data: { id: randomUUID(), catAId: id, catBId: npcId, affinity: 8 + Math.floor(Math.random() * 5), lastInteractionDay: day },
     });
   }
+
+  // 立绘异步生成（10~30 秒），不阻塞领养流程；猫主页先显示 SVG 兜底
+  after(() => generatePortrait(id));
 
   await track("adopt_complete", { goal });
   revalidatePath("/");

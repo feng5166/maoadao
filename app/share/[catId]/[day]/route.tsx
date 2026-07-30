@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { track } from "@vercel/analytics/server";
 import { avatarTraits, catAvatarDataUri } from "@/components/CatAvatar";
 import { getCat, getDiary, getWorld } from "@/lib/queries";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ catId: string;
   }
   const world = await getWorld();
   const bg = avatarTraits(cat.id).bg;
-  const avatarUri = catAvatarDataUri(cat.id, 140);
+  const portrait = await prisma.portrait.findUnique({ where: { catId: cat.id } });
+  const avatarUri = portrait
+    ? `data:${portrait.mime};base64,${Buffer.from(portrait.data).toString("base64")}`
+    : catAvatarDataUri(cat.id, 140);
   // 回流二维码：带猫 ID 与渠道归因参数
   const backUrl = `https://maoadao.com/cats/${cat.id}?from=share_card&d=${diary.day}`;
   const qrUri = await QRCode.toDataURL(backUrl, { width: 120, margin: 1, color: { dark: "#3E3226", light: "#FDF8F0" } });
@@ -46,7 +50,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ catId: string;
       >
         <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={avatarUri} width={140} height={140} alt="" />
+          <img src={avatarUri} width={140} height={140} alt="" style={{ borderRadius: 70 }} />
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 56 }}>{cat.name}</div>
             <div style={{ fontSize: 28, color: "#8A7B65", marginTop: 6 }}>

@@ -68,8 +68,20 @@ export function catAvatarDataUri(id: string, size = 140): string {
   return `data:image/svg+xml;base64,${Buffer.from(catAvatarSvg(id, size)).toString("base64")}`;
 }
 
-/** 网页用组件；SVG 内容完全由 id 哈希生成，不含用户输入 */
-export function CatAvatar({ id, size = 64 }: { id: string; size?: number }) {
+/** 网页用组件：有定稿立绘用立绘，否则用哈希 SVG 兜底（SVG 内容不含用户输入） */
+export function CatAvatar({ id, size = 64, portraitUrl }: { id: string; size?: number; portraitUrl?: string | null }) {
+  if (portraitUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={portraitUrl}
+        width={size}
+        height={size}
+        alt=""
+        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "inline-block" }}
+      />
+    );
+  }
   return (
     <span
       style={{ width: size, height: size, display: "inline-block", lineHeight: 0 }}
