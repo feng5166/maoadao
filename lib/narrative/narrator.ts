@@ -1,7 +1,11 @@
+import "../env";
 import Anthropic from "@anthropic-ai/sdk";
 import type { SimCat, SimEvent } from "../sim/types";
 
 const client = new Anthropic();
+const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-5";
+// 拒答兜底（fallbacks）是官方 Claude API 上 opus-5 的特性；走中转或其他模型时用普通调用
+const useFallbacks = MODEL === "claude-opus-5" && !process.env.ANTHROPIC_BASE_URL;
 
 export interface DiaryInput {
   cat: SimCat;
@@ -55,14 +59,15 @@ export async function narrateDiary(input: DiaryInput): Promise<{ content: string
 ${facts}`;
 
   try {
-    const response = await client.beta.messages.create({
-      model: "claude-opus-5",
+    const base = {
+      model: MODEL,
       max_tokens: 400,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
       system,
-      messages: [{ role: "user", content: user }],
-    });
+      messages: [{ role: "user" as const, content: user }],
+    };
+    const response = useFallbacks
+      ? await client.beta.messages.create({ ...base, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
+      : await client.messages.create(base);
 
     if (response.stop_reason === "refusal") {
       return { content: fallbackDiary(input, facts), generatedBy: "fallback" };
