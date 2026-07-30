@@ -34,6 +34,17 @@ export async function createCat(formData: FormData) {
   const uid = await ensureViewerId();
   await prisma.user.upsert({ where: { id: uid }, update: {}, create: { id: uid, name: "岛民", createdAt: new Date() } });
 
+  // 防连点：2 分钟内刚建过猫 → 直接跳去那只猫（幂等）
+  const recent = await prisma.cat.findFirst({
+    where: { ownerId: uid, createdAt: { gte: new Date(Date.now() - 120_000) } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (recent) redirect(`/cats/${recent.id}`);
+
+  // MVP 上限：每位岛民最多 3 只猫（定义·商业化里"第二只猫"是付费点，先硬限）
+  const owned = await prisma.cat.count({ where: { ownerId: uid } });
+  if (owned >= 3) throw new Error("一位岛民最多领养 3 只猫哦");
+
   // 内容审核：所有用户可见文本
   const mod = await moderateTexts([name, appearance, bio, tagsRaw]);
   if (!mod.ok) throw new Error(mod.reason ?? "内容未通过审核，请修改后重试");

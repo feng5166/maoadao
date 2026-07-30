@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CatAvatar } from "@/components/CatAvatar";
 import { THREAD_LABELS } from "@/lib/sim/threads";
 import { saveNudge } from "@/lib/actions";
+import { SubmitButton } from "@/components/SubmitButton";
 import { getViewerId } from "@/lib/identity";
 import {
   getActiveStorylines,
@@ -139,9 +140,9 @@ export default async function CatPage({ params }: { params: Promise<{ id: string
                 </label>
               ))}
             </div>
-            <button type="submit" className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#E08E0B]">
+            <SubmitButton pendingText="送出中…" className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#E08E0B]">
               送给它 🐾
-            </button>
+            </SubmitButton>
           </form>
         </section>
       )}

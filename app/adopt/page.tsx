@@ -1,4 +1,5 @@
 import { createCat } from "@/lib/actions";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const maxDuration = 120; // 领养后 after() 里异步生成立绘
 
@@ -83,12 +84,12 @@ export default function AdoptPage() {
           />
         </div>
 
-        <button
-          type="submit"
+        <SubmitButton
+          pendingText="正在办理入岛手续…（内容审核中，约几秒）"
           className="w-full rounded-full bg-[#F5A623] py-2.5 font-medium text-white shadow-sm hover:bg-[#E08E0B]"
         >
           带它上岛 🐾
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );
