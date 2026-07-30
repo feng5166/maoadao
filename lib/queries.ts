@@ -1,65 +1,52 @@
-import { desc, eq, or } from "drizzle-orm";
-import { db, schema } from "./db";
+import { prisma } from "./db";
 
 export async function getWorld() {
-  return (
-    (await db.select().from(schema.worldState).get()) ?? { id: 1, day: 0, season: "夏", weather: "晴" }
-  );
+  return (await prisma.worldState.findUnique({ where: { id: 1 } })) ?? { id: 1, day: 0, season: "夏", weather: "晴" };
 }
 
 export async function getFeed(limit = 50) {
-  return db
-    .select({
-      id: schema.diaryEntries.id,
-      day: schema.diaryEntries.day,
-      content: schema.diaryEntries.content,
-      mood: schema.diaryEntries.mood,
-      catId: schema.cats.id,
-      catName: schema.cats.name,
-      isNpc: schema.cats.isNpc,
-    })
-    .from(schema.diaryEntries)
-    .innerJoin(schema.cats, eq(schema.diaryEntries.catId, schema.cats.id))
-    .orderBy(desc(schema.diaryEntries.day), desc(schema.diaryEntries.createdAt))
-    .limit(limit)
-    .all();
+  const entries = await prisma.diaryEntry.findMany({
+    orderBy: [{ day: "desc" }, { createdAt: "desc" }],
+    take: limit,
+    include: { cat: { select: { id: true, name: true, isNpc: true } } },
+  });
+  return entries.map((e) => ({
+    id: e.id,
+    day: e.day,
+    content: e.content,
+    mood: e.mood,
+    catId: e.cat.id,
+    catName: e.cat.name,
+    isNpc: e.cat.isNpc,
+  }));
 }
 
 export async function getCat(id: string) {
-  return db.select().from(schema.cats).where(eq(schema.cats.id, id)).get();
+  return prisma.cat.findUnique({ where: { id } });
 }
 
 export async function getCatState(id: string) {
-  return db.select().from(schema.catStates).where(eq(schema.catStates.catId, id)).get();
+  return prisma.catState.findUnique({ where: { catId: id } });
 }
 
 export async function getCatDiaries(id: string, limit = 30) {
-  return db
-    .select()
-    .from(schema.diaryEntries)
-    .where(eq(schema.diaryEntries.catId, id))
-    .orderBy(desc(schema.diaryEntries.day))
-    .limit(limit)
-    .all();
+  return prisma.diaryEntry.findMany({
+    where: { catId: id },
+    orderBy: { day: "desc" },
+    take: limit,
+  });
 }
 
 export async function getDiary(catId: string, day: number) {
-  const all = await db
-    .select()
-    .from(schema.diaryEntries)
-    .where(eq(schema.diaryEntries.catId, catId))
-    .all();
-  return all.find((d) => d.day === day);
+  return prisma.diaryEntry.findUnique({ where: { catId_day: { catId, day } } });
 }
 
 export async function getFriends(id: string, limit = 6) {
-  const rels = await db
-    .select()
-    .from(schema.relationships)
-    .where(or(eq(schema.relationships.catAId, id), eq(schema.relationships.catBId, id)))
-    .orderBy(desc(schema.relationships.affinity))
-    .limit(limit)
-    .all();
+  const rels = await prisma.relationship.findMany({
+    where: { OR: [{ catAId: id }, { catBId: id }] },
+    orderBy: { affinity: "desc" },
+    take: limit,
+  });
   return Promise.all(
     rels.map(async (r) => {
       const otherId = r.catAId === id ? r.catBId : r.catAId;
@@ -70,10 +57,5 @@ export async function getFriends(id: string, limit = 6) {
 }
 
 export async function getActiveStorylines(catId: string) {
-  const all = await db
-    .select()
-    .from(schema.storylines)
-    .where(eq(schema.storylines.catId, catId))
-    .all();
-  return all.filter((s) => s.status === "active");
+  return prisma.storyline.findMany({ where: { catId, status: "active" } });
 }

@@ -1,0 +1,117 @@
+// 猫啊岛数据模型。设计原则：模拟器产事实，LLM 只负责叙事。
+// Event 表是唯一事实来源；DiaryEntry 是叙事层产物，可随时由事实重新生成。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Neon pooled 连接
+  directUrl = env("DIRECT_URL") // 非池化连接，migrate/db push 用
+}
+
+model User {
+  id        String   @id
+  name      String
+  createdAt DateTime
+  cats      Cat[]
+}
+
+model Cat {
+  id          String   @id
+  ownerId     String? // null = NPC 猫
+  owner       User?    @relation(fields: [ownerId], references: [id])
+  name        String
+  isNpc       Boolean  @default(false)
+  // 性格：数值轴决定模拟器行为倾向，tags 供叙事层塑造语气
+  boldness    Int // 0-100 冒险倾向
+  sociability Int // 0-100 社交倾向
+  diligence   Int // 0-100 勤劳程度
+  personaTags String[]
+  appearance  String // 外形描述，生成立绘用
+  portraitUrl String? // 定稿立绘，一次生成反复合成
+  bio         String
+  createdAt   DateTime
+
+  state      CatState?
+  diaries    DiaryEntry[]
+  storylines Storyline[]
+}
+
+model CatState {
+  catId      String @id
+  cat        Cat    @relation(fields: [catId], references: [id])
+  coins      Int    @default(50) // 鱼币
+  energy     Int    @default(100)
+  mood       String @default("平静")
+  location   String @default("自家小屋")
+  updatedDay Int    @default(0)
+}
+
+model Item {
+  id          String @id
+  catId       String
+  itemKey     String
+  qty         Int    @default(1)
+  acquiredDay Int
+
+  @@unique([catId, itemKey])
+}
+
+model Relationship {
+  id                 String @id
+  catAId             String
+  catBId             String
+  affinity           Int    @default(0) // -100 ~ 100
+  kind               String @default("acquaintance") // acquaintance | friend | rival | partner
+  lastInteractionDay Int    @default(0)
+
+  @@unique([catAId, catBId])
+}
+
+// 未完成的事件线：店还开着、债还欠着——连续性与抗套路的来源
+model Storyline {
+  id       String  @id
+  catId    String
+  cat      Cat     @relation(fields: [catId], references: [id])
+  kind     String // shop | debt | expedition | feud | courtship
+  status   String  @default("active") // active | resolved | failed
+  data     Json
+  startDay Int
+  endDay   Int?
+}
+
+// 模拟器每日产出的事实（唯一事实来源）
+model Event {
+  id     String @id
+  day    Int
+  catId  String
+  type   String // fish | shop_day | visit | explore | rest | shop_open | ...
+  data   Json
+  deltas Json
+
+  @@index([day, catId])
+}
+
+// 叙事层产物：由当日事实生成的猫咪日记
+model DiaryEntry {
+  id          String   @id
+  catId       String
+  cat         Cat      @relation(fields: [catId], references: [id])
+  day         Int
+  content     String
+  mood        String
+  eventIds    String[]
+  generatedBy String   @default("llm") // llm | fallback
+  createdAt   DateTime
+
+  @@unique([catId, day])
+}
+
+model WorldState {
+  id      Int    @id // 恒为 1
+  day     Int    @default(0)
+  season  String @default("夏")
+  weather String @default("晴")
+}

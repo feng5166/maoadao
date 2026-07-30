@@ -1,5 +1,4 @@
-import { eq } from "drizzle-orm";
-import { db, schema } from "../lib/db";
+import { prisma } from "../lib/db";
 import { advanceOneDay } from "../lib/sim/tick";
 
 // 用法：npm run tick            推进一天并生成日记
@@ -10,14 +9,16 @@ async function main() {
   const result = await advanceOneDay({ narrate });
   console.log(`第 ${result.day} 天（${result.weather}）：${result.eventCount} 条事实，${result.diaryCount} 篇日记。\n`);
 
-  const diaries = await db.select().from(schema.diaryEntries).where(eq(schema.diaryEntries.day, result.day)).all();
+  const diaries = await prisma.diaryEntry.findMany({ where: { day: result.day } });
   for (const d of diaries) {
-    const cat = await db.select().from(schema.cats).where(eq(schema.cats.id, d.catId)).get();
+    const cat = await prisma.cat.findUnique({ where: { id: d.catId } });
     console.log(`【${cat?.name}】(${d.mood}${d.generatedBy === "fallback" ? "，兜底" : ""})\n${d.content}\n`);
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

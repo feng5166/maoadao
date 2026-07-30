@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { db, schema } from "./db";
+import { prisma } from "./db";
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
@@ -25,8 +25,8 @@ export async function createCat(formData: FormData) {
     : ["神秘"];
 
   const id = `cat-${randomUUID().slice(0, 8)}`;
-  await db.insert(schema.cats)
-    .values({
+  await prisma.cat.create({
+    data: {
       id,
       name,
       isNpc: false,
@@ -37,9 +37,9 @@ export async function createCat(formData: FormData) {
       appearance: appearance || "一只还没被描述过的猫",
       bio: bio || `${name}刚刚搬来猫啊岛，一切都是新的。`,
       createdAt: new Date(),
-    })
-    .run();
-  await db.insert(schema.catStates).values({ catId: id }).run();
+      state: { create: {} },
+    },
+  });
 
   revalidatePath("/");
   redirect(`/cats/${id}`);

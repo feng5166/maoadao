@@ -7,14 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:push": "drizzle-kit push",
+    "db:push": "prisma db push",
     "seed": "tsx scripts/seed.ts",
-    "tick": "tsx scripts/tick.ts"
+    "tick": "tsx scripts/tick.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
-    "@libsql/client": "^0.17.4",
-    "drizzle-orm": "^0.45.2",
+    "@prisma/client": "^6.19.3",
     "next": "16.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -24,9 +24,9 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
     "typescript": "^5"

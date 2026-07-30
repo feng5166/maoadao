@@ -65,7 +65,7 @@ export default async function CatPage({ params }: { params: Promise<{ id: string
           <div className="mt-3 rounded-xl bg-[#FFF9EE] p-3 text-sm">
             {storylines.map((s) => (
               <p key={s.id}>
-                📌 正在经营「{String(s.data.name ?? s.kind)}」（第 {s.startDay} 天开张）
+                📌 正在经营「{String((s.data as Record<string, unknown> | null)?.name ?? s.kind)}」（第 {s.startDay} 天开张）
               </p>
             ))}
           </div>
