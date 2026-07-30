@@ -1,3 +1,4 @@
+import "./_env";
 import { prisma } from "../lib/db";
 import { NPC_CATS } from "../lib/sim/npcs";
 

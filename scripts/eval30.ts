@@ -23,9 +23,9 @@ const catById = new Map(cats.map((c) => [c.id, c]));
 const states = new Map<string, SimCatState>(
   cats.map((c) => [c.id, { coins: 50, energy: 100, mood: "平静", location: "自家小屋" }]),
 );
-let relationships: SimRelationship[] = [];
-let threads: SimThread[] = [];
-let lastUsedDay = new Map<string, number>();
+const relationships: SimRelationship[] = [];
+const threads: SimThread[] = [];
+const lastUsedDay = new Map<string, number>();
 let recentBadOutcomes = new Map<string, number>();
 let threadSeq = 0;
 

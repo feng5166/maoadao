@@ -1,4 +1,3 @@
-import "../env";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Fact, SimCat } from "../sim/types";
 import { SEGMENT_CN } from "../sim/types";

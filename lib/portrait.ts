@@ -1,4 +1,3 @@
-import "./env";
 import sharp from "sharp";
 import { prisma } from "./db";
 

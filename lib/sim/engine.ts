@@ -263,7 +263,6 @@ export function runDay(world: WorldSnapshot): DayResult {
 
   // ============ 记忆生成（规则化，不花 LLM 钱） ============
   for (const f of facts) {
-    const catName = catById.get(f.catId)?.name ?? "";
     // 观察记忆：内容价值高的事
     if (f.contentValue >= 5 && !f.threadKey) {
       memories.push({

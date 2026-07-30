@@ -211,7 +211,7 @@ export const THREAD_SYSTEMS: Record<string, ThreadSystem> = {
           // 第七步：选择公开还是保守秘密（性格决定）
           const willPublish = ctx.cat.boldness > 70;
           return stepTemplate("lighthouse_choice", willPublish ? "公开灯塔的秘密" : "守住灯塔的秘密", {
-            resolve: (c) => {
+            resolve: () => {
               if (willPublish) {
                 return {
                   outcome: "success",

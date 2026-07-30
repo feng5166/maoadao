@@ -1,4 +1,3 @@
-import "./env";
 import Anthropic from "@anthropic-ai/sdk";
 
 // 用户输入审核：LLM 主审（便宜的 haiku）+ 词表兜底。

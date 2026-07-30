@@ -1,3 +1,4 @@
+import "./_env";
 // 为还没有立绘的猫批量生成（串行防限流）。用法：npx tsx scripts/portraits.ts
 import { prisma } from "../lib/db";
 import { generatePortrait } from "../lib/portrait";

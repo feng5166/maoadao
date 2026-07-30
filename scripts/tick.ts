@@ -1,3 +1,4 @@
+import "./_env";
 import { prisma } from "../lib/db";
 import { advanceOneDay } from "../lib/sim/tick";
 

@@ -9,6 +9,7 @@ import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
 import { NPC_CATS } from "./sim/npcs";
 import { generatePortrait } from "./portrait";
+import { ensureViewerId, getViewerId } from "./identity";
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
@@ -29,6 +30,10 @@ export async function createCat(formData: FormData) {
 
   if (!name) throw new Error("猫得有个名字");
 
+  // 身份：匿名 cookie，一浏览器一岛民；猫归属于创建者
+  const uid = await ensureViewerId();
+  await prisma.user.upsert({ where: { id: uid }, update: {}, create: { id: uid, name: "岛民", createdAt: new Date() } });
+
   // 内容审核：所有用户可见文本
   const mod = await moderateTexts([name, appearance, bio, tagsRaw]);
   if (!mod.ok) throw new Error(mod.reason ?? "内容未通过审核，请修改后重试");
@@ -43,6 +48,7 @@ export async function createCat(formData: FormData) {
       id,
       name,
       isNpc: false,
+      ownerId: uid,
       goal,
       boldness,
       sociability,
@@ -77,6 +83,19 @@ export async function createCat(formData: FormData) {
 
 const SUGGESTIONS = new Set(["earn", "explore", "social", "rest"]);
 
+/** 所有权守卫：非 NPC、有主、且当前访客就是主人 */
+export async function assertOwnerCheck(
+  cat: { isNpc: boolean; ownerId: string | null } | null,
+  viewerId: string | null,
+): Promise<void> {
+  assertOwner(cat, viewerId);
+}
+
+function assertOwner(cat: { isNpc: boolean; ownerId: string | null } | null, viewerId: string | null): asserts cat {
+  if (!cat || cat.isNpc) throw new Error("只能给自己领养的猫留言");
+  if (!cat.ownerId || !viewerId || cat.ownerId !== viewerId) throw new Error("这不是你的猫哦");
+}
+
 export async function saveNudge(formData: FormData) {
   const catId = String(formData.get("catId") ?? "");
   const message = String(formData.get("message") ?? "").trim().slice(0, 60);
@@ -86,7 +105,8 @@ export async function saveNudge(formData: FormData) {
 
   if (!catId || (!message && !suggestion)) return;
   const cat = await prisma.cat.findUnique({ where: { id: catId } });
-  if (!cat || cat.isNpc) throw new Error("只能给自己领养的猫留言");
+  const uid = await getViewerId();
+  assertOwner(cat, uid);
 
   if (message) {
     const mod = await moderateTexts([message]);

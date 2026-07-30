@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CatAvatar } from "@/components/CatAvatar";
 import { THREAD_LABELS } from "@/lib/sim/threads";
 import { saveNudge } from "@/lib/actions";
+import { getViewerId } from "@/lib/identity";
 import {
   getActiveStorylines,
   getCat,
@@ -25,6 +26,8 @@ export default async function CatPage({ params }: { params: Promise<{ id: string
   const { id } = await params;
   const cat = await getCat(id);
   if (!cat) notFound();
+  const viewerId = await getViewerId();
+  const isOwner = !cat.isNpc && Boolean(cat.ownerId) && cat.ownerId === viewerId;
 
   const state = await getCatState(id);
   const diaries = await getCatDiaries(id);
@@ -107,7 +110,7 @@ export default async function CatPage({ params }: { params: Promise<{ id: string
         )}
       </div>
 
-      {!cat.isNpc && (
+      {isOwner && (
         <section className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm">
           <h2 className="mb-1 font-bold">和{cat.name}说句话</h2>
           <p className="mb-3 text-xs text-[#A89B85]">留言会成为它的记忆；建议会影响它明天想做的事（但它有自己的主意）。</p>

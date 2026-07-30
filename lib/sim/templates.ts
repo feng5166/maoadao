@@ -1,6 +1,5 @@
 import type {
   AffinityChange,
-  Fact,
   Intent,
   NewThread,
   Outcome,
