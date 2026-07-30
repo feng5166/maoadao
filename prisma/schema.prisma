@@ -8,7 +8,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL") // Neon pooled 连接
-  directUrl = env("DIRECT_URL") // 非池化连接，migrate/db push 用
+  directUrl = env("DATABASE_URL_UNPOOLED") // 非池化直连，migrate/db push 用（Neon 集成自动注入）
 }
 
 model User {
