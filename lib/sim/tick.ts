@@ -1,65 +1,101 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
-import { runDailyTick } from "./engine";
-import { narrateDiary } from "../narrative/narrator";
-import type { SimCat, SimCatState, SimEvent } from "./types";
+import { runDay, factSummary as factSummaryFor } from "./engine";
+import { narrateDiary, narrateIslandNews } from "../narrative/narrator";
+import type { Fact, SimCat, SimCatState, WorldSnapshot } from "./types";
 
-/** 推进世界一天：跑模拟 → 落库事实 → 为每只猫生成日记。 */
+/** 推进世界一天：装配快照 → 纯函数模拟 → 落库 → 叙事。 */
 export async function advanceOneDay(options: { narrate?: boolean } = {}) {
   const { narrate = true } = options;
 
   let world = await prisma.worldState.findUnique({ where: { id: 1 } });
-  if (!world) {
-    world = await prisma.worldState.create({ data: { id: 1, day: 0 } });
-  }
+  if (!world) world = await prisma.worldState.create({ data: { id: 1, day: 0 } });
   const day = world.day + 1;
   const weather = ["晴", "晴", "多云", "雨"][day % 4];
 
+  // ============ 装配世界快照 ============
   const catRows = await prisma.cat.findMany();
   const stateRows = await prisma.catState.findMany();
   const relRows = await prisma.relationship.findMany();
-  const storyRows = await prisma.storyline.findMany({ where: { status: "active" } });
+  const threadRows = await prisma.storyline.findMany({ where: { status: "active" } });
+  const recentEvents = await prisma.event.findMany({ where: { day: { gte: day - 8 } }, select: { catId: true, type: true, day: true, outcome: true } });
 
   const cats: SimCat[] = catRows.map((c) => ({
     id: c.id,
     name: c.name,
     isNpc: c.isNpc,
+    role: (c.role as SimCat["role"]) ?? undefined,
     boldness: c.boldness,
     sociability: c.sociability,
     diligence: c.diligence,
     personaTags: c.personaTags,
   }));
+  const catById = new Map(cats.map((c) => [c.id, c]));
   const states = new Map<string, SimCatState>(
     stateRows.map((s) => [s.catId, { coins: s.coins, energy: s.energy, mood: s.mood, location: s.location }]),
   );
 
-  const result = runDailyTick(
-    { day, season: world.season, weather },
+  const lastUsedDay = new Map<string, number>();
+  const recentBadOutcomes = new Map<string, number>();
+  for (const e of recentEvents) {
+    const key = `${e.catId}:${e.type}`;
+    if ((lastUsedDay.get(key) ?? -1) < e.day) lastUsedDay.set(key, e.day);
+    if (e.day === day - 1 && (e.outcome === "fail" || e.outcome === "complication")) {
+      recentBadOutcomes.set(e.catId, (recentBadOutcomes.get(e.catId) ?? 0) + 1);
+    }
+  }
+
+  const snapshot: WorldSnapshot = {
+    day,
+    season: world.season,
+    weather,
     cats,
     states,
-    relRows,
-    storyRows.map((s) => ({ ...s, data: s.data as Record<string, unknown> })),
-  );
+    relationships: relRows,
+    threads: threadRows.map((t) => ({
+      id: t.id,
+      key: t.kind,
+      catId: t.catId,
+      step: t.step,
+      status: t.status as "active",
+      data: t.data as Record<string, unknown>,
+      startDay: t.startDay,
+      lastAdvanceDay: t.lastAdvanceDay,
+    })),
+    lastUsedDay,
+    recentBadOutcomes,
+  };
 
-  // 落库：事实、状态、关系、事件线
-  const eventIdsByCat = new Map<string, string[]>();
-  const eventRows = result.events.map((ev) => {
-    const id = randomUUID();
-    eventIdsByCat.set(ev.catId, [...(eventIdsByCat.get(ev.catId) ?? []), id]);
-    return {
-      id,
-      day,
-      catId: ev.catId,
-      type: ev.type,
-      data: ev.data as Prisma.InputJsonValue,
-      deltas: ev.deltas as Prisma.InputJsonValue,
-    };
+  const result = runDay(snapshot);
+
+  // ============ 落库 ============
+  const factIds: string[] = [];
+  const mainIdx = new Set(result.mainFactIndexByCat.values());
+  await prisma.event.createMany({
+    data: result.facts.map((f, i) => {
+      const id = randomUUID();
+      factIds.push(id);
+      return {
+        id,
+        day,
+        segment: f.segment,
+        catId: f.catId,
+        type: f.type,
+        outcome: f.outcome,
+        data: f.data as Prisma.InputJsonValue,
+        deltas: f.deltas as Prisma.InputJsonValue,
+        targetId: f.targetId ?? null,
+        threadKey: f.threadKey ?? null,
+        threadStep: f.threadStep ?? null,
+        contentValue: f.contentValue,
+        isMain: mainIdx.has(i),
+      };
+    }),
   });
-  await prisma.event.createMany({ data: eventRows });
 
-  for (const [catId, change] of result.stateChanges) {
-    await prisma.catState.update({ where: { catId }, data: { ...change, updatedDay: day } });
+  for (const [catId, st] of result.stateChanges) {
+    await prisma.catState.update({ where: { catId }, data: { ...st, updatedDay: day } });
   }
 
   for (const ac of result.affinityChanges) {
@@ -75,11 +111,7 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
       const affinity = Math.max(-100, Math.min(100, existing.affinity + ac.delta));
       await prisma.relationship.update({
         where: { id: existing.id },
-        data: {
-          affinity,
-          lastInteractionDay: day,
-          kind: affinity > 40 ? "friend" : affinity < -40 ? "rival" : "acquaintance",
-        },
+        data: { affinity, lastInteractionDay: day, kind: affinity > 40 ? "friend" : affinity < -40 ? "rival" : "acquaintance" },
       });
     } else {
       await prisma.relationship.create({
@@ -88,37 +120,116 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
     }
   }
 
-  for (const s of result.newStorylines) {
+  // 新事件线（含临时 id 映射，供当日的 threadUpdates 引用）
+  const pendingIdMap = new Map<string, string>();
+  for (const nt of result.newThreads) {
+    const id = randomUUID();
+    pendingIdMap.set(`pending:${nt.key}:${nt.catId}`, id);
     await prisma.storyline.create({
-      data: { id: randomUUID(), ...s, data: s.data as Prisma.InputJsonValue },
+      data: {
+        id,
+        catId: nt.catId,
+        kind: nt.key,
+        status: "active",
+        step: nt.step,
+        lastAdvanceDay: nt.startDay,
+        data: nt.data as Prisma.InputJsonValue,
+        startDay: nt.startDay,
+      },
     });
   }
-  if (result.resolvedStorylineIds.length > 0) {
-    await prisma.storyline.updateMany({
-      where: { id: { in: result.resolvedStorylineIds } },
-      data: { status: "resolved", endDay: day },
+  for (const tu of result.threadUpdates) {
+    const id = pendingIdMap.get(tu.threadId) ?? tu.threadId;
+    await prisma.storyline.update({
+      where: { id },
+      data: {
+        ...(tu.step !== undefined ? { step: tu.step } : {}),
+        ...(tu.status ? { status: tu.status, ...(tu.status !== "active" ? { endDay: day } : {}) } : {}),
+        ...(tu.data ? { data: tu.data as Prisma.InputJsonValue } : {}),
+        ...(tu.lastAdvanceDay !== undefined ? { lastAdvanceDay: tu.lastAdvanceDay } : {}),
+      },
     });
   }
+
+  if (result.memories.length > 0) {
+    await prisma.memoryEntry.createMany({
+      data: result.memories.map((m) => ({
+        id: randomUUID(),
+        catId: m.catId,
+        day: m.day,
+        kind: m.kind,
+        content: m.content,
+        refId: m.refId ?? null,
+        importance: m.importance,
+      })),
+    });
+  }
+
   await prisma.worldState.update({ where: { id: 1 }, data: { day, weather } });
 
-  // 叙事层：并行为每只猫写日记（串行会超出 serverless 函数时限）
+  // ============ 叙事层 ============
   let diaries = 0;
+  let newsCount = 0;
   if (narrate) {
-    const eventsByCat = new Map<string, SimEvent[]>();
-    for (const ev of result.events) {
-      eventsByCat.set(ev.catId, [...(eventsByCat.get(ev.catId) ?? []), ev]);
+    // 岛屿动态（一次调用）
+    const newsFacts = result.islandNewsFactIndexes.map((i) => result.facts[i]);
+    const newsTexts = await narrateIslandNews({
+      day,
+      items: newsFacts.map((f) => ({ catName: catById.get(f.catId)?.name ?? "", summary: factSummaryFor(f, catById) })),
+      catById,
+    });
+    for (let i = 0; i < newsTexts.length; i++) {
+      await prisma.islandNews.create({
+        data: { id: randomUUID(), day, content: newsTexts[i], catId: newsFacts[i]?.catId ?? null, createdAt: new Date() },
+      });
+      newsCount++;
     }
+
+    // 每猫日记（并行）
+    const factsByCat = new Map<string, Fact[]>();
+    for (const f of result.facts) factsByCat.set(f.catId, [...(factsByCat.get(f.catId) ?? []), f]);
+
     const jobs = cats
-      .filter((cat) => (eventsByCat.get(cat.id)?.length ?? 0) > 0)
+      .filter((cat) => (factsByCat.get(cat.id)?.length ?? 0) > 0)
       .map(async (cat) => {
+        const catFacts = factsByCat.get(cat.id)!;
+        const mainIdxOfCat = result.mainFactIndexByCat.get(cat.id);
+        const mainFact = mainIdxOfCat !== undefined ? result.facts[mainIdxOfCat] : undefined;
         const mood = result.stateChanges.get(cat.id)?.mood ?? "平静";
+
+        // 记忆检索：重要性 + 近期性，排除今天，取 4 条
+        const memRows = await prisma.memoryEntry.findMany({
+          where: { catId: cat.id, day: { lt: day } },
+          orderBy: [{ importance: "desc" }, { day: "desc" }],
+          take: 4,
+        });
+        // 关系提示：最好和最差的关系各一
+        const rels = await prisma.relationship.findMany({
+          where: { OR: [{ catAId: cat.id }, { catBId: cat.id }] },
+          orderBy: { affinity: "desc" },
+        });
+        const relationHints: string[] = [];
+        if (rels.length > 0 && rels[0].affinity > 30) {
+          const other = rels[0].catAId === cat.id ? rels[0].catBId : rels[0].catAId;
+          relationHints.push(`和${catById.get(other)?.name}是好朋友`);
+        }
+        const worst = rels[rels.length - 1];
+        if (worst && worst.affinity < -20) {
+          const other = worst.catAId === cat.id ? worst.catBId : worst.catAId;
+          relationHints.push(`和${catById.get(other)?.name}有过节`);
+        }
+
         const { content, generatedBy } = await narrateDiary({
           cat,
           day,
           season: world.season,
           weather,
           mood,
-          events: eventsByCat.get(cat.id)!,
+          facts: catFacts,
+          mainFact,
+          memories: memRows.map((m) => `（第${m.day}天）${m.content}`),
+          relationHints,
+          catById,
         });
         await prisma.diaryEntry.create({
           data: {
@@ -127,7 +238,7 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
             day,
             content,
             mood,
-            eventIds: eventIdsByCat.get(cat.id) ?? [],
+            eventIds: [],
             generatedBy,
             createdAt: new Date(),
           },
@@ -137,5 +248,5 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
     diaries = (await Promise.all(jobs)).length;
   }
 
-  return { day, weather, eventCount: result.events.length, diaryCount: diaries };
+  return { day, weather, eventCount: result.facts.length, diaryCount: diaries, newsCount, directorNotes: result.directorNotes };
 }

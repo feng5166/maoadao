@@ -29,6 +29,7 @@ model Cat {
   sociability Int // 0-100 社交倾向
   diligence   Int // 0-100 勤劳程度
   personaTags String[]
+  role        String? // NPC 分级：function | story | social | background
   appearance  String // 外形描述，生成立绘用
   portraitUrl String? // 定稿立绘，一次生成反复合成
   bio         String
@@ -75,21 +76,30 @@ model Storyline {
   id       String  @id
   catId    String
   cat      Cat     @relation(fields: [catId], references: [id])
-  kind     String // shop | debt | expedition | feud | courtship
-  status   String  @default("active") // active | resolved | failed
-  data     Json
-  startDay Int
-  endDay   Int?
+  kind           String // 事件线 key：shop | debt | lighthouse
+  status         String @default("active") // active | resolved | failed
+  step           Int    @default(0)
+  lastAdvanceDay Int    @default(0)
+  data           Json
+  startDay       Int
+  endDay         Int?
 }
 
 // 模拟器每日产出的事实（唯一事实来源）
 model Event {
-  id     String @id
-  day    Int
-  catId  String
-  type   String // fish | shop_day | visit | explore | rest | shop_open | ...
-  data   Json
-  deltas Json
+  id           String  @id
+  day          Int
+  segment      String  @default("morning") // morning | afternoon | evening
+  catId        String
+  type         String // 模板 key
+  outcome      String  @default("success") // success | partial | fail | complication
+  data         Json
+  deltas       Json
+  targetId     String?
+  threadKey    String?
+  threadStep   Int?
+  contentValue Int     @default(1)
+  isMain       Boolean @default(false) // 导演选出的当日主事件
 
   @@index([day, catId])
 }
@@ -114,4 +124,28 @@ model WorldState {
   day     Int    @default(0)
   season  String @default("夏")
   weather String @default("晴")
+}
+
+// 双层记忆的主观层：观察/关系/情节/语义（客观事实由上面的结构化表维护）
+model MemoryEntry {
+  id         String @id
+  catId      String
+  day        Int
+  kind       String // observation | relation | emotion | thread | semantic
+  content    String
+  refId      String?
+  importance Int    @default(3)
+
+  @@index([catId, day])
+}
+
+// 岛屿动态：导演选出的全岛新闻（LLM 润色，失败则用事实转写）
+model IslandNews {
+  id        String   @id
+  day       Int
+  content   String
+  catId     String?
+  createdAt DateTime
+
+  @@index([day])
 }

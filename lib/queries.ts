@@ -59,3 +59,7 @@ export async function getFriends(id: string, limit = 6) {
 export async function getActiveStorylines(catId: string) {
   return prisma.storyline.findMany({ where: { catId, status: "active" } });
 }
+
+export async function getIslandNews(limit = 6) {
+  return prisma.islandNews.findMany({ orderBy: [{ day: "desc" }, { createdAt: "desc" }], take: limit });
+}

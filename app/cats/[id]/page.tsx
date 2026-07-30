@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CatAvatar } from "@/components/CatAvatar";
+import { THREAD_LABELS } from "@/lib/sim/threads";
 import {
   getActiveStorylines,
   getCat,
@@ -65,7 +66,9 @@ export default async function CatPage({ params }: { params: Promise<{ id: string
           <div className="mt-3 rounded-xl bg-[#FFF9EE] p-3 text-sm">
             {storylines.map((s) => (
               <p key={s.id}>
-                📌 正在经营「{String((s.data as Record<string, unknown> | null)?.name ?? s.kind)}」（第 {s.startDay} 天开张）
+                📌 {s.kind === "shop"
+                  ? `正在经营「${String((s.data as Record<string, unknown> | null)?.name ?? "小店")}」（第 ${s.startDay} 天开张）`
+                  : `${THREAD_LABELS[s.kind] ?? s.kind}（进行到第 ${s.step} 步）`}
               </p>
             ))}
           </div>

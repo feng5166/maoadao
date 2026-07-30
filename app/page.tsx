@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { CatAvatar } from "@/components/CatAvatar";
-import { getFeed, getWorld } from "@/lib/queries";
+import { getFeed, getIslandNews, getWorld } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const world = await getWorld();
   const feed = await getFeed();
+  const news = await getIslandNews();
 
   const byDay = new Map<number, typeof feed>();
   for (const entry of feed) {
@@ -23,6 +24,20 @@ export default async function HomePage() {
         </p>
         <h1 className="mt-1 text-xl font-bold">岛上的猫今天都在干什么？</h1>
       </div>
+
+      {news.length > 0 && (
+        <div className="rounded-2xl border border-[#EADFCC] bg-[#FFFDF7] p-4">
+          <p className="mb-2 text-xs font-medium text-[#B8860B]">📰 猫啊岛日报</p>
+          <ul className="space-y-1.5 text-sm text-[#6B5D48]">
+            {news.map((n) => (
+              <li key={n.id}>
+                <span className="mr-1.5 text-xs text-[#C4B69C]">第{n.day}天</span>
+                {n.content}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {days.length === 0 && (
         <p className="py-12 text-center text-sm text-[#A89B85]">

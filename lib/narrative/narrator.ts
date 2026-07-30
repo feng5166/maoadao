@@ -1,11 +1,32 @@
 import "../env";
 import Anthropic from "@anthropic-ai/sdk";
-import type { SimCat, SimEvent } from "../sim/types";
+import type { Fact, SimCat } from "../sim/types";
+import { SEGMENT_CN } from "../sim/types";
+import { factSummary } from "../sim/engine";
 
 const client = new Anthropic();
 const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-5";
 // 拒答兜底（fallbacks）是官方 Claude API 上 opus-5 的特性；走中转或其他模型时用普通调用
 const useFallbacks = MODEL === "claude-opus-5" && !process.env.ANTHROPIC_BASE_URL;
+
+async function callLLM(system: string, user: string, maxTokens = 400): Promise<string | null> {
+  try {
+    const base = {
+      model: MODEL,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user" as const, content: user }],
+    };
+    const response = useFallbacks
+      ? await client.beta.messages.create({ ...base, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
+      : await client.messages.create(base);
+    if (response.stop_reason === "refusal") return null;
+    return response.content.find((b) => b.type === "text")?.text.trim() ?? null;
+  } catch (err) {
+    console.error("[narrator] LLM 调用失败:", err instanceof Error ? err.message.slice(0, 200) : err);
+    return null;
+  }
+}
 
 export interface DiaryInput {
   cat: SimCat;
@@ -13,75 +34,62 @@ export interface DiaryInput {
   season: string;
   weather: string;
   mood: string;
-  events: SimEvent[];
-}
-
-// 事实先转成中文短句，LLM 只允许基于这些短句叙事，杜绝自由编造
-function eventToFact(ev: SimEvent, catName: string): string {
-  const d = ev.data;
-  switch (ev.type) {
-    case "fish":
-      return `去${d.location}钓鱼，钓到 ${d.catchCount} 条，赚了 ${ev.deltas.coins ?? 0} 鱼币`;
-    case "shop_day": {
-      const rev = Number(d.revenue);
-      return `照看自己的「${d.shopName}」（开业第 ${d.daysOpen} 天），今天${rev >= 0 ? `赚了 ${rev}` : `亏了 ${-rev}`} 鱼币`;
-    }
-    case "shop_open":
-      return `花 ${d.cost} 鱼币开了一家新店「${d.shopName}」`;
-    case "shop_close":
-      return `把「${d.shopName}」关掉了，总共亏了 ${-Number(d.totalProfit)} 鱼币`;
-    case "visit":
-      return `去找${d.targetName}玩，${d.wentWell ? "聊得很开心" : "闹得不太愉快"}`;
-    case "explore":
-      return d.found ? `去${d.location}探险，捡到了${d.found}` : `去${d.location}探险，什么也没找到`;
-    case "rest":
-      return `在${d.location}睡了一整个下午`;
-    default:
-      return `${catName}做了一件事：${JSON.stringify(d)}`;
-  }
+  facts: Fact[]; // 当日全部事实（按时段有序）
+  mainFact?: Fact; // 导演选出的主事件
+  memories: string[]; // 检索出的历史记忆（已按重要性排序）
+  relationHints: string[]; // 如 "和老怪是好朋友（好感 52）"
+  catById: Map<string, { name: string }>;
 }
 
 export async function narrateDiary(input: DiaryInput): Promise<{ content: string; generatedBy: "llm" | "fallback" }> {
-  const facts = input.events.map((ev) => `- ${eventToFact(ev, input.cat.name)}`).join("\n");
+  const factLines = input.facts
+    .map((f) => `- [${SEGMENT_CN[f.segment]}] ${factSummary(f, input.catById)}${f === input.mainFact ? "（今天最重要的事）" : ""}`)
+    .join("\n");
+  const memoryBlock = input.memories.length ? `\n你记得的事（可以自然地联系起来，但别逐条罗列）：\n${input.memories.map((m) => `- ${m}`).join("\n")}` : "";
+  const relationBlock = input.relationHints.length ? `\n你的关系：${input.relationHints.join("；")}` : "";
 
   const system = `你是猫啊岛上的一只猫，正在写自己的日记。规则：
 1. 只能基于「今日事实」写，绝对不能编造事实里没有的事件、角色或数字。
-2. 第一人称，100 字左右的中文，口语化，符合你的性格。
-3. 可以有情绪、吐槽和小心思，但情节必须与事实一一对应。
-4. 直接输出日记正文，不要标题、日期或任何额外说明。`;
+2. 第一人称，120 字左右的中文，口语化，符合你的性格。
+3. 「今天最重要的事」要作为日记的重心，其他事一笔带过或不提。
+4. 「你记得的事」是你的记忆，可以用来产生连续感（比如提到昨天的事、和某只猫的过节），但不能当成今天发生的事写。
+5. 直接输出日记正文，不要标题、日期或任何额外说明。`;
 
   const user = `你的资料：
 名字：${input.cat.name}
 性格：${input.cat.personaTags.join("、")}
 今天是猫啊岛的第 ${input.day} 天，${input.season}天，天气${input.weather}，你现在的心情：${input.mood}
-
+${relationBlock}
 今日事实：
-${facts}`;
+${factLines}
+${memoryBlock}`;
 
-  try {
-    const base = {
-      model: MODEL,
-      max_tokens: 400,
-      system,
-      messages: [{ role: "user" as const, content: user }],
+  const text = await callLLM(system, user);
+  if (!text) {
+    return {
+      content: `第 ${input.day} 天，天气${input.weather}。今天：\n${factLines}`,
+      generatedBy: "fallback",
     };
-    const response = useFallbacks
-      ? await client.beta.messages.create({ ...base, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
-      : await client.messages.create(base);
-
-    if (response.stop_reason === "refusal") {
-      return { content: fallbackDiary(input, facts), generatedBy: "fallback" };
-    }
-    const text = response.content.find((b) => b.type === "text")?.text.trim();
-    if (!text) return { content: fallbackDiary(input, facts), generatedBy: "fallback" };
-    return { content: text, generatedBy: "llm" };
-  } catch (err) {
-    console.error(`[narrator] ${input.cat.name} day ${input.day} 叙事失败:`, err);
-    return { content: fallbackDiary(input, facts), generatedBy: "fallback" };
   }
+  return { content: text, generatedBy: "llm" };
 }
 
-// LLM 不可用时的兜底：直接罗列事实，保证日记链不断
-function fallbackDiary(input: DiaryInput, facts: string): string {
-  return `第 ${input.day} 天，天气${input.weather}。今天：\n${facts}`;
+export interface NewsInput {
+  day: number;
+  items: { catName: string; summary: string }[];
+  catById: Map<string, { name: string }>;
+}
+
+/** 岛屿动态：《猫啊岛日报》口吻，一次调用生成全部条目 */
+export async function narrateIslandNews(input: NewsInput): Promise<string[]> {
+  if (input.items.length === 0) return [];
+  const factLines = input.items.map((x, i) => `${i + 1}. ${x.catName}：${x.summary}`).join("\n");
+  const system = `你是《猫啊岛日报》的编辑小梅（一只爱八卦的三花猫）。把每条事实改写成一句 30 字以内的岛屿动态，像小报标题一样有趣但不夸大事实。规则：
+1. 严格基于事实，不编造。
+2. 每条一行，行首不带序号或符号。
+3. 输出行数与输入条数一致。`;
+  const text = await callLLM(system, `第 ${input.day} 天的岛屿见闻：\n${factLines}`, 300);
+  if (!text) return input.items.map((x) => `${x.catName}${x.summary}`);
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  return lines.length ? lines.slice(0, input.items.length) : input.items.map((x) => `${x.catName}${x.summary}`);
 }

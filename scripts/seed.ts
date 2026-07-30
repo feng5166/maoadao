@@ -13,6 +13,7 @@ async function main() {
         id: npc.id,
         name: npc.name,
         isNpc: true,
+        role: npc.role,
         boldness: npc.boldness,
         sociability: npc.sociability,
         diligence: npc.diligence,
