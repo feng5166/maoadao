@@ -1,65 +1,69 @@
-import Image from "next/image";
+import Link from "next/link";
+import { CatAvatar } from "@/components/CatAvatar";
+import { getFeed, getWorld } from "@/lib/queries";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default function HomePage() {
+  const world = getWorld();
+  const feed = getFeed();
+
+  const byDay = new Map<number, typeof feed>();
+  for (const entry of feed) {
+    byDay.set(entry.day, [...(byDay.get(entry.day) ?? []), entry]);
+  }
+  const days = [...byDay.keys()].sort((a, b) => b - a);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="space-y-6">
+      <div className="rounded-2xl bg-gradient-to-r from-[#FFE0B2] to-[#FFF3E0] p-5">
+        <p className="text-sm text-[#8A7B65]">
+          今天是猫啊岛的第 <span className="font-bold text-[#3E3226]">{world.day}</span> 天 ·{" "}
+          {world.season}天 · 天气{world.weather}
+        </p>
+        <h1 className="mt-1 text-xl font-bold">岛上的猫今天都在干什么？</h1>
+      </div>
+
+      {days.length === 0 && (
+        <p className="py-12 text-center text-sm text-[#A89B85]">
+          岛上还很安静……运行 <code>npm run tick</code> 推进一天，猫们就会开始生活。
+        </p>
+      )}
+
+      {days.map((day) => (
+        <section key={day}>
+          <h2 className="mb-3 text-sm font-medium text-[#A89B85]">— 第 {day} 天 —</h2>
+          <div className="space-y-3">
+            {byDay.get(day)!.map((entry) => (
+              <article
+                key={entry.id}
+                className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <Link href={`/cats/${entry.catId}`} className="shrink-0">
+                    <CatAvatar id={entry.catId} size={44} />
+                  </Link>
+                  <div className="min-w-0">
+                    <Link href={`/cats/${entry.catId}`} className="font-bold hover:text-[#E08E0B]">
+                      {entry.catName}
+                    </Link>
+                    <p className="text-xs text-[#A89B85]">
+                      {entry.isNpc ? "岛民" : "岛上新客"} · 心情：{entry.mood}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/share/${entry.catId}/${entry.day}`}
+                    className="ml-auto shrink-0 rounded-full border border-[#EADFCC] px-3 py-1 text-xs text-[#8A7B65] hover:border-[#F5A623] hover:text-[#E08E0B]"
+                  >
+                    分享卡
+                  </Link>
+                </div>
+                <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed">{entry.content}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
