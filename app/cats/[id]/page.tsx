@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CatAvatar } from "@/components/CatAvatar";
 import { THREAD_LABELS } from "@/lib/sim/threads";
+import { saveNudge } from "@/lib/actions";
 import {
   getActiveStorylines,
   getCat,
@@ -11,6 +12,14 @@ import {
 } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
+
+const GOAL_LABELS: Record<string, string> = {
+  chill: "🛋️ 舒服躺平",
+  earn: "🐟 攒钱开店",
+  friends: "💕 交遍朋友",
+  explore: "🗺️ 探索全岛",
+};
+
 
 export default async function CatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,6 +40,11 @@ export default async function CatPage({ params }: { params: Promise<{ id: string
             <h1 className="text-2xl font-bold">{cat.name}</h1>
             <p className="mt-0.5 text-sm text-[#8A7B65]">{cat.appearance}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
+              {cat.goal && (
+                <span className="rounded-full bg-[#E8F5E9] px-2.5 py-0.5 text-xs text-[#4E7A3A]">
+                  {GOAL_LABELS[cat.goal] ?? cat.goal}
+                </span>
+              )}
               {cat.personaTags.map((tag) => (
                 <span key={tag} className="rounded-full bg-[#FFF3E0] px-2.5 py-0.5 text-xs text-[#B8860B]">
                   {tag}
@@ -89,6 +103,42 @@ export default async function CatPage({ params }: { params: Promise<{ id: string
           </div>
         )}
       </div>
+
+      {!cat.isNpc && (
+        <section className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm">
+          <h2 className="mb-1 font-bold">和{cat.name}说句话</h2>
+          <p className="mb-3 text-xs text-[#A89B85]">留言会成为它的记忆；建议会影响它明天想做的事（但它有自己的主意）。</p>
+          <form action={saveNudge} className="space-y-3">
+            <input type="hidden" name="catId" value={cat.id} />
+            <textarea
+              name="message" maxLength={60} rows={2} placeholder="给它留一句话（60 字内）"
+              className="w-full rounded-lg border border-[#E0D5C0] px-3 py-2 text-sm focus:border-[#F5A623] focus:outline-none"
+            />
+            <label className="flex items-center gap-2 text-xs text-[#8A7B65]">
+              <input type="checkbox" name="isPublic" className="accent-[#F5A623]" />
+              允许它在公开日记里提到这句话（不勾选则只有它自己知道）
+            </label>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-xs text-[#A89B85]">建议它明天：</span>
+              {[
+                { v: "", label: "随它去" },
+                { v: "earn", label: "去赚钱" },
+                { v: "explore", label: "去探险" },
+                { v: "social", label: "找朋友" },
+                { v: "rest", label: "好好休息" },
+              ].map((o, i) => (
+                <label key={o.v} className="flex cursor-pointer items-center gap-1 rounded-full border border-[#E0D5C0] px-2.5 py-1 has-[:checked]:border-[#F5A623] has-[:checked]:bg-[#FFF9EE]">
+                  <input type="radio" name="suggestion" value={o.v} defaultChecked={i === 0} className="hidden" />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+            <button type="submit" className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#E08E0B]">
+              送给它 🐾
+            </button>
+          </form>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-3 font-bold">{cat.name}的日记</h2>

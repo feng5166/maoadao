@@ -19,6 +19,20 @@ import { mulberry32, hashSeed, pick, weightedPick } from "./rng";
 
 const THREAD_AUTO_TYPE: Record<string, string> = { shop: "shop_day", debt: "debt_collect" };
 
+// 长期目标 → 行为温和倾斜；主人建议 → 当日强倾斜
+const GOAL_BOOSTS: Record<string, Record<string, number>> = {
+  earn: { fish: 1.5, odd_job: 1.5, shop_open: 1.6 },
+  friends: { visit: 1.5, gossip: 1.4 },
+  explore: { explore: 1.6, stargaze: 1.3 },
+  chill: { rest: 1.4, market: 1.2 },
+};
+const SUGGESTION_BOOSTS: Record<string, string[]> = {
+  earn: ["fish", "odd_job"],
+  explore: ["explore"],
+  social: ["visit", "gossip"],
+  rest: ["rest"],
+};
+
 /** 跑完一整天（三时段）。纯函数：输入世界快照，输出全部变化，不碰任何存储。 */
 export function runDay(world: WorldSnapshot): DayResult {
   const plan = planDay(world);
@@ -146,6 +160,11 @@ export function runDay(world: WorldSnapshot): DayResult {
         // 需求驱动：累了想睡、穷了想赚
         if (state.energy < 30 && t.key === "rest") weight *= 3;
         if (state.coins < 15 && (t.key === "fish" || t.key === "odd_job")) weight *= 1.8;
+        // 长期目标温和倾斜
+        if (cat.goal) weight *= GOAL_BOOSTS[cat.goal]?.[t.key] ?? 1;
+        // 主人建议：当日强倾斜（影响但不完全控制）
+        const suggestion = world.suggestions?.get(cat.id);
+        if (suggestion && SUGGESTION_BOOSTS[suggestion]?.includes(t.key)) weight *= 3;
         candidates.push({ template: t, weight });
       }
 
@@ -178,6 +197,10 @@ export function runDay(world: WorldSnapshot): DayResult {
         Object.assign(intent, extra);
       }
       const res = main.template.resolve(ctx, intent);
+      const suggestionNow = world.suggestions?.get(cat.id);
+      if (suggestionNow && SUGGESTION_BOOSTS[suggestionNow]?.includes(main.template.key)) {
+        res.data = { ...res.data, nudged: true };
+      }
       applyResult(cat.id, res);
       pushFact(cat.id, segment, main.template.key, main.template, res, intent.targetId, main.thread?.key, main.thread?.step);
       lastUsed.set(`${cat.id}:${main.template.key}`, world.day);

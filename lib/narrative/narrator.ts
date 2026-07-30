@@ -38,6 +38,8 @@ export interface DiaryInput {
   mainFact?: Fact; // 导演选出的主事件
   memories: string[]; // 检索出的历史记忆（已按重要性排序）
   relationHints: string[]; // 如 "和老怪是好朋友（好感 52）"
+  ownerMessage?: string; // 主人今天的留言（已允许公开才会传入）
+  ownerVisited?: boolean; // 主人来看过但留言不公开：只提"主人来过"，不引用内容
   catById: Map<string, { name: string }>;
 }
 
@@ -46,6 +48,11 @@ export async function narrateDiary(input: DiaryInput): Promise<{ content: string
     .map((f) => `- [${SEGMENT_CN[f.segment]}] ${factSummary(f, input.catById)}${f === input.mainFact ? "（今天最重要的事）" : ""}`)
     .join("\n");
   const memoryBlock = input.memories.length ? `\n你记得的事（可以自然地联系起来，但别逐条罗列）：\n${input.memories.map((m) => `- ${m}`).join("\n")}` : "";
+  const ownerBlock = input.ownerMessage
+    ? `\n主人今天给你留了话：「${input.ownerMessage}」——在日记里自然地回应一下主人。`
+    : input.ownerVisited
+      ? "\n主人今天来看过你、给你留了悄悄话——日记里可以提到主人来过、心里暖暖的，但不要编造留言内容。"
+      : "";
   const relationBlock = input.relationHints.length ? `\n你的关系：${input.relationHints.join("；")}` : "";
 
   const system = `你是猫啊岛上的一只猫，正在写自己的日记。规则：
@@ -62,7 +69,7 @@ export async function narrateDiary(input: DiaryInput): Promise<{ content: string
 ${relationBlock}
 今日事实：
 ${factLines}
-${memoryBlock}`;
+${memoryBlock}${ownerBlock}`;
 
   const text = await callLLM(system, user);
   if (!text) {
@@ -92,4 +99,11 @@ export async function narrateIslandNews(input: NewsInput): Promise<string[]> {
   if (!text) return input.items.map((x) => `${x.catName}${x.summary}`);
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   return lines.length ? lines.slice(0, input.items.length) : input.items.map((x) => `${x.catName}${x.summary}`);
+}
+
+/** 关键节点反思：把近期记忆浓缩成一句长期认知（语义记忆） */
+export async function reflect(cat: SimCat, recentMemories: string[]): Promise<string | null> {
+  if (recentMemories.length === 0) return null;
+  const system = `你是猫啊岛上的一只猫，性格：${cat.personaTags.join("、")}。根据你最近的经历，总结一条你对生活/朋友/自己的新认识。要求：第一人称、30 字以内、像猫会有的朴素感悟、必须基于经历不能编造。直接输出这一句话。`;
+  return callLLM(system, `你最近的经历：\n${recentMemories.map((m) => `- ${m}`).join("\n")}`, 100);
 }

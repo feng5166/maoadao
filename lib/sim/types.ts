@@ -15,6 +15,7 @@ export interface SimCat {
   diligence: number;
   personaTags: string[];
   role?: NpcRole; // NPC 分级：不同复杂度，控制成本
+  goal?: string; // earn | friends | explore | chill：长期目标，温和影响行为倾向
 }
 
 export interface SimCatState {
@@ -140,4 +141,6 @@ export interface WorldSnapshot {
   lastUsedDay: Map<string, number>;
   // catId → 昨天 fail/complication 的数量（负面连败补偿用）
   recentBadOutcomes: Map<string, number>;
+  // catId → 主人的明日建议（earn | explore | social | rest），当天生效
+  suggestions?: Map<string, string>;
 }

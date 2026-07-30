@@ -56,6 +56,23 @@ export default function AdoptPage() {
         ))}
 
         <div>
+          <span className="block text-sm font-medium">希望它过什么样的生活</span>
+          <div className="mt-1 grid grid-cols-2 gap-2 text-sm">
+            {[
+              { v: "chill", label: "🛋️ 舒服躺平" },
+              { v: "earn", label: "🐟 攒钱开店" },
+              { v: "friends", label: "💕 交遍朋友" },
+              { v: "explore", label: "🗺️ 探索全岛" },
+            ].map((g, i) => (
+              <label key={g.v} className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#E0D5C0] px-3 py-2 has-[:checked]:border-[#F5A623] has-[:checked]:bg-[#FFF9EE]">
+                <input type="radio" name="goal" value={g.v} defaultChecked={i === 0} className="accent-[#F5A623]" />
+                {g.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
           <label htmlFor="bio" className="block text-sm font-medium">它的故事（会影响日记的语气）</label>
           <textarea
             id="bio" name="bio" maxLength={120} rows={2}

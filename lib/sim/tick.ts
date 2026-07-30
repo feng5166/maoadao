@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { runDay, factSummary as factSummaryFor } from "./engine";
-import { narrateDiary, narrateIslandNews } from "../narrative/narrator";
+import { narrateDiary, narrateIslandNews, reflect } from "../narrative/narrator";
 import type { Fact, SimCat, SimCatState, WorldSnapshot } from "./types";
 
 /** 推进世界一天：装配快照 → 纯函数模拟 → 落库 → 叙事。 */
@@ -20,6 +20,7 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
   const relRows = await prisma.relationship.findMany();
   const threadRows = await prisma.storyline.findMany({ where: { status: "active" } });
   const recentEvents = await prisma.event.findMany({ where: { day: { gte: day - 8 } }, select: { catId: true, type: true, day: true, outcome: true } });
+  const nudges = await prisma.ownerNudge.findMany({ where: { consumedDay: null } });
 
   const cats: SimCat[] = catRows.map((c) => ({
     id: c.id,
@@ -65,6 +66,7 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
     })),
     lastUsedDay,
     recentBadOutcomes,
+    suggestions: new Map(nudges.filter((n) => n.suggestion).map((n) => [n.catId, n.suggestion!])),
   };
 
   const result = runDay(snapshot);
@@ -165,6 +167,26 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
     });
   }
 
+  // 主人留言 → 主人记忆（隐私标记决定能否进公开日记）
+  for (const n of nudges) {
+    if (n.message) {
+      await prisma.memoryEntry.create({
+        data: {
+          id: randomUUID(),
+          catId: n.catId,
+          day,
+          kind: "owner",
+          content: `主人对我说：「${n.message}」`,
+          importance: 8,
+          visibility: n.isPublic ? "public" : "private",
+        },
+      });
+    }
+  }
+  if (nudges.length > 0) {
+    await prisma.ownerNudge.updateMany({ where: { id: { in: nudges.map((n) => n.id) } }, data: { consumedDay: day } });
+  }
+
   await prisma.worldState.update({ where: { id: 1 }, data: { day, weather } });
 
   // ============ 叙事层 ============
@@ -197,12 +219,13 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
         const mainFact = mainIdxOfCat !== undefined ? result.facts[mainIdxOfCat] : undefined;
         const mood = result.stateChanges.get(cat.id)?.mood ?? "平静";
 
-        // 记忆检索：重要性 + 近期性，排除今天，取 4 条
+        // 记忆检索：重要性 + 近期性，排除今天，只取可公开的，取 4 条
         const memRows = await prisma.memoryEntry.findMany({
-          where: { catId: cat.id, day: { lt: day } },
+          where: { catId: cat.id, day: { lt: day }, visibility: "public" },
           orderBy: [{ importance: "desc" }, { day: "desc" }],
           take: 4,
         });
+        const todayNudge = nudges.find((n) => n.catId === cat.id && n.message);
         // 关系提示：最好和最差的关系各一
         const rels = await prisma.relationship.findMany({
           where: { OR: [{ catAId: cat.id }, { catBId: cat.id }] },
@@ -229,6 +252,8 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
           mainFact,
           memories: memRows.map((m) => `（第${m.day}天）${m.content}`),
           relationHints,
+          ownerMessage: todayNudge?.isPublic ? todayNudge.message ?? undefined : undefined,
+          ownerVisited: Boolean(todayNudge && !todayNudge.isPublic),
           catById,
         });
         await prisma.diaryEntry.create({
@@ -246,6 +271,33 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
         return generatedBy;
       });
     diaries = (await Promise.all(jobs)).length;
+
+    // 关键节点反思：每 7 天一次，或当天有事件线落幕的猫
+    const resolvedCatIds = new Set(
+      result.threadUpdates
+        .filter((tu) => tu.status === "resolved" || tu.status === "failed")
+        .map((tu) => {
+          const t = snapshot.threads.find((x) => x.id === tu.threadId);
+          return t?.catId;
+        })
+        .filter(Boolean) as string[],
+    );
+    const reflectCats = cats.filter((c) => day % 7 === 0 || resolvedCatIds.has(c.id));
+    await Promise.all(
+      reflectCats.map(async (cat) => {
+        const mems = await prisma.memoryEntry.findMany({
+          where: { catId: cat.id, day: { gte: day - 7 }, kind: { not: "semantic" } },
+          orderBy: { importance: "desc" },
+          take: 6,
+        });
+        const insight = await reflect(cat, mems.map((m) => m.content));
+        if (insight) {
+          await prisma.memoryEntry.create({
+            data: { id: randomUUID(), catId: cat.id, day, kind: "semantic", content: insight, importance: 8 },
+          });
+        }
+      }),
+    );
   }
 
   return { day, weather, eventCount: result.facts.length, diaryCount: diaries, newsCount, directorNotes: result.directorNotes };

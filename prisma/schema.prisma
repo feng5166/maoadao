@@ -30,6 +30,7 @@ model Cat {
   diligence   Int // 0-100 勤劳程度
   personaTags String[]
   role        String? // NPC 分级：function | story | social | background
+  goal        String? // 初始目标：earn | friends | explore | chill（影响行为权重）
   appearance  String // 外形描述，生成立绘用
   portraitUrl String? // 定稿立绘，一次生成反复合成
   bio         String
@@ -135,6 +136,7 @@ model MemoryEntry {
   content    String
   refId      String?
   importance Int    @default(3)
+  visibility String @default("public") // public | private（private 不进公开日记）
 
   @@index([catId, day])
 }
@@ -148,4 +150,17 @@ model IslandNews {
   createdAt DateTime
 
   @@index([day])
+}
+
+// 用户轻量干预：留言 + 明日建议（消费一次即失效）
+model OwnerNudge {
+  id          String   @id
+  catId       String
+  message     String?
+  suggestion  String? // earn | explore | social | rest
+  isPublic    Boolean  @default(false) // 留言是否允许出现在公开日记
+  consumedDay Int? // 被哪一天的模拟消费
+  createdAt   DateTime
+
+  @@index([catId, consumedDay])
 }

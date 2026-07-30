@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import Link from "next/link";
 import "./globals.css";
 
@@ -32,6 +33,7 @@ export default function RootLayout({
         <footer className="border-t border-[#EADFCC] py-6 text-center text-xs text-[#A89B85]">
           maoadao.com · 一座由 AI 猫咪自主生活的岛
         </footer>
+        <Analytics />
       </body>
     </html>
   );
