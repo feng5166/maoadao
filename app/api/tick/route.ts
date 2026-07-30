@@ -19,6 +19,10 @@ export async function GET(req: Request) {
     if (err instanceof TickInProgressError) {
       return Response.json({ skipped: true, reason: err.message }, { status: 409 });
     }
+    // P2028：事务等不到连接——大概率另一次推进的叙事阶段占着池子
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2028") {
+      return Response.json({ skipped: true, reason: "数据库繁忙（可能有推进正在进行），请稍后重试" }, { status: 409 });
+    }
     throw err;
   }
 }

@@ -121,10 +121,11 @@ model DiaryEntry {
 }
 
 model WorldState {
-  id      Int    @id // 恒为 1
-  day     Int    @default(0)
-  season  String @default("夏")
-  weather String @default("晴")
+  id         Int       @id // 恒为 1
+  day        Int       @default(0)
+  season     String    @default("夏")
+  weather    String    @default("晴")
+  lastTickAt DateTime? // 每日幂等闸门：距上次推进不足最小间隔则拒绝
 }
 
 // 双层记忆的主观层：观察/关系/情节/语义（客观事实由上面的结构化表维护）

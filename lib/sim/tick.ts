@@ -9,10 +9,13 @@ import type { Fact, SimCat, SimCatState, WorldSnapshot } from "./types";
 const TICK_LOCK_KEY = 8801;
 
 export class TickInProgressError extends Error {
-  constructor() {
-    super("另一次每日推进正在进行");
+  constructor(reason = "另一次每日推进正在进行") {
+    super(reason);
   }
 }
+
+// 每日幂等：距上次成功推进不足该间隔则拒绝（防 Cron 重放/误触连推两天）。本地调试可设 0。
+const MIN_TICK_INTERVAL_MIN = Number(process.env.MIN_TICK_INTERVAL_MIN ?? 360);
 
 /**
  * 推进世界一天。
@@ -32,6 +35,9 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
 
       let world = await tx.worldState.findUnique({ where: { id: 1 } });
       if (!world) world = await tx.worldState.create({ data: { id: 1, day: 0 } });
+      if (world.lastTickAt && Date.now() - world.lastTickAt.getTime() < MIN_TICK_INTERVAL_MIN * 60_000) {
+        throw new TickInProgressError(`今天已经推进过（第 ${world.day} 天）`);
+      }
       const day = world.day + 1;
       const weather = ["晴", "晴", "多云", "雨"][day % 4];
 
@@ -209,7 +215,7 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
       }
 
       // 版本条件推进：与锁双保险，读取后世界被并发推进则整体回滚
-      const advanced = await tx.worldState.updateMany({ where: { id: 1, day: world.day }, data: { day, weather } });
+      const advanced = await tx.worldState.updateMany({ where: { id: 1, day: world.day }, data: { day, weather, lastTickAt: new Date() } });
       if (advanced.count === 0) throw new TickInProgressError();
 
       return { day, weather, season: world.season, result, cats, nudges, eventIdsByCat };
