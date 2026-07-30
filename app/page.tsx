@@ -4,9 +4,9 @@ import { getFeed, getWorld } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
-  const world = getWorld();
-  const feed = getFeed();
+export default async function HomePage() {
+  const world = await getWorld();
+  const feed = await getFeed();
 
   const byDay = new Map<number, typeof feed>();
   for (const entry of feed) {

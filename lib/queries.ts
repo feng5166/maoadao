@@ -1,11 +1,13 @@
 import { desc, eq, or } from "drizzle-orm";
 import { db, schema } from "./db";
 
-export function getWorld() {
-  return db.select().from(schema.worldState).get() ?? { id: 1, day: 0, season: "夏", weather: "晴" };
+export async function getWorld() {
+  return (
+    (await db.select().from(schema.worldState).get()) ?? { id: 1, day: 0, season: "夏", weather: "晴" }
+  );
 }
 
-export function getFeed(limit = 50) {
+export async function getFeed(limit = 50) {
   return db
     .select({
       id: schema.diaryEntries.id,
@@ -23,15 +25,15 @@ export function getFeed(limit = 50) {
     .all();
 }
 
-export function getCat(id: string) {
+export async function getCat(id: string) {
   return db.select().from(schema.cats).where(eq(schema.cats.id, id)).get();
 }
 
-export function getCatState(id: string) {
+export async function getCatState(id: string) {
   return db.select().from(schema.catStates).where(eq(schema.catStates.catId, id)).get();
 }
 
-export function getCatDiaries(id: string, limit = 30) {
+export async function getCatDiaries(id: string, limit = 30) {
   return db
     .select()
     .from(schema.diaryEntries)
@@ -41,35 +43,37 @@ export function getCatDiaries(id: string, limit = 30) {
     .all();
 }
 
-export function getDiary(catId: string, day: number) {
-  return db
+export async function getDiary(catId: string, day: number) {
+  const all = await db
     .select()
     .from(schema.diaryEntries)
     .where(eq(schema.diaryEntries.catId, catId))
-    .all()
-    .find((d) => d.day === day);
+    .all();
+  return all.find((d) => d.day === day);
 }
 
-export function getFriends(id: string, limit = 6) {
-  const rels = db
+export async function getFriends(id: string, limit = 6) {
+  const rels = await db
     .select()
     .from(schema.relationships)
     .where(or(eq(schema.relationships.catAId, id), eq(schema.relationships.catBId, id)))
     .orderBy(desc(schema.relationships.affinity))
     .limit(limit)
     .all();
-  return rels.map((r) => {
-    const otherId = r.catAId === id ? r.catBId : r.catAId;
-    const other = getCat(otherId);
-    return { ...r, otherId, otherName: other?.name ?? "神秘猫" };
-  });
+  return Promise.all(
+    rels.map(async (r) => {
+      const otherId = r.catAId === id ? r.catBId : r.catAId;
+      const other = await getCat(otherId);
+      return { ...r, otherId, otherName: other?.name ?? "神秘猫" };
+    }),
+  );
 }
 
-export function getActiveStorylines(catId: string) {
-  return db
+export async function getActiveStorylines(catId: string) {
+  const all = await db
     .select()
     .from(schema.storylines)
     .where(eq(schema.storylines.catId, catId))
-    .all()
-    .filter((s) => s.status === "active");
+    .all();
+  return all.filter((s) => s.status === "active");
 }

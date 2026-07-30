@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
-    "better-sqlite3": "^13.0.2",
+    "@libsql/client": "^0.17.4",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.12",
     "react": "19.2.4",
@@ -21,7 +21,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

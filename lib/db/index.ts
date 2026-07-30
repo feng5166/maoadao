@@ -1,14 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
+import "../env";
 import * as schema from "./schema";
 
-const dbPath = process.env.DATABASE_PATH ?? "./data/maoadao.db";
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+// 本地开发用 file: SQLite，线上用 Turso（同一套 libSQL 协议与代码）
+const url = process.env.TURSO_DATABASE_URL ?? "file:./data/maoadao.db";
+if (url.startsWith("file:")) {
+  fs.mkdirSync(path.dirname(url.slice("file:".length)), { recursive: true });
+}
 
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
+const client = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
 
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(client, { schema });
 export { schema };

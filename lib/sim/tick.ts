@@ -9,18 +9,22 @@ import type { SimCat, SimCatState, SimEvent } from "./types";
 export async function advanceOneDay(options: { narrate?: boolean } = {}) {
   const { narrate = true } = options;
 
-  let world = db.select().from(schema.worldState).get();
+  let world = await db.select().from(schema.worldState).get();
   if (!world) {
-    db.insert(schema.worldState).values({ id: 1, day: 0 }).run();
-    world = db.select().from(schema.worldState).get()!;
+    await db.insert(schema.worldState).values({ id: 1, day: 0 }).run();
+    world = (await db.select().from(schema.worldState).get())!;
   }
   const day = world.day + 1;
   const weather = ["晴", "晴", "多云", "雨"][day % 4];
 
-  const catRows = db.select().from(schema.cats).all();
-  const stateRows = db.select().from(schema.catStates).all();
-  const relRows = db.select().from(schema.relationships).all();
-  const storyRows = db.select().from(schema.storylines).where(eq(schema.storylines.status, "active")).all();
+  const catRows = await db.select().from(schema.cats).all();
+  const stateRows = await db.select().from(schema.catStates).all();
+  const relRows = await db.select().from(schema.relationships).all();
+  const storyRows = await db
+    .select()
+    .from(schema.storylines)
+    .where(eq(schema.storylines.status, "active"))
+    .all();
 
   const cats: SimCat[] = catRows.map((c) => ({
     id: c.id,
@@ -47,14 +51,21 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
   const eventIdsByCat = new Map<string, string[]>();
   for (const ev of result.events) {
     const id = randomUUID();
-    db.insert(schema.events).values({ id, day, catId: ev.catId, type: ev.type, data: ev.data, deltas: ev.deltas }).run();
+    await db
+      .insert(schema.events)
+      .values({ id, day, catId: ev.catId, type: ev.type, data: ev.data, deltas: ev.deltas })
+      .run();
     eventIdsByCat.set(ev.catId, [...(eventIdsByCat.get(ev.catId) ?? []), id]);
   }
   for (const [catId, change] of result.stateChanges) {
-    db.update(schema.catStates).set({ ...change, updatedDay: day }).where(eq(schema.catStates.catId, catId)).run();
+    await db
+      .update(schema.catStates)
+      .set({ ...change, updatedDay: day })
+      .where(eq(schema.catStates.catId, catId))
+      .run();
   }
   for (const ac of result.affinityChanges) {
-    const existing = db
+    const existing = await db
       .select()
       .from(schema.relationships)
       .where(
@@ -66,60 +77,69 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
       .get();
     if (existing) {
       const affinity = Math.max(-100, Math.min(100, existing.affinity + ac.delta));
-      db.update(schema.relationships)
-        .set({ affinity, lastInteractionDay: day, kind: affinity > 40 ? "friend" : affinity < -40 ? "rival" : "acquaintance" })
+      await db
+        .update(schema.relationships)
+        .set({
+          affinity,
+          lastInteractionDay: day,
+          kind: affinity > 40 ? "friend" : affinity < -40 ? "rival" : "acquaintance",
+        })
         .where(eq(schema.relationships.id, existing.id))
         .run();
     } else {
-      db.insert(schema.relationships)
+      await db
+        .insert(schema.relationships)
         .values({ id: randomUUID(), catAId: ac.catAId, catBId: ac.catBId, affinity: ac.delta, lastInteractionDay: day })
         .run();
     }
   }
   for (const s of result.newStorylines) {
-    db.insert(schema.storylines).values({ id: randomUUID(), ...s }).run();
+    await db.insert(schema.storylines).values({ id: randomUUID(), ...s }).run();
   }
   if (result.resolvedStorylineIds.length > 0) {
-    db.update(schema.storylines)
+    await db
+      .update(schema.storylines)
       .set({ status: "resolved", endDay: day })
       .where(inArray(schema.storylines.id, result.resolvedStorylineIds))
       .run();
   }
-  db.update(schema.worldState).set({ day, weather }).where(eq(schema.worldState.id, 1)).run();
+  await db.update(schema.worldState).set({ day, weather }).where(eq(schema.worldState.id, 1)).run();
 
-  // 叙事层：把每只猫当日的事实交给 LLM 写日记
+  // 叙事层：并行为每只猫写日记（串行会超出 serverless 函数时限）
   let diaries = 0;
   if (narrate) {
     const eventsByCat = new Map<string, SimEvent[]>();
     for (const ev of result.events) {
       eventsByCat.set(ev.catId, [...(eventsByCat.get(ev.catId) ?? []), ev]);
     }
-    for (const cat of cats) {
-      const catEvents = eventsByCat.get(cat.id);
-      if (!catEvents || catEvents.length === 0) continue;
-      const mood = result.stateChanges.get(cat.id)?.mood ?? "平静";
-      const { content, generatedBy } = await narrateDiary({
-        cat,
-        day,
-        season: world.season,
-        weather,
-        mood,
-        events: catEvents,
-      });
-      db.insert(schema.diaryEntries)
-        .values({
-          id: randomUUID(),
-          catId: cat.id,
+    const jobs = cats
+      .filter((cat) => (eventsByCat.get(cat.id)?.length ?? 0) > 0)
+      .map(async (cat) => {
+        const mood = result.stateChanges.get(cat.id)?.mood ?? "平静";
+        const { content, generatedBy } = await narrateDiary({
+          cat,
           day,
-          content,
+          season: world.season,
+          weather,
           mood,
-          eventIds: eventIdsByCat.get(cat.id) ?? [],
-          generatedBy,
-          createdAt: new Date(),
-        })
-        .run();
-      diaries++;
-    }
+          events: eventsByCat.get(cat.id)!,
+        });
+        await db
+          .insert(schema.diaryEntries)
+          .values({
+            id: randomUUID(),
+            catId: cat.id,
+            day,
+            content,
+            mood,
+            eventIds: eventIdsByCat.get(cat.id) ?? [],
+            generatedBy,
+            createdAt: new Date(),
+          })
+          .run();
+        return generatedBy;
+      });
+    diaries = (await Promise.all(jobs)).length;
   }
 
   return { day, weather, eventCount: result.events.length, diaryCount: diaries };

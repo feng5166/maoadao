@@ -15,12 +15,12 @@ const fontData = fs.readFileSync(path.join(process.cwd(), "assets/fonts/NotoSans
 export async function GET(_req: Request, ctx: { params: Promise<{ catId: string; day: string }> }) {
   const { catId, day: dayStr } = await ctx.params;
   const day = Number(dayStr);
-  const cat = getCat(catId);
-  const diary = Number.isInteger(day) ? getDiary(catId, day) : undefined;
+  const cat = await getCat(catId);
+  const diary = Number.isInteger(day) ? await getDiary(catId, day) : undefined;
   if (!cat || !diary) {
     return new Response("没有这一天的日记", { status: 404 });
   }
-  const world = getWorld();
+  const world = await getWorld();
   const bg = avatarTraits(cat.id).bg;
   const avatarUri = catAvatarDataUri(cat.id, 140);
 

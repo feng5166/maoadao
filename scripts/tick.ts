@@ -10,9 +10,9 @@ async function main() {
   const result = await advanceOneDay({ narrate });
   console.log(`第 ${result.day} 天（${result.weather}）：${result.eventCount} 条事实，${result.diaryCount} 篇日记。\n`);
 
-  const diaries = db.select().from(schema.diaryEntries).where(eq(schema.diaryEntries.day, result.day)).all();
+  const diaries = await db.select().from(schema.diaryEntries).where(eq(schema.diaryEntries.day, result.day)).all();
   for (const d of diaries) {
-    const cat = db.select().from(schema.cats).where(eq(schema.cats.id, d.catId)).get();
+    const cat = await db.select().from(schema.cats).where(eq(schema.cats.id, d.catId)).get();
     console.log(`【${cat?.name}】(${d.mood}${d.generatedBy === "fallback" ? "，兜底" : ""})\n${d.content}\n`);
   }
 }

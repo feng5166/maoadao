@@ -25,7 +25,7 @@ export async function createCat(formData: FormData) {
     : ["神秘"];
 
   const id = `cat-${randomUUID().slice(0, 8)}`;
-  db.insert(schema.cats)
+  await db.insert(schema.cats)
     .values({
       id,
       name,
@@ -39,7 +39,7 @@ export async function createCat(formData: FormData) {
       createdAt: new Date(),
     })
     .run();
-  db.insert(schema.catStates).values({ catId: id }).run();
+  await db.insert(schema.catStates).values({ catId: id }).run();
 
   revalidatePath("/");
   redirect(`/cats/${id}`);

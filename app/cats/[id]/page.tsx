@@ -13,13 +13,13 @@ export const dynamic = "force-dynamic";
 
 export default async function CatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const cat = getCat(id);
+  const cat = await getCat(id);
   if (!cat) notFound();
 
-  const state = getCatState(id);
-  const diaries = getCatDiaries(id);
-  const friends = getFriends(id).filter((f) => f.affinity > 0);
-  const storylines = getActiveStorylines(id);
+  const state = await getCatState(id);
+  const diaries = await getCatDiaries(id);
+  const friends = (await getFriends(id)).filter((f) => f.affinity > 0);
+  const storylines = await getActiveStorylines(id);
 
   return (
     <div className="space-y-6">
