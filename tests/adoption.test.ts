@@ -4,7 +4,6 @@ config({ path: [".env.local", ".env"], override: true });
 process.env.ANTHROPIC_AUTH_TOKEN = "invalid-for-test";
 process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
 
-import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 
 const T = 60_000;
