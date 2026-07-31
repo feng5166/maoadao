@@ -29,8 +29,18 @@ export default async function MyCatPage() {
   ]);
   const firstEvent = await prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } });
   const daysOnIsland = Math.max(1, world.day - (firstEvent?.day ?? world.day) + 1);
+  const everNudged = (await prisma.ownerNudge.count({ where: { catId: cat.id } })) > 0;
+  const viewer = await prisma.user.findUnique({ where: { id: viewerId! }, select: { lastSeenDay: true } });
+  const missedDays = viewer?.lastSeenDay != null ? world.day - viewer.lastSeenDay : 0;
+  const missedSummaries =
+    missedDays >= 3
+      ? await prisma.catDailySummary.findMany({
+          where: { catId: cat.id, day: { gt: viewer!.lastSeenDay!, lt: summary?.day ?? world.day } },
+          orderBy: { day: "asc" },
+        })
+      : [];
 
-  after(() => prisma.user.update({ where: { id: viewerId! }, data: { lastActiveAt: new Date() } }).catch(() => {}));
+  after(() => prisma.user.update({ where: { id: viewerId! }, data: { lastActiveAt: new Date(), lastSeenDay: world.day } }).catch(() => {}));
   const funnelEvents: { name: string; props?: Record<string, string | number | boolean> }[] = [
     { name: "daily_story_view", props: { islandDay: world.day, catDay: daysOnIsland } },
   ];
@@ -54,6 +64,20 @@ export default async function MyCatPage() {
         {todayLabel()} · 来岛第 {daysOnIsland} 天 · {world.weather}
       </p>
 
+      {/* 首访引导：三句话讲清产品，完成第一次留言后消失 */}
+      {!everNudged && (
+        <div className="mt-4 border border-line bg-paper-deep/40 p-4 text-center">
+          <p className="font-diary text-[15px] leading-[2] text-ink">
+            这是{cat.name}在岛上的家。
+            <br />
+            它会在你离开后继续生活——钓鱼、串门、卷进故事。
+            <br />
+            你说的话它会记住，但听不听，它有自己的主意。
+          </p>
+          <p className="mt-2 text-xs text-ink-soft">↓ 往下翻，给它留下第一句话，明早八点回来看它怎么说</p>
+        </div>
+      )}
+
       {/* 场景 + 猫 */}
       <div className="relative mt-3 overflow-hidden rounded-lg border border-line">
         <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
@@ -68,7 +92,32 @@ export default async function MyCatPage() {
       </p>
       {!cat.portraitUrl && <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>}
 
-      {/* 故事正文 */}
+      {/* 你不在的这几天 */}
+      {missedSummaries.length > 0 && (
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="text-center text-xs tracking-widest text-ink-faint">
+            你不在的这 {missedDays} 天，{cat.name}经历了几件事
+          </p>
+          <div className="mt-2 space-y-2">
+            {missedSummaries.map((m) => (
+              <details key={m.id}>
+                <summary className="font-diary cursor-pointer list-none text-[15px] text-ink-soft">
+                  · {m.headline}
+                  <span className="ml-1 text-xs text-ink-faint">（展开）</span>
+                </summary>
+                <p className="font-diary mt-1 whitespace-pre-wrap pl-3 text-[15px] leading-[1.9]">{m.narrative}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 故事正文 + 更新状态 */}
+      {summary && summary.day < world.day && (
+        <p className="mt-4 text-center text-xs text-ink-faint">
+          今天的日记还没送到（每天早上八点前后写好）——先看看它昨天写的
+        </p>
+      )}
       {summary ? (
         <article className="mt-6">
           <h1 className="font-title text-center text-xl font-bold">{summary.headline}</h1>

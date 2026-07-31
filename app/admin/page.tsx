@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { adminLogin, isAdmin } from "@/lib/admin-auth";
+import { createInviteCodes, disableInviteCode, rateContent, toggleAdoptionPause } from "@/lib/admin-actions";
 import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,11 @@ export const dynamic = "force-dynamic";
 function fmt(d: Date | null | undefined): string {
   if (!d) return "—";
   return d.toISOString().slice(5, 16).replace("T", " ");
+}
+
+function hoursAgo(d: Date | null | undefined): number {
+  if (!d) return Infinity;
+  return (Date.now() - d.getTime()) / 3600_000;
 }
 
 export default async function AdminPage() {
@@ -28,7 +34,7 @@ export default async function AdminPage() {
     );
   }
 
-  const [world, users, userCats, recentSummaries, nudges, threads, fallbackCount, modLogs, newsToday] = await Promise.all([
+  const [world, users, userCats, recentSummaries, nudges, threads, fallbackCount, modLogs, newsToday, invites, ratings, allNudges] = await Promise.all([
     prisma.worldState.findUnique({ where: { id: 1 } }),
     prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { cats: { select: { id: true, name: true } } } }),
     prisma.cat.findMany({ where: { isNpc: false }, include: { state: true } }),
@@ -38,7 +44,22 @@ export default async function AdminPage() {
     prisma.diaryEntry.count({ where: { generatedBy: "fallback" } }),
     prisma.moderationLog.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
     prisma.islandNews.findMany({ orderBy: { day: "desc" }, take: 4 }),
+    prisma.inviteCode.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
+    prisma.contentRating.findMany(),
+    prisma.ownerNudge.findMany({ select: { catId: true } }),
   ]);
+  const ratingBySummary = new Map(ratings.map((r) => [r.summaryId, r]));
+  const nudgeCountByCat = new Map<string, number>();
+  for (const n of allNudges) nudgeCountByCat.set(n.catId, (nudgeCountByCat.get(n.catId) ?? 0) + 1);
+
+  // 生命周期分层（v0.7.1）：回答"用户在哪一步流失"
+  const owners = users.filter((u) => u.cats.length > 0);
+  const seg = {
+    neverNudged: owners.filter((u) => (nudgeCountByCat.get(u.cats[0]?.id ?? "") ?? 0) === 0),
+    active: owners.filter((u) => hoursAgo(u.lastActiveAt) < 36),
+    churned: owners.filter((u) => hoursAgo(u.lastActiveAt) > 72),
+    heavy: owners.filter((u) => (nudgeCountByCat.get(u.cats[0]?.id ?? "") ?? 0) >= 5),
+  };
   const catNameById = new Map(userCats.map((c) => [c.id, c.name]));
   const day = world?.day ?? 0;
 
@@ -64,16 +85,78 @@ export default async function AdminPage() {
       </section>
 
       <section className="rounded-2xl border border-[#EADFCC] bg-white p-4">
+        <h2 className="mb-2 font-bold">生命周期分层</h2>
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          {[
+            { label: "已领养未干预", list: seg.neverNudged },
+            { label: "连续使用中(36h)", list: seg.active },
+            { label: "已流失(>72h)", list: seg.churned },
+            { label: "高活跃(≥5次干预)", list: seg.heavy },
+          ].map((x) => (
+            <div key={x.label} className="rounded-lg border border-[#F5EDE0] p-2">
+              <p className="text-lg font-bold">{x.list.length}</p>
+              <p className="text-[#A89B85]">{x.label}</p>
+              <p className="mt-1 text-[10px] text-[#C4B69C]">{x.list.map((u) => u.cats[0]?.name).filter(Boolean).join("、") || "—"}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-[#EADFCC] bg-white p-4">
+        <h2 className="mb-2 font-bold">船票（邀请码）· 领养{world?.adoptionPaused ? "已暂停" : "开放中"}</h2>
+        <div className="mb-3 flex flex-wrap items-end gap-2 text-xs">
+          <form action={createInviteCodes} className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col">批次
+              <select name="batch" className="mt-1 rounded border border-[#E0D5C0] px-2 py-1">
+                <option value="team">team</option>
+                <option value="friends">friends</option>
+                <option value="strangers">strangers</option>
+              </select>
+            </label>
+            <label className="flex flex-col">每码次数
+              <input name="maxUses" type="number" defaultValue={3} min={1} max={50} className="mt-1 w-20 rounded border border-[#E0D5C0] px-2 py-1" />
+            </label>
+            <label className="flex flex-col">张数
+              <input name="count" type="number" defaultValue={5} min={1} max={20} className="mt-1 w-16 rounded border border-[#E0D5C0] px-2 py-1" />
+            </label>
+            <SubmitButton pendingText="…" className="rounded-full bg-[#3E3226] px-3 py-1.5 text-white">发放</SubmitButton>
+          </form>
+          <form action={toggleAdoptionPause}>
+            <SubmitButton pendingText="…" className="rounded-full border border-[#E0D5C0] px-3 py-1.5">
+              {world?.adoptionPaused ? "恢复领养" : "暂停领养"}
+            </SubmitButton>
+          </form>
+        </div>
+        <ul className="space-y-1 text-xs">
+          {invites.map((c) => (
+            <li key={c.code} className="flex items-center gap-2 border-t border-[#F5EDE0] pt-1">
+              <span className={`font-mono ${c.disabled ? "line-through text-[#C4B69C]" : ""}`}>{c.code}</span>
+              <span className="text-[#A89B85]">{c.batch} · {c.usedCount}/{c.maxUses}</span>
+              {!c.disabled && (
+                <form action={disableInviteCode}>
+                  <input type="hidden" name="code" value={c.code} />
+                  <SubmitButton pendingText="…" className="text-[#A05252] hover:underline">作废</SubmitButton>
+                </form>
+              )}
+            </li>
+          ))}
+          {invites.length === 0 && <li className="text-[#A89B85]">还没有船票——先发放一批</li>}
+        </ul>
+      </section>
+
+      <section className="rounded-2xl border border-[#EADFCC] bg-white p-4">
         <h2 className="mb-2 font-bold">用户与猫</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead><tr className="text-left text-[#A89B85]"><th className="p-1">用户</th><th className="p-1">状态</th><th className="p-1">猫</th><th className="p-1">最近活跃</th><th className="p-1">注册于</th></tr></thead>
+            <thead><tr className="text-left text-[#A89B85]"><th className="p-1">用户</th><th className="p-1">状态</th><th className="p-1">猫</th><th className="p-1">批次</th><th className="p-1">干预</th><th className="p-1">最近活跃</th><th className="p-1">注册于</th></tr></thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u.id} className="border-t border-[#F5EDE0]">
                   <td className="p-1 font-mono">{u.id.slice(0, 12)}…</td>
                   <td className="p-1">{u.status}{u.email ? ` (${u.email})` : ""}</td>
                   <td className="p-1">{u.cats.map((c) => c.name).join("、") || "—"}</td>
+                  <td className="p-1">{u.inviteBatch ?? "—"}</td>
+                  <td className="p-1">{nudgeCountByCat.get(u.cats[0]?.id ?? "") ?? 0}</td>
                   <td className="p-1">{fmt(u.lastActiveAt)}</td>
                   <td className="p-1">{fmt(u.createdAt)}</td>
                 </tr>
@@ -110,6 +193,26 @@ export default async function AdminPage() {
               <p className="mt-1 text-[#6B5D48]">{s.narrative}</p>
               {s.interventionResponse && <p className="mt-1 text-[#4E6B3A]">回执：{s.interventionResponse}</p>}
               {s.tomorrowHook && <p className="mt-1 italic text-[#8A7B65]">悬念：{s.tomorrowHook}</p>}
+              <form action={rateContent} className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[#8A7B65]">
+                <input type="hidden" name="summaryId" value={s.id} />
+                {(["continuity", "persona", "fun", "emotion", "suspense"] as const).map((k, idx) => {
+                  const labels = ["连续", "人格", "趣味", "情绪", "悬念"];
+                  const existing = ratingBySummary.get(s.id)?.[k];
+                  return (
+                    <label key={k}>{labels[idx]}
+                      <select name={k} defaultValue={existing ?? ""} className="ml-0.5 rounded border border-[#E0D5C0]">
+                        <option value="">-</option>
+                        {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                  );
+                })}
+                <label><input type="checkbox" name="templated" defaultChecked={ratingBySummary.get(s.id)?.templated ?? false} /> 模板感</label>
+                <label><input type="checkbox" name="factError" defaultChecked={ratingBySummary.get(s.id)?.factError ?? false} /> 事实错</label>
+                <label><input type="checkbox" name="shareworthy" defaultChecked={ratingBySummary.get(s.id)?.shareworthy ?? false} /> 值得分享</label>
+                <SubmitButton pendingText="…" className="rounded border border-[#E0D5C0] px-2 py-0.5">存</SubmitButton>
+                {ratingBySummary.has(s.id) && <span className="text-[#4E6B3A]">已评</span>}
+              </form>
             </div>
           ))}
           {recentSummaries.length === 0 && <p className="text-xs text-[#A89B85]">暂无</p>}

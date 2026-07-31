@@ -29,6 +29,14 @@ export default function AdoptPage() {
 
       <form action={createCat} className="mt-8 space-y-7">
         <div>
+          <label htmlFor="ticket" className="font-title block font-bold">你的船票号 <span className="text-brick">*</span></label>
+          <input
+            id="ticket" name="ticket" required maxLength={12} placeholder="BOAT-XXXX（没有的话，找给你介绍猫啊岛的人要一张）"
+            className="mt-2 w-full border-0 border-b border-line bg-transparent px-1 py-2 uppercase focus:border-sea-deep focus:outline-none"
+          />
+        </div>
+
+        <div>
           <label htmlFor="name" className="font-title block font-bold">它叫什么 <span className="text-brick">*</span></label>
           <input
             id="name" name="name" required maxLength={12} placeholder="煤球"

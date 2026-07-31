@@ -75,7 +75,7 @@ ${memoryBlock}${ownerBlock}`;
   const text = await callLLM(system, user);
   if (!text) {
     return {
-      content: `第 ${input.day} 天，天气${input.weather}。今天：\n${factLines}`,
+      content: `今天${input.cat.name}没来得及写日记，不过它这一天是这么过的：\n${factLines}`,
       generatedBy: "fallback",
     };
   }

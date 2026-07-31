@@ -33,9 +33,25 @@ export async function createCat(formData: FormData) {
 
   if (!name) throw new Error("猫得有个名字");
 
+  // 封闭内测：岛可暂停接待；上岛要船票（邀请码），原子核销防超用
+  const world0 = await prisma.worldState.findUnique({ where: { id: 1 } });
+  if (world0?.adoptionPaused) throw new Error("码头暂时不办理入岛，过几天再来吧");
+  const ticket = String(formData.get("ticket") ?? "").trim().toUpperCase();
+  if (!ticket) throw new Error("需要一张船票（邀请码）才能上岛");
+  const claimed = await prisma.inviteCode.updateMany({
+    where: { code: ticket, disabled: false, usedCount: { lt: prisma.inviteCode.fields.maxUses } },
+    data: { usedCount: { increment: 1 } },
+  });
+  if (claimed.count === 0) throw new Error("这张船票不能用了——问问给你票的人");
+  const ticketRow = await prisma.inviteCode.findUnique({ where: { code: ticket } });
+
   // 身份：匿名 cookie，一浏览器一岛民；猫归属于创建者
   const uid = await ensureViewerId();
-  await prisma.user.upsert({ where: { id: uid }, update: {}, create: { id: uid, name: "岛民", createdAt: new Date() } });
+  await prisma.user.upsert({
+    where: { id: uid },
+    update: { inviteCode: ticket, inviteBatch: ticketRow?.batch ?? null },
+    create: { id: uid, name: "岛民", inviteCode: ticket, inviteBatch: ticketRow?.batch ?? null, createdAt: new Date() },
+  });
 
   // 防连点：2 分钟内刚建过猫 → 直接跳去那只猫（幂等）
   const recent = await prisma.cat.findFirst({
@@ -103,7 +119,7 @@ export async function createCat(formData: FormData) {
   });
 
   const ref = (await cookies()).get("maoadao_ref")?.value ?? null;
-  await track("adopt_complete", { goal, referred: ref === "share_card" });
+  await track("adopt_complete", { goal, referred: ref === "share_card", batch: ticketRow?.batch ?? "unknown" });
   if (ref === "share_card") await track("referred_adopt_complete", {});
   revalidatePath("/");
   redirect(`/my-cat`);
