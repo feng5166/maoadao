@@ -114,43 +114,109 @@ export const THREAD_SYSTEMS: Record<string, ThreadSystem> = {
     },
   },
 
-  // ============ 旧钥匙线：新猫首日拿到的钥匙（三步短线，与老船长传说呼应） ============
+  // ============ 旧钥匙线（v0.8 首周脊柱）：按来岛天数门控的五步线 ============
+  // catDay = world.day - startDay + 1。D2 问来历 → D3 钥匙对不上 → D5 钥匙失踪（冲突+动态选择）
+  // → D6 按主人选择×性格分支兑现 → 落幕（纪念物：老照片）
   arrival_key: {
+    autoDaily: (ctx, thread) => {
+      const catDay = ctx.world.day - thread.startDay + 1;
+      // D5 冲突拍点：钥匙失踪（若线还停在第 3 步，强制发生——首周导演的"必须发生"）
+      if (thread.step === 3 && catDay >= 5) {
+        return {
+          outcome: "complication",
+          data: {
+            scene: "回到小屋，门口的旧钥匙不见了，窗台上只留着一根黑色的羽毛。去问巡夜的乌鸦，他只说了一句：『有些门，现在还不能开。』",
+            location: "自家小屋",
+            choices: [
+              { value: "story:trust", label: "先相信乌鸦" },
+              { value: "story:search", label: "自己把钥匙找回来" },
+              { value: "story:ask", label: "去问将军怎么回事" },
+            ],
+          },
+          deltas: { energy: -10 },
+          affinityChanges: [{ catAId: thread.catId, catBId: "npc-wuya", delta: -4, reason: "钥匙的事" }],
+          threadUpdates: [{ threadId: thread.id, step: 4, lastAdvanceDay: ctx.world.day }],
+          cvBonus: 6,
+        };
+      }
+      return null;
+    },
     intentFor: (ctx, thread) => {
+      const catDay = ctx.world.day - thread.startDay + 1;
       switch (thread.step) {
         case 1:
+          if (catDay < 2) return null;
           return stepTemplate("arrival_key_ask", "打听旧钥匙的来历", {
             segments: ["morning", "afternoon"],
             contentValue: 5,
-            resolve: (ctx2) => ({
+            resolve: (c2) => ({
               outcome: "success" as const,
               data: {
                 targetId: "npc-jiangjun",
                 targetName: "将军",
-                clue: "将军接过钥匙眯眼看了半天：「这是三十年前老船长小屋的备用钥匙。你住的那间屋子……以前是他的。」",
+                clue: "将军接过钥匙眯眼看了半天：「这是三十年前老船长的钥匙。你住的那间屋子……以前是他的。」",
               },
               deltas: { energy: -10 },
               affinityChanges: [{ catAId: thread.catId, catBId: "npc-jiangjun", delta: 5, reason: "听了段老故事" }],
-              threadUpdates: [{ threadId: thread.id, step: 2, lastAdvanceDay: ctx2.world.day }],
+              threadUpdates: [{ threadId: thread.id, step: 2, lastAdvanceDay: c2.world.day }],
               cvBonus: 3,
             }),
           });
         case 2:
-          return stepTemplate("arrival_key_open", "试试钥匙能开什么", {
+          if (catDay < 3) return null;
+          return stepTemplate("arrival_key_try", "试试钥匙能开什么", {
             segments: ["evening"],
-            contentValue: 6,
-            resolve: () => ({
-              outcome: "success",
+            contentValue: 5,
+            resolve: (c2) => ({
+              outcome: "complication" as const,
               data: {
                 location: "自家小屋",
-                discovery:
-                  "钥匙打开了床板下的一个小隔层：一页泛黄的航海笔记，和一小袋还香着的鱼干——老船长留给后来住客的见面礼",
+                scene: "把小屋里能找到的锁挨个试了一遍——床下的隔层、旧柜子、后门，锁眼全都对不上。这把钥匙开的，根本不是这间屋子里的东西。",
               },
-              deltas: { energy: -10, coins: 5 },
-              threadUpdates: [{ threadId: thread.id, status: "resolved", data: { ...thread.data, opened: true } }],
-              cvBonus: 5,
+              deltas: { energy: -15 },
+              threadUpdates: [{ threadId: thread.id, step: 3, lastAdvanceDay: c2.world.day }],
+              cvBonus: 4,
             }),
           });
+        case 4: {
+          if (catDay < 6) return null;
+          // D6 兑现：主人的选择 × 猫的性格 = 最终行为
+          const choice = ctx.world.suggestions?.get(thread.catId) ?? "";
+          const bold = ctx.cat.boldness > 70;
+          let scene: string;
+          let nudged = true;
+          if (choice === "story:trust") {
+            scene = bold
+              ? "它嘴上答应了先不管，晚上还是没忍住，绕到灯塔坡张望了一圈。什么也没看见。可等它回到小屋，钥匙已经放回了门口——底下压着一张泛黄的老照片：年轻的乌鸦站在一只戴船长帽的老猫身边。"
+              : "它决定先相信乌鸦。第二天清晨，乌鸦亲自把钥匙送了回来，还带来一张泛黄的老照片：年轻的他站在一只戴船长帽的老猫身边。「谢谢你没有追问。」乌鸦说。";
+            if (bold) nudged = false;
+          } else if (choice === "story:search") {
+            scene =
+              "它把乌鸦夜里巡逻的路线倒着找了一遍，最后在废弃渔船的瞭望角落找到了钥匙——旁边整整齐齐放着一张老照片，像是特意留给它的：年轻的乌鸦站在一只戴船长帽的老猫身边。";
+          } else if (choice === "story:ask") {
+            scene =
+              "将军听完沉默了很久：「那把钥匙开的是灯塔下面老船长的旧储物间。乌鸦替他守了三十年，谁碰钥匙他都紧张。」傍晚，乌鸦把钥匙还了回来，什么也没说，只多放了一张老照片。";
+          } else {
+            // 主人没选：按性格自行其是
+            scene = bold
+              ? "没人告诉它该怎么办，它决定自己去问。乌鸦盯着它看了很久，把钥匙还给了它，还有一张泛黄的老照片。"
+              : "它想了一晚上，决定不追问。第二天钥匙出现在门口，压着一张泛黄的老照片。";
+            nudged = false;
+          }
+          return stepTemplate("arrival_key_resolve", "钥匙的下落", {
+            contentValue: 8,
+            resolve: () => ({
+              outcome: "success" as const,
+              data: { scene, nudged, photo: "老船长与年轻乌鸦的合影", location: "自家小屋" },
+              deltas: { energy: -10 },
+              affinityChanges: [
+                { catAId: thread.catId, catBId: "npc-wuya", delta: 12, reason: "钥匙风波后的信任" },
+              ],
+              threadUpdates: [{ threadId: thread.id, status: "resolved" as const, data: { ...thread.data, photo: true } }],
+              cvBonus: 6,
+            }),
+          });
+        }
         default:
           return null;
       }

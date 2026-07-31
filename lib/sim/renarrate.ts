@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
 import { factSummary } from "./engine";
 import { THREAD_LABELS } from "./threads";
-import { narrateDiary, narrateOwnerDay } from "../narrative/narrator";
+import { narrateDiary, narrateOwnerDay, narrateWeekBook } from "../narrative/narrator";
+import { bondStage, firstWeekPlan } from "./firstweek";
+import { randomUUID as uuid } from "node:crypto";
 import type { Fact, Segment, SimCat } from "./types";
 
 // 统一叙事通道：tick 的正常路径与故障恢复路径都走这里，从已落库事实生成。
@@ -103,9 +105,25 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
 
     let content: string;
     let generatedBy: "llm" | "fallback";
+    let form = "diary";
     if (!catRow.isNpc) {
       const nudge = nudges.find((n) => n.catId === catId);
       const followed = facts.some((f) => f.data.nudged === true);
+      // 首周节奏：来岛第几天 → 主题与形态
+      const firstEvent = await prisma.event.findFirst({ where: { catId }, orderBy: { day: "asc" }, select: { day: true } });
+      const catDay = day - (firstEvent?.day ?? day) + 1;
+      const plan = firstWeekPlan(catDay);
+      form = plan?.form === "weekbook" ? "diary" : (plan?.form ?? "diary");
+      const owner = catRow.ownerId ? await prisma.user.findUnique({ where: { id: catRow.ownerId }, select: { visitDays: true } }) : null;
+      const nudgeTotal = await prisma.ownerNudge.count({ where: { catId } });
+      const bond = bondStage(catDay, nudgeTotal, owner?.visitDays ?? 0);
+      // 剧情选择的标签：从昨天摘要的 choices 里找
+      let suggestionLabel = nudge?.suggestion ? SUGGESTION_LABELS[nudge.suggestion] ?? nudge.suggestion : null;
+      if (nudge?.suggestion?.startsWith("story:")) {
+        const prev = await prisma.catDailySummary.findUnique({ where: { catId_day: { catId, day: day - 1 } } });
+        const opts = (prev?.choices ?? []) as { value: string; label: string }[];
+        suggestionLabel = opts.find((o) => o.value === nudge.suggestion)?.label ?? "你的选择";
+      }
       // 事件线快照：当日叙事用实时状态；补写历史日优先用当天留下的摘要快照，避免把未来剧情写进过去
       let activeThreads: { label: string; step: number; total?: number }[];
       if (isCurrentDay) {
@@ -131,12 +149,16 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
         ownerMessage: nudge?.isPublic ? nudge.message ?? undefined : undefined,
         ownerVisited: Boolean(nudge?.message && !nudge.isPublic),
         ownerNick: catRow.ownerNick ?? undefined,
-        suggestion: nudge?.suggestion ? { label: SUGGESTION_LABELS[nudge.suggestion] ?? nudge.suggestion, followed } : null,
+        suggestion: nudge?.suggestion && suggestionLabel ? { label: suggestionLabel, followed } : null,
         activeThreads,
+        weekTheme: plan?.theme,
+        form: form as "diary" | "dialogue" | "note",
+        bondLine: bond.line,
         catById,
       });
       content = summary.narrative;
       generatedBy = gb;
+      const dayChoices = facts.flatMap((f) => (f.data.choices as { value: string; label: string }[] | undefined) ?? []);
       const coinDelta = facts.reduce((a, f) => a + (f.deltas.coins ?? 0), 0);
       const stateChanges: { label: string; delta: string }[] = [];
       if (coinDelta !== 0) stateChanges.push({ label: "鱼币", delta: coinDelta > 0 ? `+${coinDelta}` : `${coinDelta}` });
@@ -155,6 +177,7 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
           tomorrowHook: summary.tomorrowHook,
           stateChanges,
           threadProgress: activeThreads,
+          choices: dayChoices.length > 0 ? dayChoices : undefined,
         },
         create: {
           id: randomUUID(),
@@ -166,9 +189,16 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
           tomorrowHook: summary.tomorrowHook,
           stateChanges,
           threadProgress: activeThreads,
+          choices: dayChoices.length > 0 ? dayChoices : undefined,
           createdAt: new Date(),
         },
       });
+      // D7：生成第一周纪念册（幂等）
+      if (catDay === 7) {
+        await generateWeekBook(catId, catRow.ownerId, catRow.ownerNick, cat).catch((e) =>
+          console.error("[weekbook]", e instanceof Error ? e.message.slice(0, 120) : e),
+        );
+      }
     } else {
       const r = await narrateDiary({ cat, day, season, weather, mood, facts, mainFact, memories, relationHints, catById });
       content = r.content;
@@ -177,8 +207,8 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
 
     await prisma.diaryEntry.upsert({
       where: { catId_day: { catId, day } },
-      update: { content, mood, eventIds, generatedBy },
-      create: { id: randomUUID(), catId, day, content, mood, eventIds, generatedBy, createdAt: new Date() },
+      update: { content, mood, eventIds, generatedBy, form },
+      create: { id: randomUUID(), catId, day, content, mood, eventIds, generatedBy, form, createdAt: new Date() },
     });
     regenerated++;
   });
@@ -249,3 +279,56 @@ export async function narrationGap(day: number): Promise<number> {
 /** 兼容旧 CLI 的别名 */
 export const renarrateDay = (day: number, opts: { onlyMissing?: boolean } = {}) =>
   narrateCommittedDay(day, { mode: opts.onlyMissing === false ? "force" : "missing" });
+
+async function generateWeekBook(
+  catId: string,
+  ownerId: string | null,
+  ownerNick: string | null,
+  cat: SimCat,
+): Promise<void> {
+  const exists = await prisma.weekBook.findUnique({ where: { catId_weekIndex: { catId, weekIndex: 1 } } });
+  if (exists) return;
+  const summaries = await prisma.catDailySummary.findMany({ where: { catId }, orderBy: { day: "asc" }, take: 7 });
+  const owner = ownerId ? await prisma.user.findUnique({ where: { id: ownerId }, select: { visitDays: true } }) : null;
+  const messages = await prisma.ownerNudge.count({ where: { catId, message: { not: null } } });
+  const rels = await prisma.relationship.findMany({
+    where: { OR: [{ catAId: catId }, { catBId: catId }] },
+    orderBy: { affinity: "desc" },
+    take: 1,
+  });
+  const bestFriendId = rels[0] ? (rels[0].catAId === catId ? rels[0].catBId : rels[0].catAId) : null;
+  const bestFriend = bestFriendId ? await prisma.cat.findUnique({ where: { id: bestFriendId }, select: { name: true } }) : null;
+  const keepsakes = await prisma.memoryEntry.findMany({
+    where: { catId, importance: { gte: 7 } },
+    orderBy: { importance: "desc" },
+    take: 3,
+  });
+  const receipt = summaries.map((s2) => s2.interventionResponse).filter(Boolean).slice(-1)[0] ?? null;
+
+  const { content } = await narrateWeekBook({
+    cat,
+    ownerNick: ownerNick ?? undefined,
+    visitDays: owner?.visitDays ?? 0,
+    messageCount: messages,
+    weekSummaries: summaries.map((s2) => ({ day: s2.day, headline: s2.headline, narrative: s2.narrative })),
+    bestFriendName: bestFriend?.name ?? null,
+    keepsakes: keepsakes.map((k) => k.content),
+    suggestionStory: receipt,
+  });
+  await prisma.weekBook.create({
+    data: {
+      id: uuid(),
+      catId,
+      weekIndex: 1,
+      content: {
+        ...content,
+        visitDays: owner?.visitDays ?? 0,
+        messageCount: messages,
+        bestFriend: bestFriend?.name ?? null,
+        keepsakes: keepsakes.map((k) => k.content),
+        arrivalHeadline: summaries[0]?.headline ?? "",
+      },
+      createdAt: new Date(),
+    },
+  });
+}

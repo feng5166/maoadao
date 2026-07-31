@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Fact, SimCat } from "../sim/types";
 import { SEGMENT_CN } from "../sim/types";
 import { factSummary } from "../sim/engine";
+import { FORM_RULES, THEME_NARRATION_RULES, type ContentForm, type WeekTheme } from "../sim/firstweek";
 
 const client = new Anthropic();
 const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-5";
@@ -113,6 +114,9 @@ export interface OwnerDayInput extends DiaryInput {
   ownerNick?: string; // 猫怎么称呼主人
   suggestion?: { label: string; followed: boolean } | null; // 今天消费的主人建议 + 是否有行动采纳
   activeThreads: { label: string; step: number; total?: number }[];
+  weekTheme?: WeekTheme; // 首周节奏主题（进提示词的硬要求）
+  form?: ContentForm; // 内容形态：diary | dialogue | note
+  bondLine?: string; // 主人关系阶段的自然语言（供语气参考）
 }
 
 export interface OwnerDaySummary {
@@ -148,7 +152,10 @@ export async function narrateOwnerDay(input: OwnerDayInput): Promise<{ summary: 
   "interventionResponse": ${input.suggestion ? `"用你自己的话回应${nick}昨天说的（第二人称，像'你让我去交个朋友。我本来没想听的，不过棉花带我去吃了烤鱼'）。禁止'建议''采纳''影响'这类词"` : "null"},
   "tomorrowHook": "给${nick}留的一句念想：基于还没完的事（没讲完的故事/今天留下的疑问），像随口说的，不要刻意钩子腔。实在没有就写一句对明天的小盼头"
 }
-全程禁止出现：系统、建议、事件线、进度、根据你的、由于它的性格。`;
+全程禁止出现：系统、建议、事件线、进度、根据你的、由于它的性格。
+${input.weekTheme && THEME_NARRATION_RULES[input.weekTheme] ? `今天的写法要求：${THEME_NARRATION_RULES[input.weekTheme]}` : ""}
+${input.form && FORM_RULES[input.form] ? FORM_RULES[input.form] : ""}
+${input.bondLine ? `你和${nick}现在的关系：${input.bondLine}用相称的语气。` : ""}`;
 
   const user = `你的资料：名字 ${input.cat.name}，性格 ${input.cat.personaTags.join("、")}，你叫主人「${nick}」
 今天是猫啊岛第 ${input.day} 天，${input.weather}，你的心情：${input.mood}
@@ -174,6 +181,59 @@ ${suggestionBlock}${ownerBlock}${threadBlock}${memoryBlock}`;
       narrative: `第 ${input.day} 天，天气${input.weather}。今天：\n${factLines}`,
       interventionResponse: input.suggestion ? `你建议「${input.suggestion.label}」，它${input.suggestion.followed ? "照做了" : "这次没听"}。` : null,
       tomorrowHook: input.activeThreads.length ? `${input.activeThreads[0].label}还在继续。` : null,
+    },
+    generatedBy: "fallback",
+  };
+}
+
+export interface WeekBookInput {
+  cat: SimCat;
+  ownerNick?: string;
+  visitDays: number;
+  messageCount: number;
+  weekSummaries: { day: number; headline: string; narrative: string }[];
+  bestFriendName: string | null;
+  keepsakes: string[];
+  suggestionStory: string | null; // 建议被采纳/拒绝的代表事件素材
+}
+
+export interface WeekBookContent {
+  topMoments: string[]; // 本周最重要的 3 件事（各一句）
+  catLine: string; // 猫对主人的个性化总结
+  nextWeekWish: string; // 下周想做的事（钩子）
+}
+
+/** 第一周纪念册：一次调用产出结构化内容 */
+export async function narrateWeekBook(input: WeekBookInput): Promise<{ content: WeekBookContent; generatedBy: "llm" | "fallback" }> {
+  const nick = input.ownerNick || "主人";
+  const system = `你是猫啊岛上的一只猫，性格：${input.cat.personaTags.join("、")}。回顾你来岛的第一周，输出严格 JSON：
+{
+  "topMoments": ["本周最难忘的 3 件事，各一句话，第一人称，必须来自提供的真实经历"],
+  "catLine": "对${nick}说的一句总结：个性化、有性格，能体现你们这一周的相处（比如'你总让我小心一点。虽然我不一定都听，但我知道你不是觉得我胆小'）",
+  "nextWeekWish": "下周想做的一件事：基于没做完的事，一句话"
+}
+禁止：系统词、空泛抒情。`;
+  const user = `这一周${nick}来看过你 ${input.visitDays} 次，给你留过 ${input.messageCount} 句话。
+${input.suggestionStory ? `关于${nick}的建议：${input.suggestionStory}` : ""}
+${input.bestFriendName ? `这周你和${input.bestFriendName}走得最近。` : ""}
+你的一周：
+${input.weekSummaries.map((s2) => `第${s2.day}天「${s2.headline}」：${s2.narrative.slice(0, 60)}…`).join("\n")}
+纪念物：${input.keepsakes.join("、") || "无"}`;
+
+  const text = await callLLM(system, user, 500);
+  if (text) {
+    try {
+      const parsed = JSON.parse(text.replace(/^```json?\s*/i, "").replace(/```\s*$/, "")) as WeekBookContent;
+      if (parsed.topMoments?.length && parsed.catLine) return { content: parsed, generatedBy: "llm" };
+    } catch {
+      // fall through
+    }
+  }
+  return {
+    content: {
+      topMoments: input.weekSummaries.slice(0, 3).map((s2) => s2.headline),
+      catLine: `${nick}，这一周谢谢你来看我。`,
+      nextWeekWish: "下周想去更远的地方看看。",
     },
     generatedBy: "fallback",
   };

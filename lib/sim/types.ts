@@ -141,6 +141,8 @@ export interface WorldSnapshot {
   lastUsedDay: Map<string, number>;
   // catId → 昨天 fail/complication 的数量（负面连败补偿用）
   recentBadOutcomes: Map<string, number>;
-  // catId → 主人的明日建议（earn | explore | social | rest），当天生效
+  // catId → 主人的明日建议（earn|explore|social|rest 或 story:* 剧情选择），当天生效
   suggestions?: Map<string, string>;
+  // catId → 首周节奏计划（仅来岛 1-7 天的用户猫）
+  firstWeek?: Map<string, import("./firstweek").FirstWeekPlan>;
 }

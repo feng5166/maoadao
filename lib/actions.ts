@@ -72,7 +72,7 @@ export async function saveNudge(formData: FormData) {
   const catId = String(formData.get("catId") ?? "");
   const message = String(formData.get("message") ?? "").trim().slice(0, 60);
   const suggestionRaw = String(formData.get("suggestion") ?? "");
-  const suggestion = SUGGESTIONS.has(suggestionRaw) ? suggestionRaw : null;
+  const suggestion = SUGGESTIONS.has(suggestionRaw) || /^story:[a-z_]+$/.test(suggestionRaw) ? suggestionRaw : null;
   const isPublic = formData.get("isPublic") === "on";
 
   if (!catId || (!message && !suggestion)) return;

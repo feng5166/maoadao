@@ -166,9 +166,13 @@ export function runDay(world: WorldSnapshot): DayResult {
         if (state.coins < 15 && (t.key === "fish" || t.key === "odd_job")) weight *= 1.8;
         // 长期目标温和倾斜
         if (cat.goal) weight *= GOAL_BOOSTS[cat.goal]?.[t.key] ?? 1;
-        // 主人建议：当日强倾斜（影响但不完全控制）
+        // 主人建议：当日强倾斜（影响但不完全控制）；首周 D3 刻意压低制造温和偏离
+        const fw = world.firstWeek?.get(cat.id);
         const suggestion = world.suggestions?.get(cat.id);
-        if (suggestion && SUGGESTION_BOOSTS[suggestion]?.includes(t.key)) weight *= 3;
+        if (suggestion && SUGGESTION_BOOSTS[suggestion]?.includes(t.key)) weight *= fw?.suggestionMultiplier ?? 3;
+        // 首周 D4 关系日：聚焦串门；D5 冲突日：拌嘴/借钱升权
+        if (fw?.focusTopNpc && t.key === "visit") weight *= 3;
+        if (fw && (t.key === "quarrel" || t.key === "borrow_money")) weight *= fw.conflictBoost;
         candidates.push({ template: t, weight });
       }
 
@@ -309,7 +313,7 @@ export function runDay(world: WorldSnapshot): DayResult {
     const t = threads.find((x) => x.id === tu.threadId);
     if (!t || (tu.status !== "resolved" && tu.status !== "failed")) continue;
     const semantic: Record<string, string> = {
-      arrival_key: "我的小屋曾属于一位没回来的老船长——这座岛比我想的更有故事",
+      arrival_key: "钥匙的事让我明白：这座岛上，每只猫都在替谁守着点什么",
       shop: "我大概真的不适合开店……至少现在还不适合",
       debt: "欠债的滋味不好受，以后花钱得有数",
       lighthouse:

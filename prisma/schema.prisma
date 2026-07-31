@@ -22,6 +22,7 @@ model User {
   inviteCode      String? // 用的哪个邀请码
   inviteBatch     String? // 来源批次：team | friends | strangers
   lastSeenDay     Int? // 最后一次看 /my-cat 时的世界天数（未回摘要用）
+  visitDays       Int       @default(0) // 累计回访天数（纪念册"你来过 N 次"）
   createdAt       DateTime
   lastActiveAt    DateTime?
   cats            Cat[]
@@ -126,6 +127,7 @@ model DiaryEntry {
   mood        String
   eventIds    String[]
   generatedBy String   @default("llm") // llm | fallback
+  form        String   @default("diary") // diary | dialogue | note | weekbook
   createdAt   DateTime
 
   @@unique([catId, day])
@@ -197,6 +199,7 @@ model CatDailySummary {
   tomorrowHook         String? // 明日悬念：下一次召回理由
   stateChanges         Json // 关键状态变化 [{label, delta}]
   threadProgress       Json // 事件线进度 [{key, label, step, total?}]
+  choices              Json? // 动态剧情选择 [{value,label}]（D5-6 替代固定四选一）
   createdAt            DateTime
 
   @@unique([catId, day])
@@ -258,4 +261,15 @@ model ContentRating {
   shareworthy Boolean? // 值得分享
   note        String?
   createdAt   DateTime
+}
+
+// 第一周纪念册：首周最高价值内容（v0.8 D7）
+model WeekBook {
+  id        String   @id
+  catId     String
+  weekIndex Int      @default(1)
+  content   Json // {topMoments[], bestFriend, messageCount, visitDays, adoptionExample, catLine, keepsakes[], nextWeekWish}
+  createdAt DateTime
+
+  @@unique([catId, weekIndex])
 }

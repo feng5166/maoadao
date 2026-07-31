@@ -4,6 +4,7 @@ import { prisma } from "../db";
 import { runDay } from "./engine";
 import { reflect } from "../narrative/narrator";
 import { narrateCommittedDay } from "./renarrate";
+import { firstWeekPlan, type FirstWeekPlan } from "./firstweek";
 import { dailyEmailHtml, emailEnabled, sendEmail } from "../email";
 import type { SimCat, SimCatState, WorldSnapshot } from "./types";
 
@@ -98,6 +99,15 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
         lastUsedDay,
         recentBadOutcomes,
         suggestions: new Map(nudges.filter((n) => n.suggestion).map((n) => [n.catId, n.suggestion!])),
+        firstWeek: await (async () => {
+          const m = new Map<string, FirstWeekPlan>();
+          for (const c of cats.filter((x) => !x.isNpc)) {
+            const first = await tx.event.findFirst({ where: { catId: c.id }, orderBy: { day: "asc" }, select: { day: true } });
+            const plan = firstWeekPlan(day - (first?.day ?? day) + 1);
+            if (plan) m.set(c.id, plan);
+          }
+          return m;
+        })(),
       };
 
       const result = runDay(snapshot);

@@ -9,6 +9,7 @@ import { renameCat, saveNudge } from "@/lib/actions";
 import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, sceneFor, todayLabel } from "@/lib/handbook";
+import { bondStage } from "@/lib/sim/firstweek";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +30,11 @@ export default async function MyCatPage() {
   ]);
   const firstEvent = await prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } });
   const daysOnIsland = Math.max(1, world.day - (firstEvent?.day ?? world.day) + 1);
-  const everNudged = (await prisma.ownerNudge.count({ where: { catId: cat.id } })) > 0;
-  const viewer = await prisma.user.findUnique({ where: { id: viewerId! }, select: { lastSeenDay: true } });
+  const nudgeTotal = await prisma.ownerNudge.count({ where: { catId: cat.id } });
+  const everNudged = nudgeTotal > 0;
+  const weekBook = await prisma.weekBook.findUnique({ where: { catId_weekIndex: { catId: cat.id, weekIndex: 1 } } });
+  const todayDiary = summary ? await prisma.diaryEntry.findUnique({ where: { catId_day: { catId: cat.id, day: summary.day } }, select: { form: true } }) : null;
+  const viewer = await prisma.user.findUnique({ where: { id: viewerId! }, select: { lastSeenDay: true, visitDays: true } });
   const missedDays = viewer?.lastSeenDay != null ? world.day - viewer.lastSeenDay : 0;
   const missedSummaries =
     missedDays >= 3
@@ -40,13 +44,24 @@ export default async function MyCatPage() {
         })
       : [];
 
-  after(() => prisma.user.update({ where: { id: viewerId! }, data: { lastActiveAt: new Date(), lastSeenDay: world.day } }).catch(() => {}));
+    const isNewVisitDay = viewer?.lastSeenDay !== world.day;
+  after(() =>
+    prisma.user
+      .update({
+        where: { id: viewerId! },
+        data: { lastActiveAt: new Date(), lastSeenDay: world.day, ...(isNewVisitDay ? { visitDays: { increment: 1 } } : {}) },
+      })
+      .catch(() => {}),
+  );
   const funnelEvents: { name: string; props?: Record<string, string | number | boolean> }[] = [
     { name: "daily_story_view", props: { islandDay: world.day, catDay: daysOnIsland } },
   ];
   if (daysOnIsland <= 1) funnelEvents.push({ name: "first_story_view", props: { catId: cat.id } });
   else funnelEvents.push({ name: "next_day_return", props: { catDay: daysOnIsland } });
 
+  const bond = bondStage(daysOnIsland, nudgeTotal, viewer?.visitDays ?? 0);
+  const choices = ((summary?.choices ?? null) as { value: string; label: string }[] | null) ?? null;
+  const missedOne = viewer?.lastSeenDay != null && world.day - viewer.lastSeenDay === 2;
   const notes = summary
     ? marginNotes(
         (summary.stateChanges ?? []) as { label: string; delta: string }[],
@@ -91,6 +106,10 @@ export default async function MyCatPage() {
         {cat.name}现在在{state?.location ?? "小屋"}，看起来{state?.mood ?? "很平静"}。
       </p>
       {!cat.portraitUrl && <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>}
+      <p className="mt-1.5 text-center text-xs text-ink-faint">{bond.line}</p>
+      {missedOne && (
+        <p className="mt-1 text-center text-xs text-ink-faint">昨天你没来，它还是把日记写好了。</p>
+      )}
 
       {/* 你不在的这几天 */}
       {missedSummaries.length > 0 && (
@@ -121,7 +140,19 @@ export default async function MyCatPage() {
       {summary ? (
         <article className="mt-6">
           <h1 className="font-title text-center text-xl font-bold">{summary.headline}</h1>
-          <p className="font-diary mt-4 whitespace-pre-wrap text-[16px] leading-[2] text-ink">{summary.narrative}</p>
+          {todayDiary?.form === "note" ? (
+            <div className="note-slip mx-auto mt-4 max-w-sm p-4" style={{ transform: "rotate(-0.6deg)" }}>
+              <p className="mb-1 text-xs text-ink-faint">它贴在门上的便条</p>
+              <p className="font-diary whitespace-pre-wrap text-[15px] leading-[1.9] text-ink">{summary.narrative}</p>
+            </div>
+          ) : todayDiary?.form === "dialogue" ? (
+            <div className="mx-auto mt-4 max-w-md border-l-2 border-line pl-4">
+              <p className="mb-1 text-xs text-ink-faint">今天在岛上听到的对话</p>
+              <p className="font-diary whitespace-pre-wrap text-[15px] leading-[2] text-ink">{summary.narrative}</p>
+            </div>
+          ) : (
+            <p className="font-diary mt-4 whitespace-pre-wrap text-[16px] leading-[2] text-ink">{summary.narrative}</p>
+          )}
 
           {/* 它记得你昨天说的话 */}
           {summary.interventionResponse && (
@@ -171,14 +202,17 @@ export default async function MyCatPage() {
               它可以在日记里提到这句话（不勾选就只有它自己知道）
             </label>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-xs text-ink-soft">你希望它明天……</span>
-              {[
-                { v: "", label: "随它去" },
-                { v: "earn", label: "去赚点鱼币" },
-                { v: "explore", label: "出门走走" },
-                { v: "social", label: "找朋友玩" },
-                { v: "rest", label: "好好休息" },
-              ].map((o, i) => (
+              <span className="text-xs text-ink-soft">{choices ? "这件事，你希望它……" : "你希望它明天……"}</span>
+              {(choices
+                ? [{ v: "", label: "让它自己拿主意" }, ...choices.map((c) => ({ v: c.value, label: c.label }))]
+                : [
+                    { v: "", label: "随它去" },
+                    { v: "earn", label: "去赚点鱼币" },
+                    { v: "explore", label: "出门走走" },
+                    { v: "social", label: "找朋友玩" },
+                    { v: "rest", label: "好好休息" },
+                  ]
+              ).map((o, i) => (
                 <label
                   key={o.v}
                   className="cursor-pointer border border-line px-2.5 py-1 has-[:checked]:border-sea-deep has-[:checked]:bg-paper"
@@ -194,6 +228,12 @@ export default async function MyCatPage() {
           </form>
         )}
       </div>
+
+      {weekBook && (
+        <div className="mt-8 text-center">
+          <Link href="/my-cat/week" className="seal">我们的第一周 →</Link>
+        </div>
+      )}
 
       {/* 页尾悬念 */}
       {summary?.tomorrowHook && (

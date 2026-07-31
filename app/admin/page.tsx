@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { firstWeekPlan } from "@/lib/sim/firstweek";
 import { adminLogin, isAdmin } from "@/lib/admin-auth";
 import { createInviteCodes, disableInviteCode, rateContent, toggleAdoptionPause } from "@/lib/admin-actions";
 import { adminLogout } from "@/lib/admin-auth";
@@ -65,6 +66,15 @@ export default async function AdminPage() {
     else if (h <= 36) segments.active.push(u);
     else segments.lapsing.push(u);
   }
+  const firstDayByCat = new Map<string, number>(
+    (
+      await prisma.event.groupBy({
+        by: ["catId"],
+        where: { catId: { in: [...new Set(recentSummaries.map((x) => x.catId))] } },
+        _min: { day: true },
+      })
+    ).map((g) => [g.catId, g._min.day ?? 0]),
+  );
   const catNameById = new Map(userCats.map((c) => [c.id, c.name]));
   const day = world?.day ?? 0;
 
@@ -194,6 +204,7 @@ export default async function AdminPage() {
         <p className="mt-2 text-xs text-[#A89B85]">已消费的建议数：{consumedSuggestions.length}</p>
       </section>
 
+      {/* 首周标记：来岛第几天与当日主题（v0.8 抽检用） */}
       <section className="rounded-2xl border border-[#EADFCC] bg-white p-4">
         <h2 className="mb-2 font-bold">用户猫每日摘要（近 20 条，抽检入口）</h2>
         <div className="space-y-3">
@@ -201,6 +212,15 @@ export default async function AdminPage() {
             <div key={s.id} className="border-t border-[#F5EDE0] pt-2 text-xs">
               <p className="font-medium">
                 第{s.day}天 · {catNameById.get(s.catId) ?? s.catId} · {s.headline}
+                {(() => {
+                  const first = firstDayByCat.get(s.catId);
+                  const plan = first != null ? firstWeekPlan(s.day - first + 1) : null;
+                  return plan ? (
+                    <span className="ml-1 rounded bg-[#F5EDE0] px-1 py-0.5 text-[10px] text-[#8A7B65]">
+                      来岛第{plan.catDay}天 · {plan.theme} · {plan.form}
+                    </span>
+                  ) : null;
+                })()}
               </p>
               <p className="mt-1 text-[#6B5D48]">{s.narrative}</p>
               {s.interventionResponse && <p className="mt-1 text-[#4E6B3A]">回执：{s.interventionResponse}</p>}
