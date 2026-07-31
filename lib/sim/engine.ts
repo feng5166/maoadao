@@ -305,6 +305,7 @@ export function runDay(world: WorldSnapshot): DayResult {
     const t = threads.find((x) => x.id === tu.threadId);
     if (!t || (tu.status !== "resolved" && tu.status !== "failed")) continue;
     const semantic: Record<string, string> = {
+      arrival_key: "我的小屋曾属于一位没回来的老船长——这座岛比我想的更有故事",
       shop: "我大概真的不适合开店……至少现在还不适合",
       debt: "欠债的滋味不好受，以后花钱得有数",
       lighthouse:

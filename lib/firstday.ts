@@ -4,7 +4,8 @@ import { narrateOwnerDay } from "./narrative/narrator";
 import type { Fact } from "./sim/types";
 
 // 首日体验：领养后不能面对空白页（定义·八 Step5）。
-// 立刻生成"到岛第一天"的事实 + 日记 + 今日摘要（含明日悬念），当天即有内容可看。
+// LLM 先行生成叙事（失败用兜底文案），事件/日记/摘要/旧钥匙事件线在单事务写入——
+// 中途失败整体回滚，重试不产生重复（幂等以摘要存在性为准，在事务内判定）。
 
 export async function generateArrivalDay(catId: string): Promise<void> {
   const cat = await prisma.cat.findUnique({ where: { id: catId } });
@@ -12,9 +13,8 @@ export async function generateArrivalDay(catId: string): Promise<void> {
   const world = await prisma.worldState.findUnique({ where: { id: 1 } });
   const day = world?.day ?? 0;
 
-  // 已有当日摘要则跳过（幂等）
-  const existing = await prisma.catDailySummary.findUnique({ where: { catId_day: { catId, day } } });
-  if (existing) return;
+  // 快速幂等检查（事务内还会再查一次防竞态）
+  if (await prisma.catDailySummary.findUnique({ where: { catId_day: { catId, day } } })) return;
 
   const greeterRel = await prisma.relationship.findFirst({
     where: { catAId: catId, catBId: { not: "npc-mianhua" } },
@@ -51,26 +51,7 @@ export async function generateArrivalDay(catId: string): Promise<void> {
     },
   ];
 
-  const eventIds: string[] = [];
-  for (const f of facts) {
-    const id = randomUUID();
-    eventIds.push(id);
-    await prisma.event.create({
-      data: {
-        id,
-        day,
-        segment: f.segment,
-        catId,
-        type: f.type,
-        outcome: f.outcome,
-        data: f.data as object,
-        deltas: {},
-        contentValue: f.contentValue,
-        isMain: f.type === "arrival",
-      },
-    });
-  }
-
+  // LLM 叙事在事务外先算好（耗时且可失败）；失败走兜底，写库始终原子
   const { summary, generatedBy } = await narrateOwnerDay({
     cat: {
       id: cat.id,
@@ -94,33 +75,70 @@ export async function generateArrivalDay(catId: string): Promise<void> {
     activeThreads: [],
     catById: new Map([[cat.id, { name: cat.name }], ...(secondNpc ? [[secondNpc.id, { name: secondNpc.name }] as const] : [])]),
   });
+  const tomorrowHook = summary.tomorrowHook ?? "那把旧钥匙能打开什么？明天它大概会去问问岛上的老猫。";
 
-  await prisma.diaryEntry.upsert({
-    where: { catId_day: { catId, day } },
-    update: {},
-    create: {
-      id: randomUUID(),
-      catId,
-      day,
-      content: summary.narrative,
-      mood: "既紧张又兴奋",
-      eventIds,
-      generatedBy,
-      createdAt: new Date(),
-    },
-  });
-  await prisma.catDailySummary.create({
-    data: {
-      id: randomUUID(),
-      catId,
-      day,
-      headline: summary.headline,
-      narrative: summary.narrative,
-      interventionResponse: null,
-      tomorrowHook: summary.tomorrowHook ?? "那把旧钥匙能打开什么？明天它大概会去问问岛上的老猫。",
-      stateChanges: [],
-      threadProgress: [],
-      createdAt: new Date(),
-    },
+  await prisma.$transaction(async (tx) => {
+    // 事务内二次幂等判定：并发重试只允许一份首日数据
+    const exists = await tx.catDailySummary.findUnique({ where: { catId_day: { catId, day } } });
+    if (exists) return;
+
+    const eventIds: string[] = [];
+    for (const f of facts) {
+      const id = randomUUID();
+      eventIds.push(id);
+      await tx.event.create({
+        data: {
+          id,
+          day,
+          segment: f.segment,
+          catId,
+          type: f.type,
+          outcome: f.outcome,
+          data: f.data as object,
+          deltas: {},
+          contentValue: f.contentValue,
+          isMain: f.type === "arrival",
+        },
+      });
+    }
+    await tx.diaryEntry.create({
+      data: {
+        id: randomUUID(),
+        catId,
+        day,
+        content: summary.narrative,
+        mood: "既紧张又兴奋",
+        eventIds,
+        generatedBy,
+        createdAt: new Date(),
+      },
+    });
+    await tx.catDailySummary.create({
+      data: {
+        id: randomUUID(),
+        catId,
+        day,
+        headline: summary.headline,
+        narrative: summary.narrative,
+        interventionResponse: null,
+        tomorrowHook,
+        stateChanges: [],
+        threadProgress: [{ label: "旧钥匙的来历", step: 1 }],
+        createdAt: new Date(),
+      },
+    });
+    // 旧钥匙不是文案钩子，是真事件线：模拟器后续会推进它（问来历 → 打开隔层）
+    await tx.storyline.create({
+      data: {
+        id: randomUUID(),
+        catId,
+        kind: "arrival_key",
+        status: "active",
+        step: 1,
+        lastAdvanceDay: day,
+        data: { key: "拴着褪色红绳的旧钥匙" },
+        startDay: day,
+      },
+    });
   });
 }

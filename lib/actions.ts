@@ -57,8 +57,9 @@ export async function createCat(formData: FormData) {
     : ["神秘"];
 
   const id = `cat-${randomUUID().slice(0, 8)}`;
-  await prisma.cat.create({
-    data: {
+  try {
+    await prisma.cat.create({
+      data: {
       id,
       name,
       isNpc: false,
@@ -73,8 +74,15 @@ export async function createCat(formData: FormData) {
       bio: bio || `${name}刚刚搬来猫啊岛，一切都是新的。`,
       createdAt: new Date(),
       state: { create: {} },
-    },
-  });
+      },
+    });
+  } catch (err) {
+    // 并发领养撞上 ownerId 唯一约束：另一只已创建成功，直接去看它
+    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {
+      redirect("/my-cat");
+    }
+    throw err;
+  }
 
   // 初始 NPC 关系：热心肠的棉花来打招呼 + 按性格再结识一只
   const world = await prisma.worldState.findUnique({ where: { id: 1 } });

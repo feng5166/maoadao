@@ -1,5 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { advanceOneDay, TickInProgressError } from "@/lib/sim/tick";
+import { narrateCommittedDay, narrationGap } from "@/lib/sim/renarrate";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 叙事并行调用 LLM，给足余量
@@ -12,6 +14,17 @@ export async function GET(req: Request) {
   }
 
   try {
+    // 自愈优先：当前天存在"事件已提交但叙事缺失"时，本次只补写、不推进——
+    // 状态由数据推导（有事件无日记/摘要 = 待叙事），Cron 天然成为恢复入口
+    const world = await prisma.worldState.findUnique({ where: { id: 1 } });
+    const currentDay = world?.day ?? 0;
+    const gap = await narrationGap(currentDay);
+    if (gap > 0) {
+      const r = await narrateCommittedDay(currentDay, { mode: "missing" });
+      revalidatePath("/");
+      return Response.json({ recovered: true, gapBefore: gap, ...r });
+    }
+
     const result = await advanceOneDay({ narrate: true });
     revalidatePath("/");
     return Response.json(result);

@@ -26,8 +26,8 @@ model User {
 
 model Cat {
   id          String   @id
-  ownerId     String? // null = NPC 猫
-  owner       User?    @relation(fields: [ownerId], references: [id])
+  ownerId     String?   @unique // null = NPC 猫；一人一猫由数据库约束兜底（并发防线）
+  owner       User?     @relation(fields: [ownerId], references: [id])
   name        String
   isNpc       Boolean  @default(false)
   // 性格：数值轴决定模拟器行为倾向，tags 供叙事层塑造语气

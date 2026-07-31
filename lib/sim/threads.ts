@@ -9,6 +9,7 @@ export const THREAD_LABELS: Record<string, string> = {
   shop: "经营小店",
   debt: "欠着债",
   lighthouse: "灯塔之谜",
+  arrival_key: "旧钥匙的来历",
 };
 
 interface ThreadSystem {
@@ -110,6 +111,49 @@ export const THREAD_SYSTEMS: Record<string, ThreadSystem> = {
           cvBonus: 2,
         }),
       });
+    },
+  },
+
+  // ============ 旧钥匙线：新猫首日拿到的钥匙（三步短线，与老船长传说呼应） ============
+  arrival_key: {
+    intentFor: (ctx, thread) => {
+      switch (thread.step) {
+        case 1:
+          return stepTemplate("arrival_key_ask", "打听旧钥匙的来历", {
+            segments: ["morning", "afternoon"],
+            contentValue: 5,
+            resolve: (ctx2) => ({
+              outcome: "success" as const,
+              data: {
+                targetId: "npc-jiangjun",
+                targetName: "将军",
+                clue: "将军接过钥匙眯眼看了半天：「这是三十年前老船长小屋的备用钥匙。你住的那间屋子……以前是他的。」",
+              },
+              deltas: { energy: -10 },
+              affinityChanges: [{ catAId: thread.catId, catBId: "npc-jiangjun", delta: 5, reason: "听了段老故事" }],
+              threadUpdates: [{ threadId: thread.id, step: 2, lastAdvanceDay: ctx2.world.day }],
+              cvBonus: 3,
+            }),
+          });
+        case 2:
+          return stepTemplate("arrival_key_open", "试试钥匙能开什么", {
+            segments: ["evening"],
+            contentValue: 6,
+            resolve: () => ({
+              outcome: "success",
+              data: {
+                location: "自家小屋",
+                discovery:
+                  "钥匙打开了床板下的一个小隔层：一页泛黄的航海笔记，和一小袋还香着的鱼干——老船长留给后来住客的见面礼",
+              },
+              deltas: { energy: -10, coins: 5 },
+              threadUpdates: [{ threadId: thread.id, status: "resolved", data: { ...thread.data, opened: true } }],
+              cvBonus: 5,
+            }),
+          });
+        default:
+          return null;
+      }
     },
   },
 
