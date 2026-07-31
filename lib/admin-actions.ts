@@ -12,12 +12,12 @@ async function requireAdmin() {
 }
 
 function makeCode(): string {
+  // 12 位随机（~59 bit）：船票兼作成本闸门，空间必须够大
   const alphabet = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
-  const seg = () =>
-    Array.from(randomBytes(4))
-      .map((b) => alphabet[b % alphabet.length])
-      .join("");
-  return `BOAT-${seg()}`;
+  const body = Array.from(randomBytes(12))
+    .map((b) => alphabet[b % alphabet.length])
+    .join("");
+  return `BOAT-${body.slice(0, 4)}-${body.slice(4, 8)}-${body.slice(8, 12)}`;
 }
 
 /** 发放邀请码（船票）：批次 + 每码可用次数 + 张数 */

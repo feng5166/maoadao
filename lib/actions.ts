@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { track } from "@vercel/analytics/server";
 import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
-import { NPC_CATS } from "./sim/npcs";
+import { adoptCat } from "./adoption";
 import { generatePortrait } from "./portrait";
 import { generateArrivalDay } from "./firstday";
 import { ensureViewerId, getViewerId } from "./identity";
@@ -20,106 +20,34 @@ function clamp(n: number): number {
 const GOALS = new Set(["earn", "friends", "explore", "chill"]);
 
 export async function createCat(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim().slice(0, 12);
-  const appearance = String(formData.get("appearance") ?? "").trim().slice(0, 60);
-  const bio = String(formData.get("bio") ?? "").trim().slice(0, 120);
-  const tagsRaw = String(formData.get("tags") ?? "").trim().slice(0, 60);
-  const ownerNick = String(formData.get("ownerNick") ?? "").trim().slice(0, 8);
-  const goalRaw = String(formData.get("goal") ?? "chill");
-  const goal = GOALS.has(goalRaw) ? goalRaw : "chill";
-  const boldness = clamp(Number(formData.get("boldness") ?? 50));
-  const sociability = clamp(Number(formData.get("sociability") ?? 50));
-  const diligence = clamp(Number(formData.get("diligence") ?? 50));
+  const input = {
+    name: String(formData.get("name") ?? "").trim().slice(0, 12),
+    appearance: String(formData.get("appearance") ?? "").trim().slice(0, 60),
+    bio: String(formData.get("bio") ?? "").trim().slice(0, 120),
+    tagsRaw: String(formData.get("tags") ?? "").trim().slice(0, 60),
+    ownerNick: String(formData.get("ownerNick") ?? "").trim().slice(0, 8),
+    goal: GOALS.has(String(formData.get("goal") ?? "")) ? String(formData.get("goal")) : "chill",
+    boldness: clamp(Number(formData.get("boldness") ?? 50)),
+    sociability: clamp(Number(formData.get("sociability") ?? 50)),
+    diligence: clamp(Number(formData.get("diligence") ?? 50)),
+    ticket: String(formData.get("ticket") ?? "").trim().toUpperCase(),
+  };
+  if (!input.name) throw new Error("猫得有个名字");
+  if (!input.ticket) throw new Error("需要一张船票（邀请码）才能上岛");
 
-  if (!name) throw new Error("猫得有个名字");
-
-  // 封闭内测：岛可暂停接待；上岛要船票（邀请码），原子核销防超用
-  const world0 = await prisma.worldState.findUnique({ where: { id: 1 } });
-  if (world0?.adoptionPaused) throw new Error("码头暂时不办理入岛，过几天再来吧");
-  const ticket = String(formData.get("ticket") ?? "").trim().toUpperCase();
-  if (!ticket) throw new Error("需要一张船票（邀请码）才能上岛");
-  const claimed = await prisma.inviteCode.updateMany({
-    where: { code: ticket, disabled: false, usedCount: { lt: prisma.inviteCode.fields.maxUses } },
-    data: { usedCount: { increment: 1 } },
-  });
-  if (claimed.count === 0) throw new Error("这张船票不能用了——问问给你票的人");
-  const ticketRow = await prisma.inviteCode.findUnique({ where: { code: ticket } });
-
-  // 身份：匿名 cookie，一浏览器一岛民；猫归属于创建者
   const uid = await ensureViewerId();
-  await prisma.user.upsert({
-    where: { id: uid },
-    update: { inviteCode: ticket, inviteBatch: ticketRow?.batch ?? null },
-    create: { id: uid, name: "岛民", inviteCode: ticket, inviteBatch: ticketRow?.batch ?? null, createdAt: new Date() },
-  });
-
-  // 防连点：2 分钟内刚建过猫 → 直接跳去那只猫（幂等）
-  const recent = await prisma.cat.findFirst({
-    where: { ownerId: uid, createdAt: { gte: new Date(Date.now() - 120_000) } },
-    orderBy: { createdAt: "desc" },
-  });
-  if (recent) redirect(`/cats/${recent.id}`);
-
-  // 一人一猫（v0.5）：无限重抽会毁掉归属感；"第二只猫"留作未来付费点
-  const owned = await prisma.cat.findFirst({ where: { ownerId: uid } });
-  if (owned) redirect(`/my-cat`);
-
-  // 内容审核：所有用户可见文本
-  const mod = await moderateTexts([name, appearance, bio, tagsRaw, ownerNick]);
-  if (!mod.ok) throw new Error(mod.reason ?? "内容未通过审核，请修改后重试");
-
-  const personaTags = tagsRaw
-    ? tagsRaw.split(/[,，、\s]+/).filter(Boolean).slice(0, 5)
-    : ["神秘"];
-
-  const id = `cat-${randomUUID().slice(0, 8)}`;
-  try {
-    await prisma.cat.create({
-      data: {
-      id,
-      name,
-      isNpc: false,
-      ownerId: uid,
-      ownerNick: ownerNick || null,
-      goal,
-      boldness,
-      sociability,
-      diligence,
-      personaTags,
-      appearance: appearance || "一只还没被描述过的猫",
-      bio: bio || `${name}刚刚搬来猫啊岛，一切都是新的。`,
-      createdAt: new Date(),
-      state: { create: {} },
-      },
-    });
-  } catch (err) {
-    // 并发领养撞上 ownerId 唯一约束：另一只已创建成功，直接去看它
-    if (typeof err === "object" && err !== null && "code" in err && (err as { code: string }).code === "P2002") {
-      redirect("/my-cat");
-    }
-    throw err;
-  }
-
-  // 初始 NPC 关系：热心肠的棉花来打招呼 + 按性格再结识一只
-  const world = await prisma.worldState.findUnique({ where: { id: 1 } });
-  const day = world?.day ?? 0;
-  const second =
-    sociability > 60 ? "npc-juzi" : boldness > 60 ? "npc-doudou" : diligence > 60 ? "npc-tudou" : "npc-tangyuan";
-  for (const npcId of ["npc-mianhua", second]) {
-    if (!NPC_CATS.some((n) => n.id === npcId)) continue;
-    await prisma.relationship.create({
-      data: { id: randomUUID(), catAId: id, catBId: npcId, affinity: 8 + Math.floor(Math.random() * 5), lastInteractionDay: day },
-    });
-  }
+  const result = await adoptCat(uid, input);
+  if (!result.ok) redirect(`/my-cat`);
 
   // 异步：首日事件（领养后不能面对空白页）+ 立绘生成，都不阻塞领养流程
   after(async () => {
-    await generateArrivalDay(id).catch((e) => console.error("[firstday]", e));
-    await generatePortrait(id).catch((e) => console.error("[portrait]", e));
+    await generateArrivalDay(result.catId).catch((e) => console.error("[firstday]", e));
+    await generatePortrait(result.catId).catch((e) => console.error("[portrait]", e));
   });
 
+  const user = await prisma.user.findUnique({ where: { id: uid }, select: { inviteBatch: true } });
   const ref = (await cookies()).get("maoadao_ref")?.value ?? null;
-  await track("adopt_complete", { goal, referred: ref === "share_card", batch: ticketRow?.batch ?? "unknown" });
+  await track("adopt_complete", { goal: input.goal, referred: ref === "share_card", batch: user?.inviteBatch ?? "unknown" });
   if (ref === "share_card") await track("referred_adopt_complete", {});
   revalidatePath("/");
   redirect(`/my-cat`);

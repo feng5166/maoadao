@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { adminLogin, isAdmin } from "@/lib/admin-auth";
 import { createInviteCodes, disableInviteCode, rateContent, toggleAdoptionPause } from "@/lib/admin-actions";
+import { adminLogout } from "@/lib/admin-auth";
 import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
@@ -52,14 +53,18 @@ export default async function AdminPage() {
   const nudgeCountByCat = new Map<string, number>();
   for (const n of allNudges) nudgeCountByCat.set(n.catId, (nudgeCountByCat.get(n.catId) ?? 0) + 1);
 
-  // 生命周期分层（v0.7.1）：回答"用户在哪一步流失"
+  // 生命周期分层（互斥，按优先级归入唯一一段）：流失 → 未干预 → 高活跃 → 连续 → 已干预不连续
   const owners = users.filter((u) => u.cats.length > 0);
-  const seg = {
-    neverNudged: owners.filter((u) => (nudgeCountByCat.get(u.cats[0]?.id ?? "") ?? 0) === 0),
-    active: owners.filter((u) => hoursAgo(u.lastActiveAt) < 36),
-    churned: owners.filter((u) => hoursAgo(u.lastActiveAt) > 72),
-    heavy: owners.filter((u) => (nudgeCountByCat.get(u.cats[0]?.id ?? "") ?? 0) >= 5),
-  };
+  const segments = { churned: [], neverNudged: [], heavy: [], active: [], lapsing: [] } as Record<string, typeof owners>;
+  for (const u of owners) {
+    const h = hoursAgo(u.lastActiveAt);
+    const nudgeN = nudgeCountByCat.get(u.cats[0]?.id ?? "") ?? 0;
+    if (h > 72) segments.churned.push(u);
+    else if (nudgeN === 0) segments.neverNudged.push(u);
+    else if (nudgeN >= 5) segments.heavy.push(u);
+    else if (h <= 36) segments.active.push(u);
+    else segments.lapsing.push(u);
+  }
   const catNameById = new Map(userCats.map((c) => [c.id, c.name]));
   const day = world?.day ?? 0;
 
@@ -68,7 +73,12 @@ export default async function AdminPage() {
 
   return (
     <div className="space-y-6 text-sm">
-      <h1 className="text-xl font-bold">🔭 观察后台</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">🔭 观察后台</h1>
+        <form action={adminLogout}>
+          <SubmitButton pendingText="…" className="text-xs text-[#A89B85] hover:underline">退出登录</SubmitButton>
+        </form>
+      </div>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
@@ -86,12 +96,14 @@ export default async function AdminPage() {
 
       <section className="rounded-2xl border border-[#EADFCC] bg-white p-4">
         <h2 className="mb-2 font-bold">生命周期分层</h2>
-        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        <p className="mb-2 text-[10px] text-[#A89B85]">互斥分段：每个用户只属于一段（优先级：流失＞未干预＞高活跃＞连续＞不连续）</p>
+        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
           {[
-            { label: "已领养未干预", list: seg.neverNudged },
-            { label: "连续使用中(36h)", list: seg.active },
-            { label: "已流失(>72h)", list: seg.churned },
-            { label: "高活跃(≥5次干预)", list: seg.heavy },
+            { label: "已流失(>72h)", list: segments.churned },
+            { label: "已领养未干预", list: segments.neverNudged },
+            { label: "高活跃(≥5干预)", list: segments.heavy },
+            { label: "连续使用中", list: segments.active },
+            { label: "已干预不连续", list: segments.lapsing },
           ].map((x) => (
             <div key={x.label} className="rounded-lg border border-[#F5EDE0] p-2">
               <p className="text-lg font-bold">{x.list.length}</p>

@@ -3,7 +3,7 @@ import path from "node:path";
 import { ImageResponse } from "next/og";
 import QRCode from "qrcode";
 import { track } from "@vercel/analytics/server";
-import { avatarTraits, catAvatarDataUri } from "@/components/CatAvatar";
+import { catAvatarDataUri } from "@/components/CatAvatar";
 import { getCat, getDiary, getWorld } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 
@@ -24,7 +24,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ catId: string;
     return new Response("没有这一天的日记", { status: 404 });
   }
   const world = await getWorld();
-  const bg = avatarTraits(cat.id).bg;
   const portrait = await prisma.portrait.findUnique({ where: { catId: cat.id } });
   const avatarUri = portrait
     ? `data:${portrait.mime};base64,${Buffer.from(portrait.data).toString("base64")}`
@@ -42,7 +41,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ catId: string;
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          background: `linear-gradient(160deg, ${bg} 0%, #FDF8F0 45%)`,
+          background: "#faf6ee",
           padding: 64,
           fontFamily: "Noto Sans SC",
           color: "#3E3226",
@@ -86,7 +85,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ catId: string;
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div>🏝️ 猫啊岛 · 领养一只会自己生活的 AI 猫</div>
+            <div>猫啊岛 · 领养一只会自己生活的猫</div>
             <div>maoadao.com</div>
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}

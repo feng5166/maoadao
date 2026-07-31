@@ -46,54 +46,54 @@ export default async function CatPage({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 shadow-sm">
+      <div className="border-b border-line pb-5">
         <div className="flex items-start gap-4">
           <CatAvatar id={cat.id} size={80} portraitUrl={cat.portraitUrl} />
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold">{cat.name}</h1>
-            <p className="mt-0.5 text-sm text-[#8A7B65]">{cat.appearance}</p>
+            <h1 className="font-title text-2xl font-bold">{cat.name}</h1>
+            <p className="mt-0.5 text-sm text-ink-soft">{cat.appearance}</p>
             {!cat.isNpc && !cat.portraitUrl && (
               <p className="mt-0.5 text-xs text-[#C4A24C]">🎨 专属立绘绘制中，稍后刷新查看</p>
             )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               {cat.goal && (
-                <span className="rounded-full bg-[#E8F5E9] px-2.5 py-0.5 text-xs text-[#4E7A3A]">
+                <span className="border border-line px-2 py-0.5 text-xs text-sage">
                   {GOAL_LABELS[cat.goal] ?? cat.goal}
                 </span>
               )}
               {cat.personaTags.map((tag) => (
-                <span key={tag} className="rounded-full bg-[#FFF3E0] px-2.5 py-0.5 text-xs text-[#B8860B]">
+                <span key={tag} className="border border-line px-2 py-0.5 text-xs text-ink-soft">
                   {tag}
                 </span>
               ))}
             </div>
           </div>
         </div>
-        <p className="mt-3 text-sm leading-relaxed text-[#6B5D48]">{cat.bio}</p>
+        <p className="mt-3 text-sm leading-relaxed text-ink">{cat.bio}</p>
 
         {state && (
-          <div className="mt-4 grid grid-cols-4 gap-2 border-t border-[#F5EDE0] pt-4 text-center">
+          <div className="mt-4 grid grid-cols-4 gap-2 border-t border-line pt-4 text-center">
             <div>
               <p className="text-lg font-bold">🐟 {state.coins}</p>
-              <p className="text-xs text-[#A89B85]">鱼币</p>
+              <p className="text-xs text-ink-faint">鱼币</p>
             </div>
             <div>
               <p className="text-lg font-bold">⚡ {state.energy}</p>
-              <p className="text-xs text-[#A89B85]">体力</p>
+              <p className="text-xs text-ink-faint">体力</p>
             </div>
             <div>
               <p className="text-lg font-bold">{state.mood}</p>
-              <p className="text-xs text-[#A89B85]">心情</p>
+              <p className="text-xs text-ink-faint">心情</p>
             </div>
             <div>
               <p className="truncate text-lg font-bold">{state.location}</p>
-              <p className="text-xs text-[#A89B85]">位置</p>
+              <p className="text-xs text-ink-faint">位置</p>
             </div>
           </div>
         )}
 
         {storylines.length > 0 && (
-          <div className="mt-3 rounded-xl bg-[#FFF9EE] p-3 text-sm">
+          <div className="mt-3 border-l-2 border-line pl-3 text-sm">
             {storylines.map((s) => (
               <p key={s.id}>
                 📌 {s.kind === "shop"
@@ -105,14 +105,14 @@ export default async function CatPage({
         )}
 
         {friends.length > 0 && (
-          <div className="mt-4 border-t border-[#F5EDE0] pt-4">
-            <p className="mb-2 text-xs text-[#A89B85]">朋友</p>
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="mb-2 text-xs text-ink-faint">朋友</p>
             <div className="flex flex-wrap gap-3">
               {friends.map((f) => (
-                <Link key={f.id} href={`/cats/${f.otherId}`} className="flex items-center gap-1.5 text-sm hover:text-[#E08E0B]">
+                <Link key={f.id} href={`/cats/${f.otherId}`} className="flex items-center gap-1.5 text-sm hover:text-brick">
                   <CatAvatar id={f.otherId} size={28} />
                   {f.otherName}
-                  <span className="text-xs text-[#C4B69C]">{f.affinity > 40 ? "❤️" : "·"}</span>
+                  <span className="text-xs text-ink-faint">{f.affinity > 40 ? "❤️" : "·"}</span>
                 </Link>
               ))}
             </div>
@@ -121,21 +121,21 @@ export default async function CatPage({
       </div>
 
       {isOwner && (
-        <section className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm">
+        <section className="note-slip p-4">
           <h2 className="mb-1 font-bold">和{cat.name}说句话</h2>
-          <p className="mb-3 text-xs text-[#A89B85]">留言会成为它的记忆；建议会影响它明天想做的事（但它有自己的主意）。</p>
+          <p className="mb-3 text-xs text-ink-faint">留言会成为它的记忆；建议会影响它明天想做的事（但它有自己的主意）。</p>
           <form action={saveNudge} className="space-y-3">
             <input type="hidden" name="catId" value={cat.id} />
             <textarea
               name="message" maxLength={60} rows={2} placeholder="给它留一句话（60 字内）"
-              className="w-full rounded-lg border border-[#E0D5C0] px-3 py-2 text-sm focus:border-[#F5A623] focus:outline-none"
+              className="w-full border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none"
             />
-            <label className="flex items-center gap-2 text-xs text-[#8A7B65]">
-              <input type="checkbox" name="isPublic" className="accent-[#F5A623]" />
+            <label className="flex items-center gap-2 text-xs text-ink-soft">
+              <input type="checkbox" name="isPublic" className="accent-[#5c7382]" />
               允许它在公开日记里提到这句话（不勾选则只有它自己知道）
             </label>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-xs text-[#A89B85]">建议它明天：</span>
+              <span className="text-xs text-ink-faint">建议它明天：</span>
               {[
                 { v: "", label: "随它去" },
                 { v: "earn", label: "去赚钱" },
@@ -149,7 +149,7 @@ export default async function CatPage({
                 </label>
               ))}
             </div>
-            <SubmitButton pendingText="送出中…" className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#E08E0B]">
+            <SubmitButton pendingText="送出中…" className="stamp-btn px-4 py-1.5 text-sm">
               送给它 🐾
             </SubmitButton>
           </form>
@@ -157,25 +157,25 @@ export default async function CatPage({
       )}
 
       <section>
-        <h2 className="mb-3 font-bold">{cat.name}的日记</h2>
+        <h2 className="font-title mb-3 font-bold">{cat.name}的日记</h2>
         {diaries.length === 0 && (
-          <p className="py-8 text-center text-sm text-[#A89B85]">
+          <p className="py-8 text-center text-sm text-ink-faint">
             还没有日记——等岛上的下一天开始吧。
           </p>
         )}
         <div className="space-y-3">
           {diaries.map((d) => (
-            <article key={d.id} className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm">
+            <article key={d.id} className="note-slip p-4">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-[#A89B85]">第 {d.day} 天 · {d.mood}</p>
+                <p className="text-xs text-ink-faint">第 {d.day} 天 · {d.mood}</p>
                 <Link
                   href={`/share/${cat.id}/${d.day}`}
-                  className="rounded-full border border-[#EADFCC] px-3 py-1 text-xs text-[#8A7B65] hover:border-[#F5A623] hover:text-[#E08E0B]"
+                  className="text-xs text-ink-faint hover:text-brick"
                 >
                   分享卡
                 </Link>
               </div>
-              <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed">{d.content}</p>
+              <p className="mt-2 font-diary whitespace-pre-wrap text-[15px] leading-[1.9]">{d.content}</p>
             </article>
           ))}
         </div>
