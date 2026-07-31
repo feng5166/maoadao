@@ -2,14 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CatAvatar } from "@/components/CatAvatar";
 import { THREAD_LABELS } from "@/lib/sim/threads";
+import { threadStage } from "@/lib/handbook";
 import { getViewerId } from "@/lib/identity";
 import { describeAffinity, getActiveStorylines, getFriends, getSummaries, getViewerCat } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// 猫的长期档案：生活记录 / 认识的猫 / 纪念物 / 正在发生的故事（定义 v0.5·五）
-// 情感资产要能回看，否则内容产生后很快消失。
+// 生活册：让用户感到"时间被保存了"，而不是"数据被记录了"（v0.7）。
+// 重要的日子（有回执/大事）完整展开，普通日子一句摘录可展开。
 
 export default async function HistoryPage() {
   const viewerId = await getViewerId();
@@ -20,95 +21,111 @@ export default async function HistoryPage() {
     getSummaries(cat.id),
     getFriends(cat.id, 8),
     getActiveStorylines(cat.id),
-    // 纪念物：只展示有叙事意义的（高重要性的观察/情节记忆）
     prisma.memoryEntry.findMany({
       where: { catId: cat.id, importance: { gte: 6 }, kind: { in: ["observation", "thread", "semantic"] } },
       orderBy: [{ importance: "desc" }, { day: "desc" }],
-      take: 8,
+      take: 6,
     }),
   ]);
   const friends = friendsAll.filter((f) => Math.abs(f.affinity) > 5);
+  const firstDay = summaries.length ? summaries[summaries.length - 1].day : 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/my-cat" className="text-sm text-[#A89B85] hover:text-[#E08E0B]">← 回到今天</Link>
-        <h1 className="text-xl font-bold">{cat.name}的生活档案</h1>
+    <div className="mx-auto max-w-lg">
+      <div className="text-center">
+        <p className="seal">生活册</p>
+        <h1 className="font-title mt-2 text-xl font-bold">{cat.name}在岛上的日子</h1>
+        <p className="mt-1 text-xs text-ink-faint">
+          <Link href="/my-cat" className="hover:text-brick">← 回到今天</Link>
+        </p>
       </div>
 
-      {/* 正在发生的故事 */}
+      {/* 正在发生的事 */}
       {threads.length > 0 && (
-        <section className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-bold text-[#3A5F7A]">📌 正在发生的故事</h2>
+        <div className="mt-6">
+          <p className="text-xs tracking-widest text-ink-faint">还没讲完的故事</p>
           {threads.map((t) => (
-            <p key={t.id} className="text-sm text-[#6B5D48]">
-              {THREAD_LABELS[t.kind] ?? t.kind}
-              {t.kind === "lighthouse" ? `：${t.step}/7` : `（第 ${t.startDay} 天开始）`}
+            <p key={t.id} className="font-diary mt-1 text-[15px]">
+              「{THREAD_LABELS[t.kind] ?? t.kind}」{threadStage(t.step, t.kind === "lighthouse" ? 7 : undefined)}
+              <span className="ml-2 text-xs text-ink-faint">第 {t.startDay} 天开始 · 第 {t.step} 步</span>
             </p>
           ))}
-        </section>
+        </div>
       )}
 
-      {/* 认识的猫：翻译成人话，不显数值 */}
+      {/* 岛民名册 */}
       {friends.length > 0 && (
-        <section className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-bold text-[#3A5F7A]">🐾 认识的猫</h2>
-          <div className="space-y-2">
+        <div className="mt-6 border-t border-line pt-4">
+          <p className="text-xs tracking-widest text-ink-faint">它认识的猫</p>
+          <div className="mt-2 space-y-2">
             {friends.map((f) => (
-              <Link key={f.id} href={`/cats/${f.otherId}`} className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-[#FFF9EE]">
-                <CatAvatar id={f.otherId} size={36} />
-                <div>
-                  <p className="text-sm font-medium">{f.otherName}</p>
-                  <p className="text-xs text-[#A89B85]">{describeAffinity(f.affinity)} · 最近一次来往在第 {f.lastInteractionDay} 天</p>
-                </div>
+              <Link key={f.id} href={`/cats/${f.otherId}`} className="flex items-center gap-3 py-1 hover:opacity-80">
+                <CatAvatar id={f.otherId} size={34} />
+                <span className="font-diary text-[15px]">{f.otherName}</span>
+                <span className="text-xs text-ink-soft">{describeAffinity(f.affinity)}</span>
               </Link>
             ))}
           </div>
-        </section>
+        </div>
       )}
 
-      {/* 纪念 */}
+      {/* 值得记住的 */}
       {keepsakes.length > 0 && (
-        <section className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-bold text-[#3A5F7A]">🎁 值得记住的事</h2>
-          <ul className="space-y-1.5 text-sm text-[#6B5D48]">
+        <div className="mt-6 border-t border-line pt-4">
+          <p className="text-xs tracking-widest text-ink-faint">值得记住的</p>
+          <ul className="mt-2 space-y-1.5">
             {keepsakes.map((k) => (
-              <li key={k.id}>
-                <span className="mr-1.5 text-xs text-[#C4B69C]">第{k.day}天</span>
+              <li key={k.id} className="font-diary text-[15px] leading-relaxed">
                 {k.content}
+                <span className="ml-2 text-xs text-ink-faint">第 {k.day} 天</span>
               </li>
             ))}
           </ul>
-        </section>
+        </div>
       )}
 
-      {/* 生活记录：按日回看 */}
-      <section>
-        <h2 className="mb-3 text-sm font-bold text-[#3A5F7A]">📖 生活记录</h2>
+      {/* 按日翻册 */}
+      <div className="mt-8 border-t-4 border-double border-line pt-5">
         {summaries.length === 0 && (
-          <p className="py-8 text-center text-sm text-[#A89B85]">还没有记录——第一天的故事正在发生。</p>
+          <p className="font-diary py-8 text-center text-[15px] text-ink-soft">第一页还空着——它的故事今晚开始写。</p>
         )}
-        <div className="space-y-3">
-          {summaries.map((s) => (
-            <article key={s.id} className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-[#A89B85]">第 {s.day} 天</p>
-                <Link
-                  href={`/share/${cat.id}/${s.day}`}
-                  className="rounded-full border border-[#EADFCC] px-3 py-1 text-xs text-[#8A7B65] hover:border-[#F5A623] hover:text-[#E08E0B]"
-                >
-                  分享卡
-                </Link>
-              </div>
-              <h3 className="mt-1 font-bold">{s.headline}</h3>
-              <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed">{s.narrative}</p>
-              {s.interventionResponse && (
-                <p className="mt-2 rounded-lg bg-[#F0F7EE] p-2 text-xs text-[#4E6B3A]">💬 {s.interventionResponse}</p>
-              )}
-            </article>
-          ))}
+        <div className="space-y-6">
+          {summaries.map((s) => {
+            const important = Boolean(s.interventionResponse) || s.day === firstDay;
+            return (
+              <section key={s.id}>
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-title font-bold">
+                    <span className="mr-2 text-xs font-normal text-ink-faint">来岛第 {s.day - firstDay + 1} 天</span>
+                    {s.headline}
+                  </h2>
+                  <Link href={`/share/${cat.id}/${s.day}`} className="shrink-0 text-xs text-ink-faint hover:text-brick">
+                    分享
+                  </Link>
+                </div>
+                {important ? (
+                  <>
+                    <p className="font-diary mt-2 whitespace-pre-wrap text-[15px] leading-[1.9]">{s.narrative}</p>
+                    {s.interventionResponse && (
+                      <p className="font-diary mt-2 border-l-2 border-line pl-3 text-sm leading-relaxed text-ink-soft">
+                        {s.interventionResponse}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <details className="mt-1">
+                    <summary className="font-diary cursor-pointer list-none text-[15px] text-ink-soft">
+                      {s.narrative.slice(0, 42)}……<span className="text-xs text-ink-faint">（展开）</span>
+                    </summary>
+                    <p className="font-diary mt-2 whitespace-pre-wrap text-[15px] leading-[1.9]">{s.narrative}</p>
+                  </details>
+                )}
+                <hr className="paper-rule mt-5" />
+              </section>
+            );
+          })}
         </div>
-      </section>
+      </div>
     </div>
   );
 }

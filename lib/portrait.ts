@@ -3,19 +3,24 @@ import { prisma } from "./db";
 
 // 定稿立绘：创建时生成一次，之后所有页面和分享卡复用——绝不每天重生成（定义·十三）。
 
+// 统一画风（v0.7 去 AI 化）：目标不是每张惊艳，而是 17 只放一起像同一本绘本。
+// 固定构图/视角/光线/描边/色数/背景，去掉摄影感与环境渲染，保留手绘瑕疵。
 const STYLE =
-  "儿童绘本风格，扁平可爱插画，柔和的奶油色纯色背景，单只猫的全身角色立绘，居中构图，高质量角色设计，无文字无水印";
+  "手绘绘本风格角色设计。严格遵守：全身站姿，正面微侧45度，平视视角；" +
+  "均匀柔和的平光，无投影无高光渲染；粗细一致的深棕色手绘轮廓线；" +
+  "整只猫最多使用6种颜色，色彩中低饱和；纯米白色背景（#FAF6EE），无任何环境和道具；" +
+  "扁平上色带轻微水彩纸纹理和铅笔瑕疵感；不要写实毛发细节，不要摄影感，不要3D渲染，无文字无水印";
 
 function buildPrompt(cat: { name: string; appearance: string; personaTags: string[] }): string {
   const persona = cat.personaTags.slice(0, 3).join("、");
-  return `${cat.appearance}。这只猫的性格是${persona}，表情和姿态要体现这种性格。${STYLE}`;
+  return `一只猫的角色立绘：${cat.appearance}。性格${persona}，用站姿和表情体现性格。${STYLE}`;
 }
 
 /** 生成立绘并入库；幂等（已有立绘直接返回）。耗时 10~30 秒。 */
-export async function generatePortrait(catId: string): Promise<boolean> {
+export async function generatePortrait(catId: string, options: { force?: boolean } = {}): Promise<boolean> {
   const cat = await prisma.cat.findUnique({ where: { id: catId } });
   if (!cat) return false;
-  if (cat.portraitUrl) return true;
+  if (cat.portraitUrl && !options.force) return true;
 
   const base = process.env.IMAGE_API_BASE ?? "https://api.modelverse.cn";
   const key = process.env.IMAGE_API_KEY;

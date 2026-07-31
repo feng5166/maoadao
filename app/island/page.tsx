@@ -1,84 +1,82 @@
 import Link from "next/link";
 import { CatAvatar } from "@/components/CatAvatar";
-import { getFeed, getIslandNews, getWorld } from "@/lib/queries";
+import { getIslandNews, getWorld } from "@/lib/queries";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const world = await getWorld();
-  const feed = await getFeed();
-  const news = await getIslandNews();
+// 岛上的公告栏：不是信息流（v0.7）。日报是报纸，猫的日记是便签；
+// 只看最近一天，往前一天天翻。
 
-  const byDay = new Map<number, typeof feed>();
-  for (const entry of feed) {
-    byDay.set(entry.day, [...(byDay.get(entry.day) ?? []), entry]);
-  }
-  const days = [...byDay.keys()].sort((a, b) => b - a);
+export default async function IslandPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
+  const world = await getWorld();
+  const { day: dayParam } = await searchParams;
+  const day = Math.min(world.day, Math.max(1, Number(dayParam) || world.day));
+
+  const [news, diaries] = await Promise.all([
+    getIslandNews(6).then((all) => all.filter((n) => n.day === day)),
+    prisma.diaryEntry.findMany({
+      where: { day },
+      orderBy: { createdAt: "asc" },
+      include: { cat: { select: { id: true, name: true, isNpc: true, portraitUrl: true } } },
+    }),
+  ]);
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-r from-[#FFE0B2] to-[#FFF3E0] p-5">
-        <p className="text-sm text-[#8A7B65]">
-          今天是猫啊岛的第 <span className="font-bold text-[#3E3226]">{world.day}</span> 天 ·{" "}
-          {world.season}天 · 天气{world.weather}
+    <div className="mx-auto max-w-lg">
+      <div className="text-center">
+        <p className="seal">公告栏</p>
+        <h1 className="font-title mt-2 text-xl font-bold">岛上的第 {day} 天</h1>
+        <p className="mt-1 text-xs text-ink-faint">
+          {day > 1 && (
+            <Link href={`/island?day=${day - 1}`} className="hover:text-brick">← 前一天</Link>
+          )}
+          {day > 1 && day < world.day && <span className="mx-2">·</span>}
+          {day < world.day && (
+            <Link href={`/island?day=${day + 1}`} className="hover:text-brick">后一天 →</Link>
+          )}
         </p>
-        <h1 className="mt-1 text-xl font-bold">岛上的猫今天都在干什么？</h1>
       </div>
 
+      {/* 小梅日报（报纸） */}
       {news.length > 0 && (
-        <div className="rounded-2xl border border-[#EADFCC] bg-[#FFFDF7] p-4">
-          <p className="mb-2 text-xs font-medium text-[#B8860B]">📰 猫啊岛日报</p>
-          <ul className="space-y-1.5 text-sm text-[#6B5D48]">
+        <div className="newspaper mt-6 px-4 py-3">
+          <p className="font-press text-center text-sm font-bold">猫啊岛日报</p>
+          <p className="text-center text-[10px] tracking-widest text-ink-faint">主编 小梅 · 第 {day} 期</p>
+          <hr className="paper-rule my-2" />
+          <ul className="space-y-1.5">
             {news.map((n) => (
-              <li key={n.id}>
-                <span className="mr-1.5 text-xs text-[#C4B69C]">第{n.day}天</span>
-                {n.content}
-              </li>
+              <li key={n.id} className="font-diary text-[15px] leading-relaxed">{n.content}</li>
             ))}
           </ul>
         </div>
       )}
 
-      {days.length === 0 && (
-        <p className="py-12 text-center text-sm text-[#A89B85]">
-          岛上还很安静……运行 <code>npm run tick</code> 推进一天，猫们就会开始生活。
-        </p>
-      )}
-
-      {days.map((day) => (
-        <section key={day}>
-          <h2 className="mb-3 text-sm font-medium text-[#A89B85]">— 第 {day} 天 —</h2>
-          <div className="space-y-3">
-            {byDay.get(day)!.map((entry) => (
-              <article
-                key={entry.id}
-                className="rounded-2xl border border-[#EADFCC] bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <Link href={`/cats/${entry.catId}`} className="shrink-0">
-                    <CatAvatar id={entry.catId} size={44} portraitUrl={entry.portraitUrl} />
-                  </Link>
-                  <div className="min-w-0">
-                    <Link href={`/cats/${entry.catId}`} className="font-bold hover:text-[#E08E0B]">
-                      {entry.catName}
-                    </Link>
-                    <p className="text-xs text-[#A89B85]">
-                      {entry.isNpc ? "岛民" : "岛上新客"} · 心情：{entry.mood}
-                    </p>
-                  </div>
-                  <Link
-                    href={`/share/${entry.catId}/${entry.day}`}
-                    className="ml-auto shrink-0 rounded-full border border-[#EADFCC] px-3 py-1 text-xs text-[#8A7B65] hover:border-[#F5A623] hover:text-[#E08E0B]"
-                  >
-                    分享卡
-                  </Link>
-                </div>
-                <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed">{entry.content}</p>
-              </article>
-            ))}
+      {/* 岛民便签 */}
+      <div className="mt-6 space-y-4">
+        {diaries.map((d, i) => (
+          <div key={d.id} className="note-slip p-4" style={{ transform: `rotate(${i % 2 === 0 ? "-0.4" : "0.4"}deg)` }}>
+            <div className="flex items-center gap-2">
+              <Link href={`/cats/${d.cat.id}`}>
+                <CatAvatar id={d.cat.id} size={32} portraitUrl={d.cat.portraitUrl} />
+              </Link>
+              <Link href={`/cats/${d.cat.id}`} className="font-title text-sm font-bold hover:text-brick">
+                {d.cat.name}
+              </Link>
+              <span className="text-xs text-ink-faint">{d.mood}</span>
+            </div>
+            <details className="mt-2">
+              <summary className="font-diary cursor-pointer list-none text-[15px] leading-relaxed text-ink">
+                {d.content.slice(0, 40)}……<span className="text-xs text-ink-faint">（展开）</span>
+              </summary>
+              <p className="font-diary mt-2 whitespace-pre-wrap text-[15px] leading-[1.9]">{d.content}</p>
+            </details>
           </div>
-        </section>
-      ))}
+        ))}
+        {diaries.length === 0 && (
+          <p className="font-diary py-10 text-center text-[15px] text-ink-soft">这一天的公告栏是空的。</p>
+        )}
+      </div>
     </div>
   );
 }

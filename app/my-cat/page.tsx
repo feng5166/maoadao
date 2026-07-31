@@ -1,18 +1,20 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { CatAvatar } from "@/components/CatAvatar";
-import { Track } from "@/components/Track";
 import { SubmitButton } from "@/components/SubmitButton";
+import { Track } from "@/components/Track";
 import { renameCat, saveNudge } from "@/lib/actions";
 import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
+import { marginNotes, sceneFor, todayLabel } from "@/lib/handbook";
 import { prisma } from "@/lib/db";
-import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// /my-cat：产品主入口。回答五个问题——
-// 我的猫是谁 / 今天发生了什么 / 昨天的干预有没有影响 / 现在什么状态 / 我今天还能做什么
+// 今日手账：单页连续叙事，不是卡片集合（v0.7）。
+// 顺序：日期天气 → 场景与猫 → 一句状态 → 故事正文 → 它记得你昨天说的话 → 页边批注 → 今晚留句话 → 页尾悬念
 
 export default async function MyCatPage() {
   const viewerId = await getViewerId();
@@ -25,150 +27,154 @@ export default async function MyCatPage() {
     getLatestSummary(cat.id),
     getPendingNudge(cat.id),
   ]);
-  // 来岛第几天：以它的第一条事实为准
   const firstEvent = await prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } });
   const daysOnIsland = Math.max(1, world.day - (firstEvent?.day ?? world.day) + 1);
-  // 活跃时间：连续使用天数与流失分析的数据源
-  after(() =>
-    prisma.user.update({ where: { id: viewerId! }, data: { lastActiveAt: new Date() } }).catch(() => {}),
-  );
+
+  after(() => prisma.user.update({ where: { id: viewerId! }, data: { lastActiveAt: new Date() } }).catch(() => {}));
   const funnelEvents: { name: string; props?: Record<string, string | number | boolean> }[] = [
     { name: "daily_story_view", props: { islandDay: world.day, catDay: daysOnIsland } },
   ];
   if (daysOnIsland <= 1) funnelEvents.push({ name: "first_story_view", props: { catId: cat.id } });
   else funnelEvents.push({ name: "next_day_return", props: { catDay: daysOnIsland } });
-  const stateChanges = (summary?.stateChanges ?? []) as { label: string; delta: string }[];
-  const threadProgress = (summary?.threadProgress ?? []) as { label: string; step: number; total?: number }[];
+
+  const notes = summary
+    ? marginNotes(
+        (summary.stateChanges ?? []) as { label: string; delta: string }[],
+        (summary.threadProgress ?? []) as { label: string; step: number; total?: number }[],
+      )
+    : [];
+  const scene = sceneFor(state?.location);
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto max-w-lg">
       <Track events={funnelEvents} />
-      {/* 顶部：猫的当前状态（不堆数值） */}
-      <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-4">
-          <CatAvatar id={cat.id} size={88} portraitUrl={cat.portraitUrl} />
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold">
-              {cat.name}
-              <span className="ml-2 text-sm font-normal text-[#A89B85]">来岛第 {daysOnIsland} 天</span>
-            </h1>
-            <p className="mt-1 text-sm text-[#6B5D48]">
-              现在在{state?.location ?? "小屋"}，心情{state?.mood ?? "平静"}。
-            </p>
-            {!cat.portraitUrl && <p className="mt-0.5 text-xs text-[#C4A24C]">🎨 专属立绘绘制中，稍后刷新查看</p>}
-            <div className="mt-1.5 flex gap-3 text-xs text-[#A89B85]">
-              <Link href="/my-cat/history" className="hover:text-[#E08E0B]">📖 生活记录</Link>
-              <Link href={`/cats/${cat.id}`} className="hover:text-[#E08E0B]">🔗 它的公开主页</Link>
-              {summary && (
-                <Link href={`/share/${cat.id}/${summary.day}`} className="hover:text-[#E08E0B]">🖼️ 今日分享卡</Link>
-              )}
-            </div>
-          </div>
+
+      {/* 页眉：日期与天气（手账体例） */}
+      <p className="text-center text-xs tracking-widest text-ink-faint">
+        {todayLabel()} · 来岛第 {daysOnIsland} 天 · {world.weather}
+      </p>
+
+      {/* 场景 + 猫 */}
+      <div className="relative mt-3 overflow-hidden rounded-lg border border-line">
+        <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
+        <div className="absolute bottom-2 left-2 rounded-full border-2 border-paper">
+          <CatAvatar id={cat.id} size={64} portraitUrl={cat.portraitUrl} />
         </div>
       </div>
 
-      {/* 主体：今天最重要的故事 */}
+      {/* 一句当前状态 */}
+      <p className="font-diary mt-4 text-center text-[15px] text-ink">
+        {cat.name}现在在{state?.location ?? "小屋"}，看起来{state?.mood ?? "很平静"}。
+      </p>
+      {!cat.portraitUrl && <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>}
+
+      {/* 故事正文 */}
       {summary ? (
-        <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 shadow-sm">
-          <p className="text-xs text-[#A89B85]">第 {summary.day} 天 · 今日故事</p>
-          <h2 className="mt-1 text-xl font-bold">{summary.headline}</h2>
-          <p className="mt-3 whitespace-pre-wrap text-[15px] leading-relaxed">{summary.narrative}</p>
+        <article className="mt-6">
+          <h1 className="font-title text-center text-xl font-bold">{summary.headline}</h1>
+          <p className="font-diary mt-4 whitespace-pre-wrap text-[16px] leading-[2] text-ink">{summary.narrative}</p>
 
-          {(stateChanges.length > 0 || threadProgress.length > 0) && (
-            <div className="mt-4 flex flex-wrap gap-2 border-t border-[#F5EDE0] pt-3">
-              {stateChanges.map((c, i) => (
-                <span key={i} className="rounded-full bg-[#FFF3E0] px-2.5 py-1 text-xs text-[#8A6D1B]">
-                  {c.label} {c.delta}
-                </span>
-              ))}
-              {threadProgress.map((t, i) => (
-                <span key={`t${i}`} className="rounded-full bg-[#E8F0FE] px-2.5 py-1 text-xs text-[#3A5F7A]">
-                  📌 {t.label} {t.step}{t.total ? `/${t.total}` : ""}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* 昨日建议回执：让用户相信系统有记忆、选择有效 */}
+          {/* 它记得你昨天说的话 */}
           {summary.interventionResponse && (
-            <div className="mt-4 rounded-xl bg-[#F0F7EE] p-3 text-sm text-[#4E6B3A]">
-              <p className="mb-1 text-xs font-medium">💬 关于你昨天的建议</p>
-              {summary.interventionResponse}
+            <div className="mt-6">
+              <p className="text-xs tracking-widest text-ink-faint">它记得你昨天说的话</p>
+              <p className="font-diary mt-1 border-l-2 border-line pl-3 text-[15px] leading-relaxed text-ink">
+                {summary.interventionResponse}
+              </p>
             </div>
           )}
-        </div>
+
+          {/* 页边批注 */}
+          {notes.length > 0 && (
+            <div className="margin-note mt-6 border-t border-line pt-3">
+              {notes.map((n, i) => (
+                <p key={i}>{n}</p>
+              ))}
+            </div>
+          )}
+        </article>
       ) : (
-        <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 text-center text-sm text-[#A89B85] shadow-sm">
-          {cat.name}正在熟悉小岛……它的第一篇故事马上就好，稍后刷新看看。
+        <p className="font-diary mt-8 text-center text-[15px] leading-relaxed text-ink-soft">
+          {cat.name}正在熟悉小岛。它的第一篇日记今晚就会写好——
           <br />
-          记住：它会在你离开后继续生活。明天回来，它会告诉你发生了什么。
-        </div>
+          它会在你离开后继续生活，明天回来看看它写了什么。
+        </p>
       )}
 
-      {/* 今日干预：每天一个主要动作 */}
-      <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 shadow-sm">
-        <h2 className="font-bold">和{cat.name}说句话</h2>
-        <p className="mb-3 mt-1 text-xs text-[#A89B85]">
-          留言会成为它的记忆；建议会影响它明天想做的事——但采不采纳，要看它自己的决定。
-        </p>
+      {/* 今晚给它留句话（唯一的明显容器） */}
+      <div className="mt-8 border border-line bg-paper-deep/40 p-4">
+        <h2 className="font-title font-bold">今晚给它留句话</h2>
         {pendingNudge ? (
-          <div className="rounded-xl bg-[#FFF9EE] p-3 text-sm text-[#8A6D1B]">
-            ✅ {cat.name}已经记住了{pendingNudge.message ? `你的话${pendingNudge.suggestion ? "和建议" : ""}` : "你的建议"}。
-            明天它是否采纳，要看它自己的决定。（明早 8 点后回来看结果）
-          </div>
+          <p className="font-diary mt-2 text-sm leading-relaxed text-ink">
+            {cat.name}把你的话记下了。听不听，要看它自己的决定——
+            <br />
+            明天早上八点之后回来，看看它怎么说。
+          </p>
         ) : (
-          <form action={saveNudge} className="space-y-3">
+          <form action={saveNudge} className="mt-3 space-y-3">
             <input type="hidden" name="catId" value={cat.id} />
             <textarea
-              name="message" maxLength={60} rows={2} placeholder={`给${cat.name}留一句话（60 字内）`}
-              className="w-full rounded-lg border border-[#E0D5C0] px-3 py-2 text-sm focus:border-[#F5A623] focus:outline-none"
+              name="message" maxLength={60} rows={2} placeholder={`想对${cat.name}说的话（60 字内）`}
+              className="w-full border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none"
             />
-            <label className="flex items-center gap-2 text-xs text-[#8A7B65]">
-              <input type="checkbox" name="isPublic" className="accent-[#F5A623]" />
-              允许它在公开日记里提到这句话（不勾选则只有它自己知道）
+            <label className="flex items-center gap-2 text-xs text-ink-soft">
+              <input type="checkbox" name="isPublic" className="accent-[#5c7382]" />
+              它可以在日记里提到这句话（不勾选就只有它自己知道）
             </label>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-xs text-[#A89B85]">建议它明天：</span>
+              <span className="text-xs text-ink-soft">你希望它明天……</span>
               {[
                 { v: "", label: "随它去" },
-                { v: "earn", label: "去赚钱" },
-                { v: "explore", label: "去探险" },
-                { v: "social", label: "找朋友" },
+                { v: "earn", label: "去赚点鱼币" },
+                { v: "explore", label: "出门走走" },
+                { v: "social", label: "找朋友玩" },
                 { v: "rest", label: "好好休息" },
               ].map((o, i) => (
-                <label key={o.v} className="flex cursor-pointer items-center gap-1 rounded-full border border-[#E0D5C0] px-2.5 py-1 has-[:checked]:border-[#F5A623] has-[:checked]:bg-[#FFF9EE]">
+                <label
+                  key={o.v}
+                  className="cursor-pointer border border-line px-2.5 py-1 has-[:checked]:border-sea-deep has-[:checked]:bg-paper"
+                >
                   <input type="radio" name="suggestion" value={o.v} defaultChecked={i === 0} className="hidden" />
                   {o.label}
                 </label>
               ))}
             </div>
-            <SubmitButton pendingText="送出中…" className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#E08E0B]">
-              送给它 🐾
+            <SubmitButton pendingText="正在交给它…" className="stamp-btn px-5 py-1.5 text-sm">
+              交给它
             </SubmitButton>
           </form>
         )}
       </div>
 
-      {/* 明日悬念：下一次召回理由 */}
+      {/* 页尾悬念 */}
       {summary?.tomorrowHook && (
-        <p className="px-2 text-center text-sm italic text-[#8A7B65]">✨ {summary.tomorrowHook}</p>
+        <p className="font-diary mt-8 text-center text-[15px] italic leading-relaxed text-ink-soft">
+          {summary.tomorrowHook}
+        </p>
       )}
 
-      {/* 改名（一次机会），折叠在页脚 */}
-      {!cat.renamedAt && (
-        <details className="px-2 text-xs text-[#A89B85]">
-          <summary className="cursor-pointer">名字想改一下？（机会只有一次）</summary>
-          <form action={renameCat} className="mt-2 flex gap-2">
-            <input
-              name="newName" maxLength={12} placeholder="新名字"
-              className="rounded-lg border border-[#E0D5C0] px-3 py-1.5 focus:border-[#F5A623] focus:outline-none"
-            />
-            <SubmitButton pendingText="改名中…" className="rounded-full bg-[#EADFCC] px-4 py-1.5 text-[#6B5D48] hover:bg-[#E0D5C0]">
-              确定改名
-            </SubmitButton>
-          </form>
-        </details>
-      )}
+      {/* 页脚小字：档案与分享入口 + 改名 */}
+      <div className="mt-10 border-t border-line pt-4 text-center text-xs text-ink-faint">
+        <div className="flex justify-center gap-4">
+          <Link href="/my-cat/history" className="hover:text-brick">生活册</Link>
+          <Link href={`/cats/${cat.id}`} className="hover:text-brick">它的公开主页</Link>
+          {summary && <Link href={`/share/${cat.id}/${summary.day}`} className="hover:text-brick">今日分享卡</Link>}
+        </div>
+        {!cat.renamedAt && (
+          <details className="mt-3">
+            <summary className="cursor-pointer">名字想改一下？（机会只有一次）</summary>
+            <form action={renameCat} className="mt-2 flex justify-center gap-2">
+              <input
+                name="newName" maxLength={12} placeholder="新名字"
+                className="border border-line bg-paper px-3 py-1.5 focus:border-sea-deep focus:outline-none"
+              />
+              <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-ink-soft hover:border-sea-deep">
+                就叫这个
+              </SubmitButton>
+            </form>
+          </details>
+        )}
+      </div>
     </div>
   );
 }

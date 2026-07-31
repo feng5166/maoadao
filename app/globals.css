@@ -1,26 +1,118 @@
 @import "tailwindcss";
 
+/* ============ 猫啊岛设计系统：海边小镇绘本 × 猫咪生活手账 ============
+   色板来自海岛日常，中低饱和；每页最多一个主强调色（砖红）。
+   禁：紫蓝渐变、霓虹、发光边框、玻璃拟态、密集圆角卡阴影。 */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #faf6ee; /* 奶油白：纸张与大背景 */
+  --paper-deep: #f2ecdd; /* 纸张加深（分区底色） */
+  --ink: #4a4237; /* 深灰褐：正文 */
+  --ink-soft: #8b8071; /* 次级文字 */
+  --ink-faint: #b3a892; /* 辅助注释 */
+  --sea: #7e93a3; /* 灰蓝：海面/导航 */
+  --sea-deep: #5c7382; /* 灰蓝加深 */
+  --brick: #b5543b; /* 砖红：印章与重要动作（唯一主强调色） */
+  --brick-deep: #9c4530;
+  --sage: #8a9b7c; /* 鼠尾草绿：植物/温和肯定 */
+  --lamp: #d9a441; /* 暖黄：灯光/鱼币，仅小面积 */
+  --line: #e2d9c6; /* 纸张分割线 */
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-sea: var(--sea);
+  --color-sea-deep: var(--sea-deep);
+  --color-brick: var(--brick);
+  --color-brick-deep: var(--brick-deep);
+  --color-sage: var(--sage);
+  --color-lamp: var(--lamp);
+  --color-line: var(--line);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+/* 字体层级：岛屿公共信息（宋体，正式克制）/ 猫的日记（楷体，私人松弛）/ 系统按钮（黑体，清晰） */
+.font-title {
+  font-family: "Songti SC", "Noto Serif SC", "SimSun", Georgia, serif;
+  letter-spacing: 0.02em;
+}
+.font-diary {
+  font-family: "Kaiti SC", "KaiTi", "STKaiti", "Songti SC", serif;
+}
+.font-press {
+  font-family: "Songti SC", "Noto Serif SC", serif;
+  letter-spacing: 0.12em;
+}
+
+/* 纸张分割线：代替卡片边框 */
+.paper-rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.paper-rule-double {
+  border: 0;
+  border-top: 3px double var(--line);
+}
+
+/* 印章按钮：砖红、微圆角、无阴影无渐变 */
+.stamp-btn {
+  background: var(--brick);
+  color: #fdf9f2;
+  border-radius: 8px;
+  padding: 0.6rem 1.6rem;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.stamp-btn:hover {
+  background: var(--brick-deep);
+}
+.stamp-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 便签：岛屿公告栏的猫日记载体 */
+.note-slip {
+  background: #fffdf6;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+/* 报纸：小梅日报载体 */
+.newspaper {
+  background: #fbf8f0;
+  border-top: 3px double var(--line);
+  border-bottom: 3px double var(--line);
+}
+
+/* 手账页边批注 */
+.margin-note {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.9;
+}
+
+/* 语义滑杆（入岛登记）：去参数感 */
+.semantic-range {
+  accent-color: var(--sea-deep);
+}
+
+/* 印章角标 */
+.seal {
+  display: inline-block;
+  border: 1.5px solid var(--brick);
+  color: var(--brick);
+  border-radius: 4px;
+  padding: 0 0.4rem;
+  font-size: 0.72rem;
+  transform: rotate(-2deg);
 }

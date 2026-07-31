@@ -4,12 +4,13 @@ import { prisma } from "../lib/db";
 import { generatePortrait } from "../lib/portrait";
 
 async function main() {
-  const cats = await prisma.cat.findMany({ where: { portraitUrl: null } });
-  console.log(`${cats.length} 只猫待生成立绘`);
+  const force = process.argv.includes("--force");
+  const cats = await prisma.cat.findMany({ where: force ? {} : { portraitUrl: null } });
+  console.log(`${cats.length} 只猫待生成立绘${force ? "（统一画风强制重绘）" : ""}`);
   let ok = 0;
   for (const cat of cats) {
     process.stdout.write(`${cat.name} ... `);
-    const success = await generatePortrait(cat.id);
+    const success = await generatePortrait(cat.id, { force });
     console.log(success ? "✓" : "✗");
     if (success) ok++;
   }

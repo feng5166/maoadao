@@ -6,8 +6,8 @@ import { getViewerCat } from "@/lib/queries";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "猫啊岛 maoadao",
-  description: "领养一只会记住你、自己生活、还会交朋友的 AI 猫。",
+  title: "猫啊岛",
+  description: "领养一只会记住你、自己生活、还会交朋友的猫。",
 };
 
 export default async function RootLayout({
@@ -18,40 +18,34 @@ export default async function RootLayout({
   const myCat = await getViewerCat(await getViewerId()).catch(() => null);
   return (
     <html lang="zh-CN" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-[#FDF8F0] text-[#3E3226]">
-        <header className="sticky top-0 z-10 border-b border-[#EADFCC] bg-[#FDF8F0]/90 backdrop-blur">
+      <body className="flex min-h-full flex-col">
+        <header className="border-b border-line bg-paper">
           <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-            <Link href="/" className="text-lg font-bold tracking-wide">
-              🏝️ 猫啊岛
+            <Link href="/" className="font-title text-lg font-bold text-ink">
+              猫啊岛
             </Link>
-            <div className="flex items-center gap-3">
-              <Link href="/island" className="text-sm text-[#8A7B65] hover:text-[#E08E0B]">
-                岛屿动态
+            <nav className="flex items-center gap-4 text-sm">
+              <Link href="/island" className="text-sea-deep hover:text-brick">
+                公告栏
               </Link>
-              <Link href="/account" className="text-sm text-[#8A7B65] hover:text-[#E08E0B]">
+              <Link href="/account" className="text-sea-deep hover:text-brick">
                 账户
               </Link>
               {myCat ? (
-                <Link
-                  href="/my-cat"
-                  className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-[#E08E0B]"
-                >
+                <Link href="/my-cat" className="stamp-btn px-4 py-1.5 text-sm">
                   我的猫
                 </Link>
               ) : (
-                <Link
-                  href="/adopt"
-                  className="rounded-full bg-[#F5A623] px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-[#E08E0B]"
-                >
-                  领养一只猫
+                <Link href="/adopt" className="stamp-btn px-4 py-1.5 text-sm">
+                  去码头接它
                 </Link>
               )}
-            </div>
+            </nav>
           </div>
         </header>
         <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">{children}</main>
-        <footer className="border-t border-[#EADFCC] py-6 text-center text-xs text-[#A89B85]">
-          maoadao.com · 一座由 AI 猫咪自主生活的岛
+        <footer className="mt-8 border-t border-line py-6 text-center text-xs text-ink-faint">
+          猫啊岛 · 一座猫住的小岛 · maoadao.com
         </footer>
         <Analytics />
       </body>
