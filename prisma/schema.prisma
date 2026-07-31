@@ -19,6 +19,9 @@ model User {
   emailVerifiedAt DateTime?
   notifyDaily     Boolean   @default(true) // 每日故事邮件（绑定邮箱后默认开，可关）
   recoveryCode    String?   @unique // 零依赖跨设备找回码
+  inviteCode      String? // 用的哪个邀请码
+  inviteBatch     String? // 来源批次：team | friends | strangers
+  lastSeenDay     Int? // 最后一次看 /my-cat 时的世界天数（未回摘要用）
   createdAt       DateTime
   lastActiveAt    DateTime?
   cats            Cat[]
@@ -133,7 +136,8 @@ model WorldState {
   day        Int       @default(0)
   season     String    @default("夏")
   weather    String    @default("晴")
-  lastTickAt DateTime? // 每日幂等闸门：距上次推进不足最小间隔则拒绝
+  lastTickAt     DateTime? // 每日幂等闸门：距上次推进不足最小间隔则拒绝
+  adoptionPaused Boolean   @default(false) // 后台一键暂停新领养
 }
 
 // 双层记忆的主观层：观察/关系/情节/语义（客观事实由上面的结构化表维护）
@@ -228,4 +232,30 @@ model ModerationLog {
   reason    String?
   input     String
   createdAt DateTime
+}
+
+// 封闭内测邀请码：限次数、分批次（成本控制 + 按批次分析）
+model InviteCode {
+  code      String   @id
+  batch     String // team | friends | strangers
+  maxUses   Int      @default(1)
+  usedCount Int      @default(0)
+  disabled  Boolean  @default(false)
+  createdAt DateTime
+}
+
+// 内容人工评分：回答"什么内容真正带来次日留存"（v0.7.0·7）
+model ContentRating {
+  id          String   @id
+  summaryId   String   @unique
+  continuity  Int? // 连续性 1-5
+  persona     Int? // 人格感 1-5
+  fun         Int? // 趣味性 1-5
+  emotion     Int? // 情绪强度 1-5
+  suspense    Int? // 悬念质量 1-5
+  templated   Boolean? // 模板感
+  factError   Boolean? // 事实错误
+  shareworthy Boolean? // 值得分享
+  note        String?
+  createdAt   DateTime
 }
