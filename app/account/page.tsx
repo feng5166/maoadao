@@ -92,7 +92,8 @@ export default async function AccountPage() {
                 发验证码
               </SubmitButton>
             </form>
-            <form action={verifyEmailCode} className="flex gap-2">
+            <form action={verifyEmailCode} className="space-y-2">
+              <div className="flex gap-2">
               <input
                 name="email" type="email" placeholder="邮箱" required
                 className="w-2/5 rounded-lg border border-[#E0D5C0] px-3 py-2 text-sm focus:border-[#F5A623] focus:outline-none"
@@ -104,6 +105,11 @@ export default async function AccountPage() {
               <SubmitButton pendingText="验证中…" className="rounded-full bg-[#F5A623] px-4 py-2 text-sm font-medium text-white hover:bg-[#E08E0B]">
                 绑定/登录
               </SubmitButton>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-[#A89B85]">
+                <input type="checkbox" name="confirmSwitch" className="accent-[#F5A623]" />
+                我知道，切换账户（仅当邮箱已绑定别的猫、且要放弃当前浏览器身份时勾选）
+              </label>
             </form>
             <p className="text-xs text-[#A89B85]">绑定后：换设备可用邮箱找回；猫有新故事时会收到一封「内容钩子」邮件（可随时关闭）。</p>
           </div>

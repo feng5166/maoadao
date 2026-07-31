@@ -198,16 +198,27 @@ model CatDailySummary {
   @@unique([catId, day])
 }
 
-// 邮箱验证码（绑定与登录共用）
+// 邮箱验证码（绑定与登录共用）：只存 HMAC 哈希，单码限试 5 次，原子消费
 model LoginCode {
-  id        String    @id
-  email     String
-  code      String
-  expiresAt DateTime
-  usedAt    DateTime?
+  id           String    @id
+  email        String
+  codeHash     String
+  attemptCount Int       @default(0)
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime
+
+  @@index([email, createdAt])
+}
+
+// 认证类失败审计与滑动窗口限频（验证码校验失败、找回码失败）
+model AuthAttempt {
+  id        String   @id
+  kind      String // verify_email_fail | recover_fail
+  key       String // email 或 viewer uid/ip
   createdAt DateTime
 
-  @@index([email, code])
+  @@index([kind, key, createdAt])
 }
 
 // 审核拦截日志：后台抽检"被拦了什么、为什么"

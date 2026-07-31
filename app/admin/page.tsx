@@ -1,19 +1,31 @@
 import { prisma } from "@/lib/db";
+import { adminLogin, isAdmin } from "@/lib/admin-auth";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
 // 内部观察后台（定义 v0.6·P0-2）：种子测试时判断"用户为什么流失"，而不是只看留存数字。
-// 鉴权：/admin?key=ADMIN_KEY（只读页面，无写操作）
+// 鉴权：POST 密钥换 12 小时 httpOnly 会话 cookie（密钥绝不进 URL）；只读页面，无写操作
 
 function fmt(d: Date | null | undefined): string {
   if (!d) return "—";
   return d.toISOString().slice(5, 16).replace("T", " ");
 }
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ key?: string }> }) {
-  const { key } = await searchParams;
-  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY) {
-    return <p className="py-20 text-center text-sm text-[#A89B85]">🔒</p>;
+export default async function AdminPage() {
+  if (!(await isAdmin())) {
+    // 密钥只走 POST 表单，绝不进 URL
+    return (
+      <form action={adminLogin} className="mx-auto mt-24 flex max-w-xs gap-2">
+        <input
+          name="key" type="password" placeholder="管理密钥" autoComplete="off"
+          className="flex-1 rounded-lg border border-[#E0D5C0] px-3 py-2 text-sm focus:border-[#F5A623] focus:outline-none"
+        />
+        <SubmitButton pendingText="…" className="rounded-full bg-[#3E3226] px-4 py-2 text-sm text-white">
+          进入
+        </SubmitButton>
+      </form>
+    );
   }
 
   const [world, users, userCats, recentSummaries, nudges, threads, fallbackCount, modLogs, newsToday] = await Promise.all([

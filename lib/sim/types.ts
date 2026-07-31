@@ -65,7 +65,7 @@ export interface Fact {
   type: string;
   outcome: Outcome;
   data: Record<string, unknown>;
-  deltas: { coins?: number; energy?: number };
+  deltas: { coins?: number; energy?: number; affinity?: { targetId: string; delta: number; reason: string }[] };
   targetId?: string;
   threadKey?: string;
   threadStep?: number;

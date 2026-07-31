@@ -138,7 +138,14 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
       content = summary.narrative;
       generatedBy = gb;
       const coinDelta = facts.reduce((a, f) => a + (f.deltas.coins ?? 0), 0);
-      const stateChanges = coinDelta !== 0 ? [{ label: "鱼币", delta: coinDelta > 0 ? `+${coinDelta}` : `${coinDelta}` }] : [];
+      const stateChanges: { label: string; delta: string }[] = [];
+      if (coinDelta !== 0) stateChanges.push({ label: "鱼币", delta: coinDelta > 0 ? `+${coinDelta}` : `${coinDelta}` });
+      for (const f of facts) {
+        for (const a of f.deltas.affinity ?? []) {
+          const otherName = catById.get(a.targetId)?.name ?? "某只猫";
+          stateChanges.push({ label: `与${otherName}`, delta: `${a.delta > 0 ? "+" : ""}${a.delta} ${a.reason}` });
+        }
+      }
       await prisma.catDailySummary.upsert({
         where: { catId_day: { catId, day } },
         update: {

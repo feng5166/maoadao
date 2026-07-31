@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 // 1) 首访身份预置：进站即发放 uid cookie，杜绝"两个并发领养各自造身份"的孤儿猫竞态
 // 2) 分享回流归因：from=share_card 种 7 天归因 cookie
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const res = NextResponse.next();
 
   if (!req.cookies.get("maoadao_uid")) {

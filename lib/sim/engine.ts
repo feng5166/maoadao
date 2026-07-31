@@ -111,6 +111,10 @@ export function runDay(world: WorldSnapshot): DayResult {
   }
 
   function pushFact(catId: string, segment: (typeof SEGMENTS)[number], type: string, template: EventTemplate | null, res: ResolveResult, targetId?: string, threadKey?: string, threadStep?: number) {
+    // 关系变化并入事实 deltas：让 Event 自足，叙事与展示标签可完全从事实恢复
+    const affinity = (res.affinityChanges ?? [])
+      .filter((a) => a.catAId === catId)
+      .map((a) => ({ targetId: a.catBId, delta: a.delta, reason: a.reason }));
     facts.push({
       catId,
       day: world.day,
@@ -118,7 +122,7 @@ export function runDay(world: WorldSnapshot): DayResult {
       type,
       outcome: res.outcome,
       data: res.data,
-      deltas: res.deltas,
+      deltas: affinity.length > 0 ? { ...res.deltas, affinity } : res.deltas,
       targetId,
       threadKey,
       threadStep,
