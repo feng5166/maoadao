@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CopyCode } from "@/components/CopyCode";
 import { SubmitButton } from "@/components/SubmitButton";
 import {
   ensureRecoveryCode,
@@ -47,9 +48,7 @@ export default async function AccountPage() {
         {recoveryCode ? (
           <>
             <p className="mt-1 text-xs text-ink-faint">抄下这串猫爪印，换设备时输入即可找回你的猫。别告诉别人——拿到码就等于拿到猫。</p>
-            <p className="mt-2 bg-paper-deep px-4 py-3 text-center font-mono text-lg tracking-wider text-ink">
-              {recoveryCode}
-            </p>
+            <CopyCode code={recoveryCode} />
           </>
         ) : (
           <form action={recoverByCode} className="mt-2 flex gap-2">
