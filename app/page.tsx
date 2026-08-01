@@ -12,10 +12,14 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const viewerId = await getViewerId();
-  const myCat = await getViewerCat(viewerId);
-  const { world, npcs, totalCats, sampleDiary } = await getHomeShowcase();
+  // 三路并行：跨洋链路下省掉查询瀑布
+  const [myCat, { world, npcs, totalCats, sampleDiary }, newsRaw] = await Promise.all([
+    getViewerCat(viewerId),
+    getHomeShowcase(),
+    getIslandNewsWithCats(6),
+  ]);
   // 历史坏数据兜底：缺了对象名的残句（"向借钱被拒"）不上首页
-  const news = (await getIslandNewsWithCats(6)).filter((n) => !n.content.includes("向借钱")).slice(0, 3);
+  const news = newsRaw.filter((n) => !n.content.includes("向借钱")).slice(0, 3);
   const stripCats = npcs.slice(0, 12);
   const moreCount = totalCats - stripCats.length;
 

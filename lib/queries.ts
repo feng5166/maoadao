@@ -1,8 +1,10 @@
+import { cache } from "react";
 import { prisma } from "./db";
 
-export async function getWorld() {
+// React.cache：同一次请求里 layout 和 page 重复调用只打一次数据库
+export const getWorld = cache(async () => {
   return (await prisma.worldState.findUnique({ where: { id: 1 } })) ?? { id: 1, day: 0, season: "夏", weather: "晴" };
-}
+});
 
 export async function getFeed(limit = 50) {
   const entries = await prisma.diaryEntry.findMany({
@@ -78,8 +80,8 @@ export async function getIslandNewsWithCats(limit = 6) {
 
 /** 首页橱窗：世界状态 + 岛民名册 + 今日样张日记（优先当天的 LLM 手笔，缺则回退最近一篇） */
 export async function getHomeShowcase() {
-  const world = await getWorld();
-  const [npcs, totalCats] = await Promise.all([
+  const [world, npcs, totalCats] = await Promise.all([
+    getWorld(),
     prisma.cat.findMany({
       where: { isNpc: true },
       select: { id: true, name: true, portraitUrl: true },
@@ -97,10 +99,10 @@ export async function getHomeShowcase() {
   return { world, npcs, totalCats, sampleDiary };
 }
 
-export async function getViewerCat(viewerId: string | null) {
+export const getViewerCat = cache(async (viewerId: string | null) => {
   if (!viewerId) return null;
   return prisma.cat.findFirst({ where: { ownerId: viewerId } });
-}
+});
 
 export async function getLatestSummary(catId: string) {
   return prisma.catDailySummary.findFirst({ where: { catId }, orderBy: { day: "desc" } });

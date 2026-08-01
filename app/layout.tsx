@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { getViewerId } from "@/lib/identity";
 import { getViewerCat } from "@/lib/queries";
 import "./globals.css";
@@ -10,12 +11,25 @@ export const metadata: Metadata = {
   description: "领养一只会记住你、自己生活、还会交朋友的猫。",
 };
 
-export default async function RootLayout({
+// 导航按钮单独成组件挂 Suspense：查询不阻塞页面外壳的首字节（跨洋链路下体感差异明显）
+async function NavCatButton() {
+  const myCat = await getViewerCat(await getViewerId()).catch(() => null);
+  return myCat ? (
+    <Link href="/my-cat" className="stamp-btn px-4 py-1.5 text-sm">
+      我的猫
+    </Link>
+  ) : (
+    <Link href="/adopt" className="stamp-btn px-4 py-1.5 text-sm">
+      去码头接它
+    </Link>
+  );
+}
+
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const myCat = await getViewerCat(await getViewerId()).catch(() => null);
   return (
     <html lang="zh-CN" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
@@ -31,15 +45,9 @@ export default async function RootLayout({
               <Link href="/account" className="text-sea-deep hover:text-brick">
                 账户
               </Link>
-              {myCat ? (
-                <Link href="/my-cat" className="stamp-btn px-4 py-1.5 text-sm">
-                  我的猫
-                </Link>
-              ) : (
-                <Link href="/adopt" className="stamp-btn px-4 py-1.5 text-sm">
-                  去码头接它
-                </Link>
-              )}
+              <Suspense fallback={<span className="inline-block h-[33px] w-[92px] animate-pulse rounded-lg bg-paper-deep" />}>
+                <NavCatButton />
+              </Suspense>
             </nav>
           </div>
         </header>

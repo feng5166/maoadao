@@ -82,16 +82,21 @@ export function CatAvatar({
   crop?: "full" | "head";
 }) {
   if (portraitUrl) {
+    // 站内立绘按显示尺寸取缩略图（2x 屏 + head 裁切的放大量都算进去了），别为 24px 头像下 768px 全图
+    const thumb = size <= 40 ? 96 : size <= 80 ? 128 : size <= 128 ? 256 : 0;
+    const src = portraitUrl.startsWith("/api/portrait/") && thumb ? `${portraitUrl}?s=${thumb}` : portraitUrl;
     return (
       <span
         style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", display: "inline-block", lineHeight: 0 }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={portraitUrl}
+          src={src}
           width={size}
           height={size}
           alt=""
+          loading="lazy"
+          decoding="async"
           style={{
             width: size,
             height: size,
