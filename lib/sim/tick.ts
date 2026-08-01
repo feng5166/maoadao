@@ -6,7 +6,7 @@ import { reflect } from "../narrative/narrator";
 import { narrateCommittedDay } from "./renarrate";
 import { firstWeekPlan, type FirstWeekPlan } from "./firstweek";
 import { dailyEmailHtml, emailEnabled, sendEmail } from "../email";
-import type { SimCat, SimCatState, WorldSnapshot } from "./types";
+import { weatherFor, type SimCat, type SimCatState, type WorldSnapshot } from "./types";
 
 // 单一岛屿的推进锁 key（pg advisory lock 命名空间）
 const TICK_LOCK_KEY = 8801;
@@ -42,7 +42,7 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
         throw new TickInProgressError(`今天已经推进过（第 ${world.day} 天）`);
       }
       const day = world.day + 1;
-      const weather = ["晴", "晴", "多云", "雨"][day % 4];
+      const weather = weatherFor(day);
 
       // ---- 装配世界快照 ----
       const catRows = await tx.cat.findMany();

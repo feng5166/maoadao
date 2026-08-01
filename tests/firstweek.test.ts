@@ -55,8 +55,8 @@ describe("主人关系四阶段（自然语言，不因缺席惩罚）", () => {
   });
 
   it("阶段文案不含系统词", () => {
-    for (const args of [[1, 0, 0], [2, 1, 1], [4, 3, 2], [7, 4, 4]] as const) {
-      const { line } = bondStage(...args);
+    for (const [day, visits, msgs] of [[1, 0, 0], [2, 1, 1], [4, 3, 2], [7, 4, 4]] as const) {
+      const { line } = bondStage(day, visits, msgs);
       expect(line).not.toMatch(/AI|系统|数值|等级|好感度/);
     }
   });

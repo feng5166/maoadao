@@ -4,6 +4,11 @@ export type Segment = "morning" | "afternoon" | "evening";
 export const SEGMENTS: Segment[] = ["morning", "afternoon", "evening"];
 export const SEGMENT_CN: Record<Segment, string> = { morning: "上午", afternoon: "下午", evening: "晚上" };
 
+// 天气由天数确定性推导——tick/renarrate/eval 必须用同一来源，否则重生成历史时天气对不上
+export function weatherFor(day: number): string {
+  return ["晴", "晴", "多云", "雨"][day % 4];
+}
+
 export type NpcRole = "function" | "story" | "social" | "background";
 
 export interface SimCat {

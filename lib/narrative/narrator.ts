@@ -5,9 +5,9 @@ import { factSummary } from "../sim/engine";
 import { FORM_RULES, THEME_NARRATION_RULES, type ContentForm, type WeekTheme } from "../sim/firstweek";
 
 const client = new Anthropic();
-const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-5";
-// 拒答兜底（fallbacks）是官方 Claude API 上 opus-5 的特性；走中转或其他模型时用普通调用
-const useFallbacks = MODEL === "claude-opus-5" && !process.env.ANTHROPIC_BASE_URL;
+const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-4-8";
+// 拒答兜底（fallbacks）是官方 Claude API 上 Fable 5 的特性；走中转或其他模型时用普通调用
+const useFallbacks = MODEL === "claude-fable-5" && !process.env.ANTHROPIC_BASE_URL;
 
 async function callLLM(system: string, user: string, maxTokens = 400): Promise<string | null> {
   try {
@@ -18,7 +18,7 @@ async function callLLM(system: string, user: string, maxTokens = 400): Promise<s
       messages: [{ role: "user" as const, content: user }],
     };
     const response = useFallbacks
-      ? await client.beta.messages.create({ ...base, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
+      ? await client.beta.messages.create({ ...base, betas: ["server-side-fallback-2026-06-01"], fallbacks: [{ model: "claude-opus-4-8" }] })
       : await client.messages.create(base);
     if (response.stop_reason === "refusal") return null;
     return response.content.find((b) => b.type === "text")?.text.trim() ?? null;

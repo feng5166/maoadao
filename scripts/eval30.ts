@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { runDay, factSummary } from "../lib/sim/engine";
 import { NPC_CATS } from "../lib/sim/npcs";
 import type { Fact, SimCat, SimCatState, SimRelationship, SimThread, WorldSnapshot } from "../lib/sim/types";
-import { SEGMENT_CN } from "../lib/sim/types";
+import { SEGMENT_CN, weatherFor } from "../lib/sim/types";
 
 const DAYS = Number(process.argv[2] ?? 30);
 
@@ -36,7 +36,7 @@ const threadLog: string[] = [];
 const directorLog: string[] = [];
 
 for (let day = 1; day <= DAYS; day++) {
-  const weather = ["晴", "晴", "多云", "雨"][day % 4];
+  const weather = weatherFor(day);
   const world: WorldSnapshot = {
     day,
     season: "夏",

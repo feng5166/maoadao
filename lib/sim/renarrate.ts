@@ -5,7 +5,7 @@ import { THREAD_LABELS } from "./threads";
 import { narrateDiary, narrateOwnerDay, narrateWeekBook } from "../narrative/narrator";
 import { bondStage, firstWeekPlan } from "./firstweek";
 import { randomUUID as uuid } from "node:crypto";
-import type { Fact, Segment, SimCat } from "./types";
+import { weatherFor, type Fact, type Segment, type SimCat } from "./types";
 
 // 统一叙事通道：tick 的正常路径与故障恢复路径都走这里，从已落库事实生成。
 // 这是"Event 是唯一事实来源、日记可重新生成"承诺的兑现——
@@ -23,7 +23,7 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
   const { mode = "missing", catIds } = options;
   const world = await prisma.worldState.findUnique({ where: { id: 1 } });
   const isCurrentDay = (world?.day ?? 0) === day;
-  const weather = ["晴", "晴", "多云", "雨"][day % 4];
+  const weather = weatherFor(day);
   const season = world?.season ?? "夏";
 
   const events = await prisma.event.findMany({
