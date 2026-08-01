@@ -65,6 +65,38 @@ export async function getIslandNews(limit = 6) {
   return prisma.islandNews.findMany({ orderBy: [{ day: "desc" }, { createdAt: "desc" }], take: limit });
 }
 
+/** 日报带脸：新闻行附上当事猫（IslandNews 没建外键，手动补一次查询） */
+export async function getIslandNewsWithCats(limit = 6) {
+  const rows = await getIslandNews(limit);
+  const catIds = [...new Set(rows.map((r) => r.catId).filter((id): id is string => Boolean(id)))];
+  const cats = catIds.length
+    ? await prisma.cat.findMany({ where: { id: { in: catIds } }, select: { id: true, name: true, portraitUrl: true } })
+    : [];
+  const byId = new Map(cats.map((c) => [c.id, c]));
+  return rows.map((r) => ({ ...r, cat: r.catId ? (byId.get(r.catId) ?? null) : null }));
+}
+
+/** 首页橱窗：世界状态 + 岛民名册 + 今日样张日记（优先当天的 LLM 手笔，缺则回退最近一篇） */
+export async function getHomeShowcase() {
+  const world = await getWorld();
+  const [npcs, totalCats] = await Promise.all([
+    prisma.cat.findMany({
+      where: { isNpc: true },
+      select: { id: true, name: true, portraitUrl: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.cat.count(),
+  ]);
+  const diaryQuery = (where: object) =>
+    prisma.diaryEntry.findFirst({
+      where: { generatedBy: "llm", form: "diary", cat: { isNpc: true }, ...where },
+      orderBy: [{ day: "desc" }, { createdAt: "desc" }],
+      include: { cat: { select: { id: true, name: true, portraitUrl: true } } },
+    });
+  const sampleDiary = (await diaryQuery({ day: world.day })) ?? (await diaryQuery({}));
+  return { world, npcs, totalCats, sampleDiary };
+}
+
 export async function getViewerCat(viewerId: string | null) {
   if (!viewerId) return null;
   return prisma.cat.findFirst({ where: { ownerId: viewerId } });

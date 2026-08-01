@@ -63,17 +63,20 @@ body {
   border-top: 3px double var(--line);
 }
 
-/* 印章按钮：砖红、微圆角、无阴影无渐变 */
+/* 印章按钮：砖红、微圆角、无阴影无渐变；按下有盖章的手感 */
 .stamp-btn {
   background: var(--brick);
   color: #fdf9f2;
   border-radius: 8px;
   padding: 0.6rem 1.6rem;
   font-weight: 500;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.12s;
 }
 .stamp-btn:hover {
   background: var(--brick-deep);
+}
+.stamp-btn:active {
+  transform: scale(0.96);
 }
 .stamp-btn:disabled {
   opacity: 0.55;
@@ -92,6 +95,32 @@ body {
   background: #fbf8f0;
   border-top: 3px double var(--line);
   border-bottom: 3px double var(--line);
+}
+
+/* 场景卡的呼吸感：hover 轻轻浮起，不加阴影不发光 */
+.scene-float {
+  transition: transform 0.35s ease;
+}
+.scene-float:hover {
+  transform: translateY(-4px) rotate(0.4deg);
+}
+
+/* 样张日记页：一页贴在墙上的手账，顶部一截鼠尾草色胶带 */
+.diary-page {
+  position: relative;
+  background: #fffdf6;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.diary-page::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 86px;
+  height: 18px;
+  transform: translateX(-50%) rotate(-2deg);
+  background: rgba(138, 155, 124, 0.32);
 }
 
 /* 手账页边批注 */
