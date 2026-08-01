@@ -248,6 +248,7 @@ export default async function MyCatPage() {
           <Link href="/my-cat/history" className="hover:text-brick">生活册</Link>
           <Link href={`/cats/${cat.id}`} className="hover:text-brick">它的公开主页</Link>
           {summary && <Link href={`/share/${cat.id}/${summary.day}`} className="hover:text-brick">今日分享卡</Link>}
+          <Link href="/account#tickets" className="hover:text-brick">送朋友船票</Link>
         </div>
         {!cat.renamedAt && (
           <details className="mt-3">

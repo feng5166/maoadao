@@ -4,6 +4,7 @@ import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
 import { NPC_CATS } from "./sim/npcs";
 import { failsInWindow } from "./authcode";
+import { grantBoatTickets } from "./tickets";
 
 // 领养核心（与 Server Action 解耦，可单测）。
 // 关键时序（review P0）：船票核销必须发生在"确定能建猫"之后的同一事务里——
@@ -95,13 +96,16 @@ export async function adoptCat(uid: string, input: AdoptInput): Promise<AdoptRes
         },
       });
       const day = world?.day ?? 0;
-      for (const npcId of ["npc-mianhua", second]) {
-        if (!NPC_CATS.some((n) => n.id === npcId)) continue;
-        await tx.relationship.create({
-          data: { id: randomUUID(), catAId: catId, catBId: npcId, affinity: 10, lastInteractionDay: day },
-        });
-      }
-    });
+      await tx.relationship.createMany({
+        data: ["npc-mianhua", second]
+          .filter((npcId) => NPC_CATS.some((n) => n.id === npcId))
+          .map((npcId) => ({ id: randomUUID(), catAId: catId, catBId: npcId, affinity: 10, lastInteractionDay: day })),
+      });
+      // 新岛民自己也成为邀请人：5 张可转赠船票，与建猫同事务（失败一起回滚）
+      await grantBoatTickets(tx, uid);
+    },
+    // 跨洋链路下 6 个往返轻松超过默认 5s；放宽而不是拆事务（时序约束见文件头）
+    { timeout: 15000 });
   } catch (err) {
     // 并发输家：另一只已建成（事务回滚，票已退回）→ 回到那只猫
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {

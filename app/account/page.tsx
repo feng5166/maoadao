@@ -11,6 +11,7 @@ import {
 import { emailEnabled } from "@/lib/email";
 import { getViewerId } from "@/lib/identity";
 import { getViewerCat } from "@/lib/queries";
+import { ensureBoatTickets } from "@/lib/tickets";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default async function AccountPage() {
   const user = viewerId ? await prisma.user.findUnique({ where: { id: viewerId } }) : null;
   const cat = await getViewerCat(viewerId);
   const recoveryCode = cat ? await ensureRecoveryCode() : null;
+  const tickets = cat && viewerId ? await ensureBoatTickets(viewerId) : [];
   const mailReady = emailEnabled();
 
   return (
@@ -39,6 +41,31 @@ export default async function AccountPage() {
         <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 text-sm text-ink shadow-sm">
           这台设备上还没有猫。如果你在别处养过，用下面的找回码或邮箱把它找回来；
           还没养过就去<Link href="/adopt" className="text-brick">领养一只</Link>。
+        </div>
+      )}
+
+      {/* 船票：岛靠邀请上，每位岛民手里有五张可转赠的票 */}
+      {tickets.length > 0 && (
+        <div id="tickets" className="border-t border-line pt-4">
+          <h2 className="font-title font-bold">🎫 我的船票</h2>
+          <p className="mt-1 text-xs text-ink-faint">
+            猫啊岛只能坐船来。你手里有 {tickets.length} 张船票——送出一张，朋友就能到码头领养自己的猫。
+            每张只能用一次，送给谁由你决定。
+          </p>
+          <div className="mt-2 space-y-2">
+            {tickets.map((t) =>
+              t.disabled || t.usedCount >= t.maxUses ? (
+                <p key={t.code} className="bg-paper-deep/50 px-3 py-2 text-sm text-ink-faint">
+                  <span className="font-mono tracking-wider line-through">{t.code}</span>
+                  <span className="ml-2 text-xs">
+                    {t.disabled ? "（这张票停用了）" : "（已有人用它上岛了）"}
+                  </span>
+                </p>
+              ) : (
+                <CopyCode key={t.code} code={t.code} />
+              ),
+            )}
+          </div>
         </div>
       )}
 

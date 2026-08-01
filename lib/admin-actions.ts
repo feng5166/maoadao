@@ -1,23 +1,15 @@
 "use server";
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "./db";
 import { isAdmin } from "./admin-auth";
+import { makeTicketCode } from "./tickets";
 
 // 后台写操作：全部经 isAdmin() 会话校验（v0.7.1）
 
 async function requireAdmin() {
   if (!(await isAdmin())) throw new Error("无权限");
-}
-
-function makeCode(): string {
-  // 12 位随机（~59 bit）：船票兼作成本闸门，空间必须够大
-  const alphabet = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
-  const body = Array.from(randomBytes(12))
-    .map((b) => alphabet[b % alphabet.length])
-    .join("");
-  return `BOAT-${body.slice(0, 4)}-${body.slice(4, 8)}-${body.slice(8, 12)}`;
 }
 
 /** 发放邀请码（船票）：批次 + 每码可用次数 + 张数 */
@@ -28,7 +20,7 @@ export async function createInviteCodes(formData: FormData) {
   const count = Math.max(1, Math.min(20, Number(formData.get("count") ?? 1)));
   for (let i = 0; i < count; i++) {
     await prisma.inviteCode.create({
-      data: { code: makeCode(), batch, maxUses, createdAt: new Date() },
+      data: { code: makeTicketCode(), batch, maxUses, createdAt: new Date() },
     });
   }
   revalidatePath("/admin");

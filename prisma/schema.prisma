@@ -237,14 +237,18 @@ model ModerationLog {
   createdAt DateTime
 }
 
-// 封闭内测邀请码：限次数、分批次（成本控制 + 按批次分析）
+// 封闭内测邀请码（船票）：限次数、分批次（成本控制 + 按批次分析）
+// 领养成功即发 5 张可转赠船票（issuedTo = 发出者），邀请链：新用户.inviteCode → 票.issuedTo
 model InviteCode {
   code      String   @id
-  batch     String // team | friends | strangers
+  batch     String // team | friends | strangers | islander（岛民转赠）
   maxUses   Int      @default(1)
   usedCount Int      @default(0)
   disabled  Boolean  @default(false)
+  issuedTo  String? // 这张票属于哪位岛民（null = 官方发放）
   createdAt DateTime
+
+  @@index([issuedTo])
 }
 
 // 内容人工评分：回答"什么内容真正带来次日留存"（v0.7.0·7）
