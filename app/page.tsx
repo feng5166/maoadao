@@ -43,7 +43,7 @@ export default async function HomePage() {
         )}
         {myCat ? (
           <Link href="/my-cat" className="stamp-btn mt-6 inline-flex items-center gap-2">
-            <CatAvatar id={myCat.id} size={26} portraitUrl={myCat.portraitUrl} />
+            <CatAvatar id={myCat.id} size={26} portraitUrl={myCat.portraitUrl} crop="head" />
             看看{myCat.name}今天在干嘛
           </Link>
         ) : (
@@ -52,24 +52,24 @@ export default async function HomePage() {
           </Link>
         )}
 
-        {/* 岛民名册：先看到猫，才会想认识猫 */}
+        {/* 岛民名册：一排小猫站在码头边，先看到猫，才会想认识猫 */}
         {stripCats.length > 0 && (
           <div className="mt-9">
-            <div className="flex items-center justify-center">
+            <div className="flex flex-wrap items-end justify-center gap-y-1.5">
               {stripCats.map((c, i) => (
                 <Link
                   key={c.id}
                   href={`/cats/${c.id}`}
                   title={c.name}
-                  className={`${i > 0 ? "-ml-3" : ""} inline-block rounded-full border-2 border-paper bg-paper transition-transform duration-200 hover:z-10 hover:-translate-y-1.5`}
+                  className={`${i > 0 ? "-ml-1.5" : ""} inline-block transition-transform duration-200 hover:z-10 hover:-translate-y-1.5`}
                   style={{ zIndex: i }}
                 >
-                  <CatAvatar id={c.id} size={38} portraitUrl={c.portraitUrl} />
+                  <CatAvatar id={c.id} size={50} portraitUrl={c.portraitUrl} />
                 </Link>
               ))}
               {moreCount > 0 && (
                 <span
-                  className="-ml-3 inline-flex h-[38px] w-[38px] items-center justify-center rounded-full border-2 border-paper bg-paper-deep text-[11px] text-ink-soft"
+                  className="-ml-1.5 mb-1 inline-flex h-[34px] w-[34px] items-center justify-center rounded-full bg-paper-deep text-[11px] text-ink-soft"
                   style={{ zIndex: stripCats.length }}
                 >
                   +{moreCount}
@@ -116,7 +116,7 @@ export default async function HomePage() {
                   href={`/cats/${sampleDiary.cat.id}`}
                   className="inline-flex items-center gap-1.5 text-ink-soft transition-colors hover:text-brick"
                 >
-                  <CatAvatar id={sampleDiary.cat.id} size={22} portraitUrl={sampleDiary.cat.portraitUrl} />
+                  <CatAvatar id={sampleDiary.cat.id} size={22} portraitUrl={sampleDiary.cat.portraitUrl} crop="head" />
                   {sampleDiary.cat.name}的日记
                 </Link>
               </div>
@@ -138,7 +138,7 @@ export default async function HomePage() {
               <li key={n.id} className="flex items-start gap-2.5">
                 {n.cat ? (
                   <Link href={`/cats/${n.cat.id}`} title={n.cat.name} className="mt-0.5 shrink-0">
-                    <CatAvatar id={n.cat.id} size={24} portraitUrl={n.cat.portraitUrl} />
+                    <CatAvatar id={n.cat.id} size={24} portraitUrl={n.cat.portraitUrl} crop="head" />
                   </Link>
                 ) : (
                   <span className="mt-0.5 w-[24px] shrink-0" />

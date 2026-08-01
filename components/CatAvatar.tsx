@@ -68,18 +68,38 @@ export function catAvatarDataUri(id: string, size = 140): string {
   return `data:image/svg+xml;base64,${Buffer.from(catAvatarSvg(id, size)).toString("base64")}`;
 }
 
-/** 网页用组件：有定稿立绘用立绘，否则用哈希 SVG 兜底（SVG 内容不含用户输入） */
-export function CatAvatar({ id, size = 64, portraitUrl }: { id: string; size?: number; portraitUrl?: string | null }) {
+/** 网页用组件：有定稿立绘用立绘，否则用哈希 SVG 兜底（SVG 内容不含用户输入）
+ *  crop="head"：小尺寸场景（署名、新闻行）把全身立绘放大聚焦到猫头，避免缩成一个看不清的小点 */
+export function CatAvatar({
+  id,
+  size = 64,
+  portraitUrl,
+  crop = "full",
+}: {
+  id: string;
+  size?: number;
+  portraitUrl?: string | null;
+  crop?: "full" | "head";
+}) {
   if (portraitUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={portraitUrl}
-        width={size}
-        height={size}
-        alt=""
-        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", display: "inline-block" }}
-      />
+      <span
+        style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", display: "inline-block", lineHeight: 0 }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={portraitUrl}
+          width={size}
+          height={size}
+          alt=""
+          style={{
+            width: size,
+            height: size,
+            objectFit: "cover",
+            ...(crop === "head" ? { transform: "scale(1.9)", transformOrigin: "50% 16%" } : {}),
+          }}
+        />
+      </span>
     );
   }
   return (
