@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
-import { factSummary } from "./engine";
-import { THREAD_LABELS } from "./threads";
+import { factSummary, newsLine } from "./engine";
+import { THREAD_LABELS, THREAD_TOTALS } from "./threads";
 import { narrateDiary, narrateOwnerDay, narrateWeekBook } from "../narrative/narrator";
 import { bondStage, firstWeekPlan } from "./firstweek";
 import { randomUUID as uuid } from "node:crypto";
@@ -131,7 +131,7 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
         activeThreads = threads.map((t) => ({
           label: THREAD_LABELS[t.kind] ?? t.kind,
           step: t.step,
-          total: t.kind === "lighthouse" ? 7 : undefined,
+          total: THREAD_TOTALS[t.kind],
         }));
       } else {
         activeThreads = ((existingSummary?.threadProgress ?? []) as { label: string; step: number; total?: number }[]) ?? [];
@@ -249,7 +249,7 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
       await prisma.islandNews.upsert({
         where: { id: `news-${day}-${slot}` },
         update: {},
-        create: { id: `news-${day}-${slot}`, day, content: `${catById.get(e.catId)?.name ?? ""}${factSummary(f, catById)}`, catId: e.catId, createdAt: new Date() },
+        create: { id: `news-${day}-${slot}`, day, content: newsLine(f, catById), catId: e.catId, createdAt: new Date() },
       });
     }
   }

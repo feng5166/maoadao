@@ -1,7 +1,7 @@
 // 30 天内存态干跑评估：不碰数据库、不调 LLM。
 // 产出 doc/eval/report-30d.md，人工判断"30 天是否耐看"（项目定义·阶段一）。
 import fs from "node:fs";
-import { runDay, factSummary } from "../lib/sim/engine";
+import { runDay, factSummary, newsLine } from "../lib/sim/engine";
 import { NPC_CATS } from "../lib/sim/npcs";
 import type { Fact, SimCat, SimCatState, SimRelationship, SimThread, WorldSnapshot } from "../lib/sim/types";
 import { SEGMENT_CN, weatherFor } from "../lib/sim/types";
@@ -145,7 +145,7 @@ lines.push(directorLog.length ? directorLog.slice(0, 40).map((l) => `- ${l}`).jo
 lines.push(`\n## 岛屿动态（逐日）\n`);
 for (let d = 1; d <= DAYS; d++) {
   const news = newsByDay.get(d) ?? [];
-  if (news.length) lines.push(`- 第${d}天：${news.map((f) => `${catById.get(f.catId)?.name}${factSummary(f, catById)}`).join("；")}`);
+  if (news.length) lines.push(`- 第${d}天：${news.map((f) => newsLine(f, catById)).join("；")}`);
 }
 
 // 三只样本猫的 30 天主事件流水（人工读这段判断"耐不耐看"）

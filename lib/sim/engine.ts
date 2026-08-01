@@ -320,6 +320,9 @@ export function runDay(world: WorldSnapshot): DayResult {
         t.data.choice === "keep"
           ? "有些秘密不必说破，陪着就够了"
           : "好故事就该被讲出来——但要用善意的讲法",
+      cafe: "原来梦想不是攒够钱那天实现的，是有猫愿意陪你把棚屋修好那天",
+      tangyuan_secret: "这岛上最懒的猫，也在用自己的方式陪着谁",
+      general_past: "有些故事等得起，等它自己愿意开口的那天",
     };
     const content = semantic[t.key];
     if (content) {
@@ -342,6 +345,13 @@ export function runDay(world: WorldSnapshot): DayResult {
   };
 }
 
+/** 岛屿动态一行：场景类事实自带完整句子，用「名字：」衔接；动作类摘要以动词开头，直接连写 */
+export function newsLine(f: Fact, catById: Map<string, { name: string }>): string {
+  const name = catById.get(f.catId)?.name ?? "";
+  const sceneLike = f.data.scene != null || f.data.clue != null || f.data.discovery != null;
+  return `${name}${sceneLike ? "：" : ""}${factSummary(f, catById)}`;
+}
+
 /** 把事实压成一句给记忆/评估用的中文短句（叙事层的事实转写在 narrator 里更详细） */
 export function factSummary(f: Fact, catById: Map<string, { name: string }>): string {
   const d = f.data;
@@ -356,7 +366,7 @@ export function factSummary(f: Fact, catById: Map<string, { name: string }>): st
     case "market":
       return d.overspend ? `赶集买${d.bought}一激动花超了` : `赶集买了${d.bought}`;
     case "rest":
-      return "睡了一觉";
+      return d.pose ? `${d.pose}睡了一觉${d.dream ? `，${d.dream}` : ""}` : "睡了一觉";
     case "stargaze":
       return `看星星，${d.sky}`;
     case "visit":

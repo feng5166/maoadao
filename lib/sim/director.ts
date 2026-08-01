@@ -46,13 +46,26 @@ export function planDay(world: WorldSnapshot): DirectorPlan {
     }
   }
 
-  // 3. 事件线推进加权：停滞越久越该动一动
+  // 3. 事件线推进加权：停滞越久越该动一动。
+  // 同 key 只加权最老的一条；同 key 活跃线泛滥（≥3）时整组不加权——
+  // 30 天干跑里 debt 线被逐条加权，把后半月的岛变成了借贷公告板。
+  const activeByKey = new Map<string, typeof world.threads>();
   for (const thread of world.threads) {
     if (thread.status !== "active") continue;
-    const stale = world.day - thread.lastAdvanceDay;
+    const group = activeByKey.get(thread.key);
+    if (group) group.push(thread);
+    else activeByKey.set(thread.key, [thread]);
+  }
+  for (const [key, group] of activeByKey) {
+    if (group.length >= 3) {
+      notes.push(`事件线「${key}」同时有 ${group.length} 条活跃，暂停推进加权`);
+      continue;
+    }
+    const oldest = group.reduce((a, b) => (a.startDay <= b.startDay ? a : b));
+    const stale = world.day - oldest.lastAdvanceDay;
     const boost = stale >= 2 ? 3 : 1.5;
-    weightMultipliers.set(`${thread.catId}:thread:${thread.id}`, boost);
-    if (stale >= 2) notes.push(`事件线「${thread.key}」已停滞 ${stale} 天，给主角推进加权 ×${boost}`);
+    weightMultipliers.set(`${oldest.catId}:thread:${oldest.id}`, boost);
+    if (stale >= 2) notes.push(`事件线「${key}」已停滞 ${stale} 天，给主角推进加权 ×${boost}`);
   }
 
   return { tone, weightMultipliers, notes };

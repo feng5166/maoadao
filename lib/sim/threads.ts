@@ -10,6 +10,18 @@ export const THREAD_LABELS: Record<string, string> = {
   debt: "欠着债",
   lighthouse: "灯塔之谜",
   arrival_key: "旧钥匙的来历",
+  cafe: "冰粉的咖啡馆",
+  tangyuan_secret: "汤圆之谜",
+  general_past: "将军的往事",
+};
+
+/** 各事件线的总步数（进度展示用；没有的按开放式处理） */
+export const THREAD_TOTALS: Record<string, number> = {
+  lighthouse: 7,
+  arrival_key: 5,
+  cafe: 5,
+  tangyuan_secret: 4,
+  general_past: 4,
 };
 
 interface ThreadSystem {
@@ -217,6 +229,264 @@ export const THREAD_SYSTEMS: Record<string, ThreadSystem> = {
             }),
           });
         }
+        default:
+          return null;
+      }
+    },
+  },
+
+  // ============ 冰粉的咖啡馆：五步创业线（step 1 由八卦模板触发，主角是冰粉本人） ============
+  cafe: {
+    intentFor: (ctx, thread) => {
+      switch (thread.step) {
+        case 1:
+          return stepTemplate("cafe_scout", "看铺面", {
+            segments: ["morning", "afternoon"],
+            contentValue: 5,
+            resolve: (c) => ({
+              outcome: "success",
+              data: {
+                location: "溪流浅滩",
+                scene: "冰粉在集市广场和灯塔坡之间纠结了一整天，最后拍板要了溪流边那间旧棚屋——「猫喝咖啡的时候，就该听着水声。」",
+              },
+              deltas: { coins: -20, energy: -15 },
+              threadUpdates: [{ threadId: thread.id, step: 2, lastAdvanceDay: c.world.day }],
+              cvBonus: 3,
+            }),
+          });
+        case 2:
+          return stepTemplate("cafe_help", "请土豆帮忙翻修", {
+            segments: ["morning", "afternoon"],
+            contentValue: 5,
+            resolve: (c) => ({
+              outcome: "success",
+              data: {
+                targetId: "npc-tudou",
+                targetName: "土豆",
+                scene: "土豆围着旧棚屋转了三圈，敲了敲每一根柱子：「能修。」条件只有一个——开业后管他一年的梅子水。",
+              },
+              deltas: { energy: -10 },
+              affinityChanges: [{ catAId: thread.catId, catBId: "npc-tudou", delta: 6, reason: "翻修之约" }],
+              threadUpdates: [{ threadId: thread.id, step: 3, lastAdvanceDay: c.world.day }],
+              cvBonus: 3,
+            }),
+          });
+        case 3:
+          return stepTemplate("cafe_setback", "装修出岔子", {
+            contentValue: 6,
+            resolve: (c) => ({
+              outcome: "complication",
+              data: {
+                location: "溪流浅滩",
+                scene: pick(c.rng, [
+                  "一场夜雨把刚调好的涂料泡成了一桶粉色的汤，冰粉盯着看了半天，宣布这就是新的主题色",
+                  "招牌上的字请糯米写，结果「咖啡」写成了「咖菲」——冰粉决定将错就错，还挺时髦",
+                ]),
+              },
+              deltas: { coins: -10, energy: -15 },
+              threadUpdates: [{ threadId: thread.id, step: 4, lastAdvanceDay: c.world.day }],
+              cvBonus: 4,
+            }),
+          });
+        case 4:
+          return stepTemplate("cafe_preview", "半价试营业", {
+            segments: ["morning", "afternoon"],
+            contentValue: 7,
+            resolve: (c) => {
+              const smooth = c.rng() < 0.55;
+              return {
+                outcome: smooth ? "success" : "complication",
+                data: {
+                  location: "溪流浅滩",
+                  scene: smooth
+                    ? "半价试营业挤满了猫，连老怪都从松林里出来了。鲜鱼特调卖到脱销，冰粉的毛都忙乱了——她一点也不在乎"
+                    : "试营业手忙脚乱，冰粉把三杯鲜鱼特调全端错了桌——结果三桌猫都说「这杯好像更对我的胃口」，错打错着大受好评",
+                },
+                deltas: { coins: 15, energy: -25 },
+                threadUpdates: [{ threadId: thread.id, step: 5, lastAdvanceDay: c.world.day }],
+                cvBonus: smooth ? 3 : 5,
+              };
+            },
+          });
+        case 5:
+          return stepTemplate("cafe_opening", "正式开业", {
+            segments: ["morning"],
+            contentValue: 8,
+            resolve: () => ({
+              outcome: "success",
+              data: {
+                location: "溪流浅滩",
+                scene: "「溪畔咖菲」正式开业，全岛的猫都来捧场。小梅的日报头版：《溪流边真的开出了咖啡馆》。土豆捧着他的第一杯梅子水，坐在自己修的窗边",
+              },
+              deltas: { coins: 30, energy: -20 },
+              affinityChanges: [
+                { catAId: thread.catId, catBId: "npc-tudou", delta: 8, reason: "梦想的合伙人" },
+                { catAId: thread.catId, catBId: "npc-xiaomei", delta: 6, reason: "头版报道" },
+              ],
+              threadUpdates: [{ threadId: thread.id, status: "resolved", data: { ...thread.data, opened: true } }],
+              cvBonus: 8,
+            }),
+          });
+        default:
+          return null;
+      }
+    },
+  },
+
+  // ============ 汤圆之谜：四步线（step 1 由八卦模板触发，主角是好奇的猫） ============
+  tangyuan_secret: {
+    intentFor: (ctx, thread) => {
+      switch (thread.step) {
+        case 1:
+          return stepTemplate("tangyuan_watch", "观察汤圆", {
+            segments: ["morning", "afternoon"],
+            contentValue: 5,
+            resolve: (c) => {
+              if (c.rng() < 0.35) {
+                return {
+                  outcome: "fail",
+                  data: { targetId: "npc-tangyuan", targetName: "汤圆", scene: "盯了汤圆一整天，他从窗台睡到躺椅、从躺椅睡回窗台，什么破绽也没有" },
+                  deltas: { energy: -10 },
+                  cvBonus: 1,
+                };
+              }
+              return {
+                outcome: "success",
+                data: { targetId: "npc-tangyuan", targetName: "汤圆", scene: "傍晚亲眼看见汤圆伸了个懒腰，慢悠悠往松林方向溜——那不是一只懒猫会去的地方" },
+                deltas: { energy: -10 },
+                threadUpdates: [{ threadId: thread.id, step: 2, lastAdvanceDay: c.world.day }],
+                cvBonus: 3,
+              };
+            },
+          });
+        case 2:
+          return stepTemplate("tangyuan_follow", "夜里跟踪", {
+            segments: ["evening"],
+            contentValue: 6,
+            resolve: (c) => ({
+              outcome: "complication",
+              data: {
+                location: "松林小径",
+                scene: "跟到松林深处就跟丢了。地上留着一小截烤鱼签，竹签上刻着一个歪歪扭扭的「怪」字",
+              },
+              deltas: { energy: -20 },
+              threadUpdates: [{ threadId: thread.id, step: 3, lastAdvanceDay: c.world.day }],
+              cvBonus: 4,
+            }),
+          });
+        case 3:
+          return stepTemplate("tangyuan_truth", "蹲守真相", {
+            segments: ["evening"],
+            contentValue: 7,
+            resolve: (c) => ({
+              outcome: "success",
+              data: {
+                location: "松林小径",
+                discovery:
+                  "真相在后半夜揭晓：老怪的木屋里亮着灯，汤圆窝在窗边，陪失眠的老怪说话说到天亮。临走时老怪塞给他两条鱼，叮嘱了一句「别声张」",
+              },
+              deltas: { energy: -25 },
+              threadUpdates: [{ threadId: thread.id, step: 4, lastAdvanceDay: c.world.day }],
+              cvBonus: 6,
+            }),
+          });
+        case 4: {
+          const willTell = ctx.cat.sociability > 70;
+          return stepTemplate("tangyuan_choice", willTell ? "忍不住想说" : "守住这个秘密", {
+            contentValue: 8,
+            resolve: () => {
+              if (willTell) {
+                return {
+                  outcome: "success",
+                  data: {
+                    choice: "tell",
+                    scene: "实在憋不住，悄悄讲给了棉花听。棉花感动得直抹眼泪——好在她转头就忘了。秘密还是秘密，眼泪倒是真的",
+                  },
+                  deltas: { energy: -5 },
+                  affinityChanges: [
+                    { catAId: thread.catId, catBId: "npc-mianhua", delta: 6, reason: "共享了一场感动" },
+                    { catAId: thread.catId, catBId: "npc-tangyuan", delta: 8, reason: "重新认识了他" },
+                  ],
+                  threadUpdates: [{ threadId: thread.id, status: "resolved", data: { ...thread.data, choice: "tell" } }],
+                  cvBonus: 7,
+                };
+              }
+              return {
+                outcome: "success",
+                data: {
+                  choice: "keep",
+                  scene: "它谁也没告诉。只是第二天，在汤圆常睡的窗台上，多了一条用叶子包好的小鱼干",
+                },
+                deltas: { energy: -5 },
+                affinityChanges: [{ catAId: thread.catId, catBId: "npc-tangyuan", delta: 12, reason: "无言的敬意" }],
+                threadUpdates: [{ threadId: thread.id, status: "resolved", data: { ...thread.data, choice: "keep" } }],
+                cvBonus: 7,
+              };
+            },
+          });
+        }
+        default:
+          return null;
+      }
+    },
+  },
+
+  // ============ 将军的往事：四步线（step 1 由八卦模板触发，与灯塔共享老船长的往事） ============
+  general_past: {
+    intentFor: (ctx, thread) => {
+      switch (thread.step) {
+        case 1:
+          return stepTemplate("general_ask", "直接问将军", {
+            segments: ["morning", "afternoon"],
+            contentValue: 5,
+            resolve: (c) => ({
+              outcome: "complication",
+              data: {
+                targetId: "npc-jiangjun",
+                targetName: "将军",
+                scene: "刚提到「年轻时的大风浪」，将军手里的登记册就停了半拍：「都是过去的事了。」那天码头的闸门关得比平时早",
+              },
+              deltas: { energy: -10 },
+              affinityChanges: [{ catAId: thread.catId, catBId: "npc-jiangjun", delta: -2, reason: "碰了旧伤疤" }],
+              threadUpdates: [{ threadId: thread.id, step: 2, lastAdvanceDay: c.world.day }],
+              cvBonus: 4,
+            }),
+          });
+        case 2:
+          return stepTemplate("general_clue", "翻找旧航海志", {
+            segments: ["morning", "afternoon"],
+            contentValue: 6,
+            resolve: (c) => ({
+              outcome: "success",
+              data: {
+                targetId: "npc-laoguai",
+                targetName: "老怪",
+                clue: "老怪从收藏堆里翻出半页泡过水的航海日志：三十年前那晚，老船长的船上还有一只年轻的大副猫——名字被水渍晕开了，只看得清一个「将」字",
+              },
+              deltas: { energy: -15 },
+              affinityChanges: [{ catAId: thread.catId, catBId: "npc-laoguai", delta: 5, reason: "翻旧账的同伙" }],
+              threadUpdates: [{ threadId: thread.id, step: 3, lastAdvanceDay: c.world.day }],
+              cvBonus: 5,
+            }),
+          });
+        case 3:
+          return stepTemplate("general_open", "把日志还给将军", {
+            segments: ["evening"],
+            contentValue: 8,
+            resolve: () => ({
+              outcome: "success",
+              data: {
+                targetId: "npc-jiangjun",
+                targetName: "将军",
+                scene:
+                  "它把日志残页放在登记台上。将军盯着看了很久，终于开口：那晚是老船长把最后一块救生板推给了他，只说了一句「码头以后交给你」。从那天起将军再没出过海，却每天把码头守到最后一班船。临别时，将军把用了三十年的旧船哨送给了它",
+              },
+              deltas: { energy: -10 },
+              affinityChanges: [{ catAId: thread.catId, catBId: "npc-jiangjun", delta: 15, reason: "听完了那晚的事" }],
+              threadUpdates: [{ threadId: thread.id, status: "resolved", data: { ...thread.data, whistle: true } }],
+              cvBonus: 8,
+            }),
+          });
         default:
           return null;
       }

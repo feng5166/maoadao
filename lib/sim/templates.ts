@@ -49,9 +49,128 @@ export interface EventTemplate {
 }
 
 export const LOCATIONS = ["海边礁石", "松林小径", "集市广场", "灯塔坡", "溪流浅滩", "废弃渔船"];
-const FOUND_ITEMS = ["贝壳", "亮晶晶的玻璃珠", "半截毛线球", "旧怀表", "漂流瓶", "羽毛", "一枚生锈的钥匙"];
-const SNACKS = ["烤鱼串", "鱼糕", "小鱼干", "海苔卷"];
+// 注意：不放"钥匙"类道具——首周主线纪念物是"门口的旧钥匙"，泛用池撞车会稀释唯一感
+const FOUND_ITEMS = [
+  "贝壳",
+  "亮晶晶的玻璃珠",
+  "半截毛线球",
+  "旧怀表",
+  "漂流瓶",
+  "羽毛",
+  "一颗被海水磨圆的绿玻璃",
+  "半张看不清字的旧船票",
+  "缠着水草的小木牌",
+  "一小罐没开封的沙丁鱼",
+  "褪色的红头绳",
+  "一枚有猫爪印的旧硬币",
+  "干透的海星",
+  "一截雕着波浪纹的木头",
+  "写着半句话的纸条",
+  "一颗特别圆的鹅卵石",
+  "掉了漆的小铃铛",
+  "旧望远镜的镜片",
+  "一撮不知道是谁的白毛",
+  "空的漂亮墨水瓶",
+];
+const SNACKS = ["烤鱼串", "鱼糕", "小鱼干", "海苔卷", "虾饼", "鱼皮花生", "奶皮子", "烤墨鱼脚", "梅子水", "软乎乎的鱼松包"];
 const SHOP_KINDS = ["烤鱼店", "杂货铺", "毛线咖啡馆", "贝壳纪念品店"];
+const EXPLORE_MISHAPS = [
+  "迷路绕了一大圈",
+  "被突然的浪头浇成落汤猫",
+  "追蝴蝶追进了刺丛",
+  "踩空掉进了退潮的水洼",
+  "被一只螃蟹夹住了尾巴尖",
+  "钻树洞卡住了，退出来时一身树皮屑",
+  "被松鼠从树上扔了一脑袋松果",
+  "躲阵雨躲进了漏雨的破棚子",
+  "追自己的影子撞上了栅栏",
+  "爬上高处下不来，最后是闭着眼跳下来的",
+];
+const QUARREL_CAUSES = [
+  "谁先占的晒太阳宝座",
+  "上次借的小鱼干到底还没还",
+  "谁的尾巴更好看",
+  "钓鱼位的归属权",
+  "打呼噜到底吵没吵到别人",
+  "集市排队谁插了谁的队",
+  "晾鱼干的绳子被谁家占满了",
+  "半夜谁在屋顶跑酷",
+  "借走的毛线球还回来时少了一半",
+  "谁把水洼里的月亮踩碎了",
+  "留言板上的字被谁蹭花了",
+  "到底是先看见流星的算许愿还是先喊出来的算",
+];
+const STARGAZE_SKIES = [
+  "满天星",
+  "一弯月牙",
+  "有流星划过",
+  "云缝里漏出几颗星",
+  "月亮又大又圆，照得沙滩发白",
+  "星星少但特别亮的一夜",
+  "银河淡淡地横在海面上",
+  "一颗星星眨得特别起劲，像在打招呼",
+];
+const REST_POSES = [
+  "蜷成一只完美的猫饼",
+  "四脚朝天摊成一张饼",
+  "把自己塞进了一个明显小一号的纸箱",
+  "枕着自己的尾巴",
+  "睡成了一个不可思议的麻花形状",
+  "半个身子挂在窗台边缘，睡得纹丝不动",
+  "脸埋进毛毯里只露出耳朵",
+  "抱着毛线球，睡得像只小虾米",
+];
+const REST_DREAMS = [
+  "梦见一条会发光的大鱼",
+  "梦见自己会飞，翅膀是两片海苔",
+  "梦见全岛的猫排队给它送小鱼干",
+  "梦见在追一个滚来滚去的太阳",
+  "梦见胡子变得特别长，能当钓鱼线用",
+  "梦见灯塔跟它说话，声音像海浪",
+  "梦见主人",
+  "梦里一直在打喷嚏，醒来发现鼻尖沾着一根羽毛",
+];
+
+// 八卦池：常青的角色向传闻（不涉及具体数值/状态，不会与模拟事实矛盾）。
+// 汤圆/将军/灯塔/冰粉相关的传闻不在这里——它们是事件线入口，见 gossip 模板的 resolve。
+const GOSSIPS = [
+  "橘子在集市吹牛，说自己钓到过一条比船还大的鱼，被将军当场戳穿",
+  "馒头的鱼糕换了新配方，据说吃过的猫一整天都在哼歌",
+  "斗斗又拉着糯米出海探险，船开出去十米他就吐了——他明明怕水",
+  "铃铛黄昏在灯塔坡唱新歌，唱到一半忘了词，硬是哼完了整段",
+  "糯米画了一张全岛的画像，谁去看她都害羞得用尾巴挡住画",
+  "球球的杂货铺进了一批新毛线，棉花在门口排了整整一上午",
+  "土豆修屋顶时在瓦片下发现一窝麻雀，愣是等雏鸟飞走才继续干活",
+  "老怪收藏的贝壳摆满了一整面墙，据说每一颗都有名字",
+  "乌鸦昨晚巡逻时对着月亮发了很久的呆，被路过的猫看了个正着",
+  "小梅在为日报找新选题，见谁都问「你最近有没有什么大新闻」",
+  "棉花答应帮三只猫带话，结果三句话全记串了，闹了一天乌龙",
+  "将军把码头的缆绳重新盘了一遍，说是台风季前的老规矩",
+  "冰粉给自己梳了个新造型，在溪流边照了一下午水面",
+  "盐汽水修好了球球店里那台老挂钟，一分钱没收就走了",
+  "汤圆睡觉的窗台挪到了馒头早点摊隔壁——大家都说他是闻着味儿挑的",
+  "铃铛和糯米商量着合作：一个唱歌一个画画，办一场溪流边的小展览",
+  "斗斗宣称在废弃渔船底下发现了「宝藏的线索」，可谁要跟他去看他又不肯带路",
+  "老怪最近夜里点灯到很晚，松林深处的窗子亮到后半夜",
+  "黑豆又在给猫讲他的开店大计，这次连店名都想好了",
+  "馒头蒸坏了一屉鱼糕，特意摆在摊前免费送，一会儿就被抢光了",
+];
+
+// 同话题冷却（无状态版）：按天滑动窗口轮换可选八卦，同一条传闻只在窗口期内出现，
+// 隔几天才会转回来——压住"逐字重复"的密度。彻底解法是动态八卦（P2）。
+const GOSSIP_WINDOW = 8;
+function gossipPick(rng: () => number, day: number): string {
+  const start = (day * 3) % GOSSIPS.length;
+  const windowed = Array.from({ length: Math.min(GOSSIP_WINDOW, GOSSIPS.length) }, (_, i) => GOSSIPS[(start + i) % GOSSIPS.length]);
+  return pick(rng, windowed);
+}
+
+// 悬念事件线入口的可用性：无活跃同名线，且（快照里可见的）上一条开始至今超过冷却期。
+// 生产快照只含 active 线，等价于"无活跃线"；干跑快照含历史线，额外获得冷却窗口。
+const MYSTERY_COOLDOWN_DAYS = 40;
+function threadFree(ctx: TemplateCtx, key: string): boolean {
+  return !ctx.world.threads.some((t) => t.key === key && (t.status === "active" || ctx.world.day - t.startDay < MYSTERY_COOLDOWN_DAYS));
+}
 
 function socialTarget(ctx: TemplateCtx, prefer: "friend" | "rival" | "any"): string | null {
   const others = ctx.world.cats.filter((c) => c.id !== ctx.cat.id);
@@ -125,7 +244,7 @@ export const TEMPLATES: EventTemplate[] = [
         // 迷路/被困——失败也是故事
         return {
           outcome: "fail",
-          data: { location, mishap: pick(ctx.rng, ["迷路绕了一大圈", "被突然的浪头浇成落汤猫", "追蝴蝶追进了刺丛"]) },
+          data: { location, mishap: pick(ctx.rng, EXPLORE_MISHAPS) },
           deltas: { energy: -30 },
           cvBonus: 2,
         };
@@ -157,6 +276,11 @@ export const TEMPLATES: EventTemplate[] = [
         { boss: "土豆", what: "帮忙搬木料修屋顶" },
         { boss: "球球", what: "帮杂货铺理货" },
         { boss: "将军", what: "帮码头清点渔获" },
+        { boss: "馒头", what: "帮早点摊看火蒸鱼糕" },
+        { boss: "小梅", what: "帮日报挨家挨户送报" },
+        { boss: "土豆", what: "帮忙给新栅栏刷漆" },
+        { boss: "球球", what: "帮忙盘点仓库里的毛线" },
+        { boss: "将军", what: "帮忙给缆绳上油" },
       ];
       const job = pick(ctx.rng, jobs);
       const pay = 8 + Math.floor(ctx.rng() * 8 * (ctx.cat.diligence / 100 + 0.5));
@@ -204,7 +328,12 @@ export const TEMPLATES: EventTemplate[] = [
     personalityFit: (c) => 0.6 + (100 - c.diligence) / 100,
     resolve: (ctx) => ({
       outcome: "success",
-      data: { location: ctx.state.location },
+      // 睡姿必有、梦境偶得：让占比最高的补觉也有一句可写的细节
+      data: {
+        location: ctx.state.location,
+        pose: pick(ctx.rng, REST_POSES),
+        dream: ctx.rng() < 0.4 ? pick(ctx.rng, REST_DREAMS) : null,
+      },
       deltas: { energy: 40 },
     }),
   },
@@ -221,7 +350,7 @@ export const TEMPLATES: EventTemplate[] = [
     personalityFit: (c) => 0.5 + (100 - c.sociability) / 150,
     resolve: (ctx) => ({
       outcome: "success",
-      data: { location: pick(ctx.rng, ["灯塔坡", "海边礁石"]), sky: pick(ctx.rng, ["满天星", "一弯月牙", "有流星划过"]) },
+      data: { location: pick(ctx.rng, ["灯塔坡", "海边礁石"]), sky: pick(ctx.rng, STARGAZE_SKIES) },
       deltas: { energy: -5 },
       cvBonus: ctx.rng() < 0.2 ? 1 : 0,
     }),
@@ -274,35 +403,57 @@ export const TEMPLATES: EventTemplate[] = [
     },
     resolve: (ctx, intent) => {
       const target = ctx.catById.get(intent.targetId!)!;
-      // 灯塔传闻是灯塔线的入口：胆大的猫听到会上钩
-      const lighthouseExists = ctx.world.threads.some((t) => t.key === "lighthouse");
-      if (!lighthouseExists && ctx.cat.boldness > 55 && ctx.rng() < 0.35) {
+      // 悬念传闻是事件线的入口：符合性格的猫听到会上钩（每次至多开一条线）。
+      // 节奏间隔：距上一条悬念线开启不足 7 天不再开新线——否则全部挤在前三天，后半月又空了。
+      const MYSTERY_KEYS = ["lighthouse", "tangyuan_secret", "general_past", "cafe"];
+      const recentMystery = ctx.world.threads.some((t) => MYSTERY_KEYS.includes(t.key) && ctx.world.day - t.startDay < 7);
+      const busyWithMystery = ctx.threadsOfCat.some((t) => t.status === "active" && MYSTERY_KEYS.includes(t.key));
+      const entries: { rumor: string; thread: NewThread }[] = [];
+      // 每条线的"当事 NPC"不能当主角，否则会出现自己调查自己的荒诞剧
+      const LIGHTHOUSE_CAST = ["npc-yantai", "npc-laoguai", "npc-wuya", "npc-xiaomei"];
+      const TANGYUAN_CAST = ["npc-tangyuan", "npc-laoguai", "npc-mianhua"];
+      const GENERAL_CAST = ["npc-jiangjun", "npc-laoguai"];
+      if (!recentMystery && !busyWithMystery) {
+        if (ctx.cat.boldness > 55 && !LIGHTHOUSE_CAST.includes(ctx.cat.id) && threadFree(ctx, "lighthouse")) {
+          entries.push({
+            rumor: "灯塔最近半夜会发出奇怪的光，盐汽水却矢口否认",
+            thread: { key: "lighthouse", catId: ctx.cat.id, step: 1, data: { rumorFrom: target.name, hasBell: false }, startDay: ctx.world.day },
+          });
+        }
+        if (ctx.cat.sociability > 55 && !TANGYUAN_CAST.includes(ctx.cat.id) && ctx.catById.has("npc-tangyuan") && threadFree(ctx, "tangyuan_secret")) {
+          entries.push({
+            rumor: "汤圆从来不干活却顿顿有鱼吃，最近还总在后半夜往松林方向溜",
+            thread: { key: "tangyuan_secret", catId: ctx.cat.id, step: 1, data: { rumorFrom: target.name }, startDay: ctx.world.day },
+          });
+        }
+        if (ctx.cat.boldness > 45 && !GENERAL_CAST.includes(ctx.cat.id) && ctx.catById.has("npc-jiangjun") && threadFree(ctx, "general_past")) {
+          entries.push({
+            rumor: "将军年轻时在船上见过大风浪，可他从来不细说",
+            thread: { key: "general_past", catId: ctx.cat.id, step: 1, data: { rumorFrom: target.name }, startDay: ctx.world.day },
+          });
+        }
+        // 冰粉的咖啡馆：传闻属于打听的猫，事件线属于冰粉本人
+        if (ctx.cat.id !== "npc-bingfen" && ctx.catById.has("npc-bingfen") && threadFree(ctx, "cafe")) {
+          entries.push({
+            rumor: "冰粉真的攒够钱了，据说已经在溪流边看中了一间旧棚屋",
+            thread: { key: "cafe", catId: "npc-bingfen", step: 1, data: {}, startDay: ctx.world.day },
+          });
+        }
+      }
+      if (entries.length > 0 && ctx.rng() < 0.25) {
+        const e = pick(ctx.rng, entries);
         return {
           outcome: "complication",
-          data: { targetId: target.id, targetName: target.name, rumor: "灯塔最近半夜会发出奇怪的光，盐汽水却矢口否认" },
+          data: { targetId: target.id, targetName: target.name, rumor: e.rumor },
           deltas: { energy: -8 },
-          newThreads: [
-            {
-              key: "lighthouse",
-              catId: ctx.cat.id,
-              step: 1,
-              data: { rumorFrom: target.name, hasBell: false },
-              startDay: ctx.world.day,
-            },
-          ],
+          newThreads: [e.thread],
           affinityChanges: [{ catAId: ctx.cat.id, catBId: target.id, delta: 3, reason: "共享秘密" }],
           cvBonus: 4,
         };
       }
-      const gossips = [
-        "汤圆从来不干活却顿顿有鱼吃，岛上未解之谜又添一笔",
-        "黑豆好像又在筹备新店了，这次说是第八家",
-        "冰粉在攒钱，说要开全岛最气派的咖啡馆",
-        "将军年轻时在船上见过大风浪，可他从来不细说",
-      ];
       return {
         outcome: "success",
-        data: { targetId: target.id, targetName: target.name, rumor: pick(ctx.rng, gossips) },
+        data: { targetId: target.id, targetName: target.name, rumor: gossipPick(ctx.rng, ctx.world.day) },
         deltas: { energy: -8 },
         affinityChanges: [{ catAId: ctx.cat.id, catBId: target.id, delta: 2, reason: "聊八卦" }],
       };
@@ -313,11 +464,12 @@ export const TEMPLATES: EventTemplate[] = [
     label: "借钱",
     category: "social",
     segments: ["morning", "afternoon"],
-    cooldownDays: 3,
+    cooldownDays: 5,
     baseWeight: 10,
     contentValue: 5,
     minEnergy: 10,
-    condition: (ctx) => ctx.state.coins < 25 && !ctx.threadsOfCat.some((t) => t.key === "debt" && t.status === "active"),
+    // 真穷才借（<15）+ 冷却 5 天：防止后半月全岛退化成借贷公告板（30 天干跑教训）
+    condition: (ctx) => ctx.state.coins < 15 && !ctx.threadsOfCat.some((t) => t.key === "debt" && t.status === "active"),
     personalityFit: (c) => 0.3 + c.boldness / 90,
     propose: (ctx) => {
       // 找岛上有钱又不算太熟的猫借：球球（杂货铺）最常见
@@ -389,7 +541,7 @@ export const TEMPLATES: EventTemplate[] = [
     },
     resolve: (ctx, intent) => {
       const target = ctx.catById.get(intent.targetId!)!;
-      const causes = ["谁先占的晒太阳宝座", "上次借的小鱼干到底还没还", "谁的尾巴更好看", "钓鱼位的归属权"];
+      const causes = QUARREL_CAUSES;
       const reconciled = ctx.rng() < 0.25;
       return {
         outcome: reconciled ? "complication" : "fail",
@@ -413,8 +565,9 @@ export const TEMPLATES: EventTemplate[] = [
     baseWeight: 22,
     contentValue: 6,
     minEnergy: 40,
+    // 门槛 75→55：30 天干跑鱼币均值 44、0 次开店——原门槛让开店线成了空头文案
     condition: (ctx) =>
-      ctx.state.coins > 75 &&
+      ctx.state.coins > 55 &&
       ctx.cat.boldness > 60 &&
       !ctx.threadsOfCat.some((t) => t.key === "shop" && t.status === "active") &&
       // 全岛同时最多两家店：稀缺性本身就是戏
