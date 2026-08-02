@@ -52,8 +52,23 @@ export default function RootLayout({
           </div>
         </header>
         <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">{children}</main>
-        <footer className="mt-8 border-t border-line py-6 text-center text-xs text-ink-faint">
-          猫啊岛 · 一座猫住的小岛 · maoadao.com
+        <footer className="mt-8 space-y-1.5 border-t border-line py-6 text-center text-xs text-ink-faint">
+          <p>猫啊岛 · 一座猫住的小岛 · maoadao.com</p>
+          <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener" className="hover:text-ink-soft">
+              浙ICP备2026050677号
+            </a>
+            <a
+              href="https://beian.mps.gov.cn/#/query/webSearch?code=11010502061775"
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-1 hover:text-ink-soft"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- 14px 政府备案图标，不走优化管线 */}
+              <img src="/ghs.png" alt="公安备案图标" className="h-3.5 w-3.5" />
+              京公网安备11010502061775号
+            </a>
+          </p>
         </footer>
         <Analytics />
       </body>
