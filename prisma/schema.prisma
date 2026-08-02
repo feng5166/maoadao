@@ -179,6 +179,20 @@ model Channel {
   @@index([userId])
 }
 
+// 微信留言全量记录（门铃审计面）：不论是否回复/是否落为留言，每条入站都记——
+// 管理后台可查，收到即同步飞书。matched = activation | status | nudge | closed | silent | unsubscribed | unknown | ignored
+model WechatMessageLog {
+  id        String   @id
+  openId    String
+  userId    String?
+  catName   String?
+  text      String
+  matched   String
+  createdAt DateTime
+
+  @@index([createdAt])
+}
+
 // 出站信箱：tick 时排队，dispatch cron 错峰发送；窗口外的落 window_closed = "未寄出的信"
 model OutboundMessage {
   id        String    @id

@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
 import { moderateTexts } from "../moderation";
+import { sendFeishu } from "../feishu";
 import { track } from "@vercel/analytics/server";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay } from "../moments";
 import { entryLink } from "./entry";
@@ -24,6 +25,23 @@ export async function safeTrack(name: string, props?: Record<string, string | nu
 
 export function windowDeadline(from = new Date()): Date {
   return new Date(from.getTime() + WINDOW_HOURS * 3600_000);
+}
+
+/** 微信留言全量记录 + 飞书同步(门铃审计面):失败都不影响主流程 */
+async function logWechatMessage(
+  openId: string,
+  userId: string | null,
+  catName: string | null,
+  text: string,
+  matched: string,
+): Promise<void> {
+  if (!text) return;
+  await prisma.wechatMessageLog
+    .create({ data: { id: randomUUID(), openId, userId, catName, text: text.slice(0, 500), matched, createdAt: new Date() } })
+    .catch((e) => console.error("[wechat-log]", e instanceof Error ? e.message.slice(0, 120) : e));
+  await sendFeishu(
+    `🐱 猫啊岛·微信留言\n${catName ? `猫:${catName}` : "未绑定用户"}${userId ? `(主人 ${userId.slice(0, 10)}…)` : ""}\n分类:${matched}\n「${text.slice(0, 200)}」`,
+  ).catch(() => {});
 }
 
 export async function getBoundChannel(userId: string) {
@@ -67,6 +85,7 @@ export async function bindChannel(userId: string, openId: string, firstText: str
   // 激活的那句话就是"对它说的第一句"——同时落为留言,明早日记回应
   const text = firstText?.trim() ?? "";
   if (text && !UNSUBSCRIBE_WORDS.includes(text)) await saveWechatNudge(cat.id, text);
+  await logWechatMessage(openId, userId, cat.name, text, "activation");
 
   // 握手:唯一的即时消息,豁免静默(doc/12 §八;动作回执非推送)。桥零台词,文案全在这里。
   return { replyText: handshakeMessage(cat, cat.firstWords, beijingHour()) };
@@ -112,9 +131,21 @@ async function firstPersonNow(catId: string): Promise<string> {
   return nowLine("我", ev ? { type: ev.type, data: ev.data as Record<string, unknown>, targetName } : null, hour, state?.location);
 }
 
-/** 入站总入口(激活后的每条消息):找猫 / 留话 / 退订。
- *  一来一回(doc/11 修订):同一北京日,第 1 条实质回复 + 第 2 条收束,之后静默(消息照收)。 */
+/** 入站总入口:分流 + 全量记录(每条都记,不论是否回复)+ 飞书同步 */
 export async function handleInbound(externalId: string, rawText: string): Promise<InboundResult> {
+  const result = await handleInboundCore(externalId, rawText);
+  const text = rawText.trim().slice(0, 500);
+  if (text) {
+    const ch = await prisma.channel.findUnique({ where: { kind_externalId: { kind: WECHAT_KIND, externalId } } });
+    const cat = ch ? await prisma.cat.findFirst({ where: { ownerId: ch.userId }, select: { name: true } }) : null;
+    await logWechatMessage(externalId, ch?.userId ?? null, cat?.name ?? null, text, result.matched);
+  }
+  return result;
+}
+
+/** 分流核心:找猫 / 留话 / 退订。
+ *  一来一回(doc/11 修订):同一北京日,第 1 条实质回复 + 第 2 条收束,之后静默(消息照收)。 */
+async function handleInboundCore(externalId: string, rawText: string): Promise<InboundResult> {
   const text = rawText.trim().slice(0, 500);
   if (!text) return { replyText: null, matched: "ignored" };
 

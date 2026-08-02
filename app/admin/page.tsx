@@ -36,7 +36,7 @@ export default async function AdminPage() {
     );
   }
 
-  const [world, users, userCats, recentSummaries, nudges, threads, fallbackCount, modLogs, newsToday, invites, ratings, allNudges] = await Promise.all([
+  const [world, users, userCats, recentSummaries, nudges, threads, fallbackCount, modLogs, newsToday, invites, ratings, allNudges, wxLogs] = await Promise.all([
     prisma.worldState.findUnique({ where: { id: 1 } }),
     prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { cats: { select: { id: true, name: true } } } }),
     prisma.cat.findMany({ where: { isNpc: false }, include: { state: true } }),
@@ -49,6 +49,7 @@ export default async function AdminPage() {
     prisma.inviteCode.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
     prisma.contentRating.findMany(),
     prisma.ownerNudge.findMany({ select: { catId: true } }),
+    prisma.wechatMessageLog.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
   ]);
   const ratingBySummary = new Map(ratings.map((r) => [r.summaryId, r]));
   const nudgeCountByCat = new Map<string, number>();
@@ -122,6 +123,21 @@ export default async function AdminPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-[#EADFCC] bg-white p-4">
+        <h2 className="mb-2 font-bold">微信留言(门铃全量记录,同步飞书)</h2>
+        {wxLogs.length === 0 && <p className="text-xs text-[#A89B85]">还没有微信留言。</p>}
+        <ul className="space-y-1 text-xs">
+          {wxLogs.map((m) => (
+            <li key={m.id} className="flex items-baseline gap-2 border-t border-[#F5EDE0] pt-1">
+              <span className="shrink-0 text-[#A89B85]">{fmt(m.createdAt)}</span>
+              <span className="shrink-0 font-bold">{m.catName ?? "未绑定"}</span>
+              <span className="shrink-0 rounded bg-[#F5EDE0] px-1.5 text-[10px] text-[#8A7B65]">{m.matched}</span>
+              <span className="min-w-0 break-all">{m.text}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="rounded-2xl border border-[#EADFCC] bg-white p-4">

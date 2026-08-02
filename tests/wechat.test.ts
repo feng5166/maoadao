@@ -18,6 +18,7 @@ describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言�
     const cats = await prisma.cat.findMany({ where: { ownerId: U }, select: { id: true } });
     const catIds = cats.map((c) => c.id);
     await prisma.$transaction([
+      prisma.wechatMessageLog.deleteMany({ where: { OR: [{ userId: U }, { openId: { startsWith: "wxid-test" } }, { openId: "wxid-nobody" }] } }),
       prisma.outboundMessage.deleteMany({ where: { userId: U } }),
       prisma.channel.deleteMany({ where: { userId: U } }),
       prisma.ownerNudge.deleteMany({ where: { catId: { in: catIds } } }),
