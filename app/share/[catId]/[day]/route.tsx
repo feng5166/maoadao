@@ -6,6 +6,7 @@ import { track } from "@vercel/analytics/server";
 import { catAvatarDataUri } from "@/components/CatAvatar";
 import { getCat, getDiary, getWorld } from "@/lib/queries";
 import { prisma } from "@/lib/db";
+import { SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ catId: string;
     ? `data:${portrait.mime};base64,${Buffer.from(portrait.data).toString("base64")}`
     : catAvatarDataUri(cat.id, 140);
   // 回流二维码：带猫 ID 与渠道归因参数
-  const backUrl = `https://maoadao.com/cats/${cat.id}?from=share_card&d=${diary.day}`;
+  const backUrl = `${SITE_URL}/cats/${cat.id}?from=share_card&d=${diary.day}`;
   const qrUri = await QRCode.toDataURL(backUrl, { width: 120, margin: 1, color: { dark: "#3E3226", light: "#FDF8F0" } });
   await track("share_card_view", { catId: cat.id, day: diary.day }).catch(() => {});
 

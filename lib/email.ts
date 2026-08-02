@@ -1,3 +1,5 @@
+import { SITE_URL } from "./site";
+
 // 邮件发送：Resend REST API（无 SDK 依赖）。
 // 未配置 RESEND_API_KEY 时优雅降级：验证码打到服务端日志（内测期可用），每日邮件跳过。
 
@@ -41,10 +43,10 @@ export function otpEmailHtml(code: string): string {
 
 /** 每日召回邮件：内容钩子，不是系统通知 */
 export function dailyEmailHtml(catName: string, hook: string): string {
-  const url = `https://maoadao.vercel.app/my-cat`;
+  const url = `${SITE_URL}/my-cat`;
   return `<div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:24px;background:#FDF8F0;border-radius:16px">
   <p style="font-size:16px;line-height:1.7">${hook}</p>
   <p style="margin-top:20px"><a href="${url}" style="background:#F5A623;color:#fff;padding:10px 24px;border-radius:999px;text-decoration:none">看看${catName}的今天 →</a></p>
-  <p style="margin-top:20px;color:#A89B85;font-size:12px">不想收到每日故事？<a href="https://maoadao.vercel.app/account" style="color:#A89B85">到账户页关闭</a></p>
+  <p style="margin-top:20px;color:#A89B85;font-size:12px">不想收到每日故事？<a href="${SITE_URL}/account" style="color:#A89B85">到账户页关闭</a></p>
 </div>`;
 }

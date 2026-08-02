@@ -12,7 +12,9 @@ import { absenceMessage, d2Message, eventMessage } from "./messages";
 import { safeTrack, WECHAT_KIND } from "./service";
 import { hashSeed, mulberry32 } from "../sim/rng";
 
-const LINK = "https://maoadao.com/my-cat";
+import { SITE_URL } from "../site";
+
+const LINK = `${SITE_URL}/my-cat`;
 const ABSENCE_GAP_DAYS = 4; // lastSeenDay 落后 ≥4 = 缺席 3 天
 const ABSENCE_COOLDOWN_DAYS = 5;
 
