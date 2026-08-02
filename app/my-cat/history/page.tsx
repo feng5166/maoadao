@@ -4,6 +4,7 @@ import { CatAvatar } from "@/components/CatAvatar";
 import { THREAD_LABELS } from "@/lib/sim/threads";
 import { threadStage } from "@/lib/handbook";
 import { getViewerId } from "@/lib/identity";
+import { firstsFor } from "@/lib/firsts";
 import { describeAffinity, getActiveStorylines, getFriends, getSummaries, getViewerCat } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 
@@ -17,7 +18,7 @@ export default async function HistoryPage() {
   const cat = await getViewerCat(viewerId);
   if (!cat) redirect("/adopt");
 
-  const [summaries, friendsAll, threads, keepsakes, arrivalNote] = await Promise.all([
+  const [summaries, friendsAll, threads, keepsakes, arrivalNote, firsts] = await Promise.all([
     getSummaries(cat.id),
     getFriends(cat.id, 8),
     getActiveStorylines(cat.id),
@@ -27,6 +28,7 @@ export default async function HistoryPage() {
       take: 6,
     }),
     prisma.arrivalNote.findUnique({ where: { catId: cat.id } }),
+    firstsFor(cat.id),
   ]);
   const friends = friendsAll.filter((f) => Math.abs(f.affinity) > 5);
   const firstDay = summaries.length ? summaries[summaries.length - 1].day : 0;
@@ -78,6 +80,21 @@ export default async function HistoryPage() {
             给{cat.name}留下第一句话 · 带它认识邻居 · 和它约好明早八点
           </p>
           <p className="mt-1 text-xs text-ink-faint">那天在码头领到的纸，三件都办妥了。</p>
+        </div>
+      )}
+
+      {/* 它记得的第一次：从事实回放派生的纪念（doc/09 数字生命层） */}
+      {firsts.length > 0 && (
+        <div className="mt-6 border-t border-line pt-4">
+          <p className="text-xs tracking-widest text-ink-faint">它记得的第一次</p>
+          <ul className="mt-2 space-y-1.5">
+            {firsts.map((f, i) => (
+              <li key={i} className="font-diary text-[15px] leading-relaxed">
+                {f.text}
+                <span className="ml-2 text-xs text-ink-faint">来岛第 {f.catDay} 天</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

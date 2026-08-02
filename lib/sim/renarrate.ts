@@ -4,6 +4,7 @@ import { factSummary, newsLine } from "./engine";
 import { THREAD_LABELS, THREAD_TOTALS } from "./threads";
 import { narrateDiary, narrateOwnerDay, narrateWeekBook } from "../narrative/narrator";
 import { bondStage, firstWeekPlan } from "./firstweek";
+import { hashSeed, mulberry32 } from "./rng";
 import { randomUUID as uuid } from "node:crypto";
 import { weatherFor, type Fact, type Segment, type SimCat } from "./types";
 
@@ -87,6 +88,20 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
       take: 4,
     });
     const memories = memRows.map((m) => `（第${m.day}天）${m.content}`);
+    // 猫记得你（doc/09 §4）：隔些日子让它自然想起主人很早以前说过的话——
+    // "今天本来想去灯塔，但想到你第一次来的时候让我别逞强"。只用允许公开的留言；约四分之一的天数出现。
+    if (!catRow.isNpc) {
+      const echoRng = mulberry32(hashSeed(day, "owner-echo", catId));
+      if (echoRng() < 0.25) {
+        const oldNudge = await prisma.ownerNudge.findFirst({
+          where: { catId, isPublic: true, message: { not: null }, consumedDay: { not: null, lte: day - 7 } },
+          orderBy: { consumedDay: "asc" },
+        });
+        if (oldNudge?.message) {
+          memories.push(`（第${oldNudge.consumedDay}天）主人对你说过：「${oldNudge.message}」——这句话你一直记着`);
+        }
+      }
+    }
     const rels = await prisma.relationship.findMany({
       where: { OR: [{ catAId: catId }, { catBId: catId }] },
       orderBy: { affinity: "desc" },
