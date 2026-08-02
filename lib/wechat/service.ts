@@ -8,7 +8,7 @@ import { moderateTexts } from "../moderation";
 import { sendFeishu } from "../feishu";
 import { track } from "@vercel/analytics/server";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay } from "../moments";
-import { entryLink } from "./entry";
+import { shortEntryLink } from "./entry";
 import { closeReply, handshakeMessage, presenceReply, receiptReply, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
 
 export const WECHAT_KIND = "wechat_openclaw"; // 历史命名保留(通道 kind 标识,与协议实现解耦)
@@ -173,7 +173,7 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
 
   const bumpReplies = () =>
     prisma.channel.update({ where: { id: channel.id }, data: { replyDay: today, repliesInDay: replies + 1 } });
-  const link = entryLink(channel.userId);
+  const link = await shortEntryLink(channel.userId);
 
   // ---- 找猫:报当前已解锁的真实状态,不落留言 ----
   const isFinding = FIND_CAT_PATTERNS.some((p) => p.test(text)) && text.length <= 20;

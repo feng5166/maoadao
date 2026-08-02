@@ -20,6 +20,8 @@ describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言�
     await prisma.$transaction([
       prisma.wechatMessageLog.deleteMany({ where: { OR: [{ userId: U }, { openId: { startsWith: "wxid-test" } }, { openId: "wxid-nobody" }] } }),
       prisma.outboundMessage.deleteMany({ where: { userId: U } }),
+      // 只删测试用户的短链:令牌 payload 以 base64url("u-test-wx-1") 开头
+      prisma.shortLink.deleteMany({ where: { target: { contains: `wt=${Buffer.from(U).toString("base64url")}` } } }),
       prisma.channel.deleteMany({ where: { userId: U } }),
       prisma.ownerNudge.deleteMany({ where: { catId: { in: catIds } } }),
       prisma.memoryEntry.deleteMany({ where: { catId: { in: catIds } } }),
@@ -93,7 +95,7 @@ describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言�
     // 第 1 条:找猫 → 状态回复(带免登录深链),不产生留言
     const f = await handleInbound(WXID, "你在干嘛?");
     expect(f.matched).toBe("status");
-    expect(f.replyText).toContain("/api/wechat/entry?wt=");
+    expect(f.replyText).toMatch(/\/s\/[A-Za-z0-9]{7}/);
     expect(await prisma.ownerNudge.count({ where: { catId: cat.id, consumedDay: null } })).toBe(0);
 
     // 第 2 条:留话 → 已到收束(一次会话最多一条实质回复),但留言照存
@@ -120,7 +122,7 @@ describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言�
     const fresh = await handleInbound(WXID, "早点睡哦");
     expect(fresh.matched).toBe("nudge");
     expect(fresh.replyText).toContain("我收到啦"); // 胆小型回执(boldness 30)
-    expect(fresh.replyText).toContain("/api/wechat/entry?wt=");
+    expect(fresh.replyText).toMatch(/\/s\/[A-Za-z0-9]{7}/);
   }, T);
 
   it("退订与说话即续订", async () => {

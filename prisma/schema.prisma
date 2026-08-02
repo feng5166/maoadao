@@ -179,6 +179,17 @@ model Channel {
   @@index([userId])
 }
 
+// 站内短链：微信消息里的深链太长（HMAC 令牌），压成 /s/{code}；只允许站内相对路径，防开放跳转
+model ShortLink {
+  code      String    @id // 7 位 base62
+  target    String // 站内相对路径（以 / 开头）
+  hits      Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime
+
+  @@index([createdAt])
+}
+
 // 微信留言全量记录（门铃审计面）：不论是否回复/是否落为留言，每条入站都记——
 // 管理后台可查，收到即同步飞书。matched = activation | status | nudge | closed | silent | unsubscribed | unknown | ignored
 model WechatMessageLog {

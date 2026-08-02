@@ -45,3 +45,9 @@ export function verifyEntryToken(token: string, now = Date.now()): string | null
 export function entryLink(userId: string): string {
   return `${SITE_URL}/api/wechat/entry?wt=${signEntryToken(userId)}`;
 }
+
+/** 短链版深链(微信消息一律用这个):/s/{code} → /api/wechat/entry?wt=…,与令牌同寿命 72h */
+export async function shortEntryLink(userId: string): Promise<string> {
+  const { createShortLink } = await import("../shortlink");
+  return createShortLink(`/api/wechat/entry?wt=${signEntryToken(userId)}`, 72 * 3600_000);
+}

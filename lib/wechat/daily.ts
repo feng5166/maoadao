@@ -13,7 +13,7 @@ import { absenceMessage, d2Message, eventMessage } from "./messages";
 import { safeTrack, WECHAT_KIND } from "./service";
 import { hashSeed, mulberry32 } from "../sim/rng";
 
-import { entryLink } from "./entry";
+import { shortEntryLink } from "./entry";
 const ABSENCE_GAP_DAYS = 4; // lastSeenDay 落后 ≥4 = 缺席 3 天
 const ABSENCE_COOLDOWN_DAYS = 5;
 
@@ -63,7 +63,7 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
         )
       : "在小屋里睡了个懒觉";
 
-    const LINK = entryLink(ch.userId); // 深链免登录,直达"它现在怎么样"(doc/11 修订 §五)
+    const LINK = await shortEntryLink(ch.userId); // 短链→免登录深链,直达"它现在怎么样"
     let kind: string | null = null;
     let content: string | null = null;
 
