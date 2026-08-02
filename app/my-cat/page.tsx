@@ -11,7 +11,7 @@ import { archiveArrivalNote, getArrivalChecklist, markArrivalCelebrated } from "
 import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
-import { beijingHour, currentSegment, nowLine, unlockedSegments } from "@/lib/moments";
+import { beijingHour, currentSegment, nowLine, sameBeijingDay, unlockedSegments } from "@/lib/moments";
 import { bondStage } from "@/lib/sim/firstweek";
 import { factSummary } from "@/lib/sim/engine";
 import { SEGMENT_CN, type Fact, type Segment } from "@/lib/sim/types";
@@ -38,7 +38,6 @@ export default async function MyCatPage() {
   const nudgeTotal = await prisma.ownerNudge.count({ where: { catId: cat.id } });
   const everNudged = nudgeTotal > 0;
   const weekBook = await prisma.weekBook.findUnique({ where: { catId_weekIndex: { catId: cat.id, weekIndex: 1 } } });
-  const todayDiary = summary ? await prisma.diaryEntry.findUnique({ where: { catId_day: { catId: cat.id, day: summary.day } }, select: { form: true } }) : null;
   const viewer = await prisma.user.findUnique({ where: { id: viewerId! }, select: { lastSeenDay: true, visitDays: true } });
   const missedDays = viewer?.lastSeenDay != null ? world.day - viewer.lastSeenDay : 0;
   const missedSummaries =
@@ -110,7 +109,10 @@ export default async function MyCatPage() {
     ? await prisma.cat.findMany({ where: { id: { in: targetIds } }, select: { id: true, name: true } })
     : [];
   const targetById = new Map(targets.map((t) => [t.id, { name: t.name }]));
-  const seg = currentSegment(hour);
+  // 早八 cron 还没跑完时 world.day 还是昨天——那是完整过完的一天，不做时段裁剪
+  const lastTickAt = "lastTickAt" in world ? (world.lastTickAt as Date | null) : null;
+  const gating = hour < 8 || (lastTickAt != null && sameBeijingDay(lastTickAt, new Date()));
+  const seg = gating ? currentSegment(hour) : null;
   const nowEvent = seg ? (todayEvents.find((e) => e.segment === seg && e.isMain) ?? todayEvents.find((e) => e.segment === seg) ?? null) : null;
   const nowText = nowLine(
     cat.name,
@@ -124,7 +126,7 @@ export default async function MyCatPage() {
     hour,
     state?.location,
   );
-  const unlocked = new Set<string>(unlockedSegments(hour));
+  const unlocked = new Set<string>(gating ? unlockedSegments(hour) : ["morning", "afternoon", "evening"]);
   const timeline = todayEvents
     .filter((e) => unlocked.has(e.segment))
     .map((e) => ({
@@ -133,6 +135,17 @@ export default async function MyCatPage() {
       text: factSummary({ type: e.type, outcome: e.outcome, data: e.data as Record<string, unknown>, targetId: e.targetId ?? undefined } as Fact, targetById),
     }));
   const dayComplete = unlocked.size === 3;
+  // 日记是一天的收束（doc/09 §5）：晚上六点起亮出今天的；白天先读昨天的，早八先看"它怎么说"。
+  // 叙事迟到（summary.day < world.day）时照旧展示已有内容，不额外遮挡。
+  const showTodayStory = dayComplete || (summary != null && summary.day < world.day);
+  const prevSummary =
+    !showTodayStory && summary
+      ? await prisma.catDailySummary.findFirst({ where: { catId: cat.id, day: { lt: summary.day } }, orderBy: { day: "desc" } })
+      : null;
+  const displayed = showTodayStory ? summary : prevSummary;
+  const displayedDiary = displayed
+    ? await prisma.diaryEntry.findUnique({ where: { catId_day: { catId: cat.id, day: displayed.day } }, select: { form: true } })
+    : null;
 
   return (
     <div className="mx-auto max-w-lg">
@@ -264,31 +277,46 @@ export default async function MyCatPage() {
         </div>
       )}
 
+      {/* 早八先看"它怎么说"：今天的日记晚上才收束，但它对你留言的回应一早就在 */}
+      {!showTodayStory && summary?.interventionResponse && (
+        <div className="mt-6">
+          <p className="text-xs tracking-widest text-ink-faint">它记得你昨天说的话</p>
+          <p className="font-diary mt-1 border-l-2 border-line pl-3 text-[15px] leading-relaxed text-ink">
+            {summary.interventionResponse}
+          </p>
+        </div>
+      )}
+
       {/* 故事正文 + 更新状态 */}
       {summary && summary.day < world.day && (
         <p className="mt-4 text-center text-xs text-ink-faint">
           今天的日记还没送到（每天早上八点前后写好）——先看看它昨天写的
         </p>
       )}
-      {summary ? (
+      {!showTodayStory && displayed && (
+        <p className="mt-4 text-center text-xs text-ink-faint">
+          今天的日记要等它把这一天过完（晚上六点后来看）——先翻翻它昨天写的
+        </p>
+      )}
+      {displayed ? (
         <article className="mt-6">
-          <h1 className="font-title text-center text-xl font-bold">{summary.headline}</h1>
-          {todayDiary?.form === "note" ? (
+          <h1 className="font-title text-center text-xl font-bold">{displayed.headline}</h1>
+          {displayedDiary?.form === "note" ? (
             <div className="note-slip mx-auto mt-4 max-w-sm p-4" style={{ transform: "rotate(-0.6deg)" }}>
               <p className="mb-1 text-xs text-ink-faint">它贴在门上的便条</p>
-              <p className="font-diary whitespace-pre-wrap text-[15px] leading-[1.9] text-ink">{summary.narrative}</p>
+              <p className="font-diary whitespace-pre-wrap text-[15px] leading-[1.9] text-ink">{displayed.narrative}</p>
             </div>
-          ) : todayDiary?.form === "dialogue" ? (
+          ) : displayedDiary?.form === "dialogue" ? (
             <div className="mx-auto mt-4 max-w-md border-l-2 border-line pl-4">
-              <p className="mb-1 text-xs text-ink-faint">今天在岛上听到的对话</p>
-              <p className="font-diary whitespace-pre-wrap text-[15px] leading-[2] text-ink">{summary.narrative}</p>
+              <p className="mb-1 text-xs text-ink-faint">在岛上听到的对话</p>
+              <p className="font-diary whitespace-pre-wrap text-[15px] leading-[2] text-ink">{displayed.narrative}</p>
             </div>
           ) : (
-            <p className="font-diary mt-4 whitespace-pre-wrap text-[16px] leading-[2] text-ink">{summary.narrative}</p>
+            <p className="font-diary mt-4 whitespace-pre-wrap text-[16px] leading-[2] text-ink">{displayed.narrative}</p>
           )}
 
-          {/* 它记得你昨天说的话 */}
-          {summary.interventionResponse && (
+          {/* 它记得你昨天说的话（收束态：随日记一起看） */}
+          {showTodayStory && summary?.interventionResponse && (
             <div className="mt-6">
               <p className="text-xs tracking-widest text-ink-faint">它记得你昨天说的话</p>
               <p className="font-diary mt-1 border-l-2 border-line pl-3 text-[15px] leading-relaxed text-ink">
@@ -297,8 +325,8 @@ export default async function MyCatPage() {
             </div>
           )}
 
-          {/* 页边批注 */}
-          {notes.length > 0 && (
+          {/* 页边批注（属于今天的账，随收束一起亮） */}
+          {showTodayStory && notes.length > 0 && (
             <div className="margin-note mt-6 border-t border-line pt-3">
               {notes.map((n, i) => (
                 <p key={i}>{n}</p>
@@ -307,7 +335,7 @@ export default async function MyCatPage() {
           )}
 
           {/* 事件线落幕：一件持续多日的事今天有了结局——郑重收束 + 交代往后 */}
-          {finishedThreads.length > 0 && (
+          {showTodayStory && finishedThreads.length > 0 && (
             <div className="note-slip mt-6 p-4 text-center" style={{ transform: "rotate(-0.4deg)" }}>
               {finishedThreads.map((t) => (
                 <div key={t.label} className="mt-2 first:mt-0">
@@ -405,10 +433,10 @@ export default async function MyCatPage() {
         </div>
       )}
 
-      {/* 页尾悬念 */}
-      {summary?.tomorrowHook && (
+      {/* 页尾悬念（跟着展示的那篇日记走：白天是昨晚留的念想，正好指向今天） */}
+      {displayed?.tomorrowHook && (
         <p className="font-diary mt-8 text-center text-[15px] italic leading-relaxed text-ink-soft">
-          {summary.tomorrowHook}
+          {displayed.tomorrowHook}
         </p>
       )}
 
@@ -417,7 +445,7 @@ export default async function MyCatPage() {
         <div className="flex justify-center gap-4">
           <Link href="/my-cat/history" className="hover:text-brick">生活册</Link>
           <Link href={`/cats/${cat.id}`} className="hover:text-brick">它的公开主页</Link>
-          {summary && <Link href={`/share/${cat.id}/${summary.day}`} className="hover:text-brick">今日分享卡</Link>}
+          {displayed && <Link href={`/share/${cat.id}/${displayed.day}`} className="hover:text-brick">分享卡</Link>}
           <Link href="/account#tickets" className="hover:text-brick">送朋友船票</Link>
         </div>
         {!cat.renamedAt && (

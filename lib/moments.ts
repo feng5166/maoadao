@@ -12,6 +12,12 @@ export function beijingHour(now = new Date()): number {
   ) % 24;
 }
 
+/** 两个时刻是否同一个北京日：判断"今天的 tick 跑过没"——没跑过时 world.day 还是昨天，不做时段裁剪 */
+export function sameBeijingDay(a: Date, b: Date): boolean {
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" });
+  return fmt.format(a) === fmt.format(b);
+}
+
 /** 当前现实时刻已经"过完"的时段（时间门） */
 export function unlockedSegments(hour: number): Segment[] {
   if (hour < 8) return ["morning", "afternoon", "evening"]; // 凌晨：昨天已完整过完
