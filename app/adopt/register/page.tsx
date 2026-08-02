@@ -56,16 +56,16 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       <div className="text-center">
         <p className="seal">岛民登记册</p>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          它就蹲在登记台边上打量你。棉花帮你翻开岛民册：
+          它就蹲在登记台边上打量你。岛主陈皮翻开岛民册，笔尖蘸了蘸：
           <br />
-          「就几个问题——答完，它就是你的猫啦。」
+          「几个小问题。答完，这只猫，就交给你啦。」
         </p>
       </div>
 
       {/* 预期错误（无效船票/审核不过）：世界观口径的错误条，不再是整页服务器错误 */}
       {err && (
         <div className="mt-5 border-l-2 border-brick bg-paper-deep/40 p-3 text-sm leading-relaxed text-ink">
-          棉花有点抱歉地看着你：「{err}」
+          岛主放下笔，有点抱歉地看着你：「{err}」
         </div>
       )}
 

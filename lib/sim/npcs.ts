@@ -28,4 +28,6 @@ export const NPC_CATS: NpcSeed[] = [
   { id: "npc-lingdang", role: "background", name: "铃铛", boldness: 30, sociability: 70, diligence: 35, personaTags: ["爱唱歌", "多愁善感", "浪漫"], appearance: "奶白色布偶猫，蓝眼睛", bio: "每天黄昏在灯塔坡唱歌，听众时多时少。" },
   { id: "npc-heidou", role: "social", name: "黑豆", boldness: 80, sociability: 60, diligence: 25, personaTags: ["赌性坚强", "乐观", "口才好"], appearance: "黑色短毛猫，右前爪是白色", bio: "开过七家店倒闭了七家，正在筹备第八家。" },
   { id: "npc-mianhua", role: "social", name: "棉花", boldness: 25, sociability: 95, diligence: 50, personaTags: ["治愈", "好脾气", "记性差"], appearance: "蓬松的白色长毛猫，像一朵云", bio: "谁心情不好都会去找棉花聊聊，虽然她转头就忘。" },
+  // 岛主（doc/00 §八功能型"岛长"的落位，2026-08-02）：入岛登记的主持者——码头的进出归将军，岛民的名字归陈皮
+  { id: "npc-chenpi", role: "function", name: "陈皮", boldness: 40, sociability: 55, diligence: 60, personaTags: ["慢性子", "记性极好", "落笔认真"], appearance: "上了年纪的黄白田园猫，背有点驼，耳朵边的毛发白", bio: "猫啊岛的岛主。岛民册是他一笔一笔记的——谁哪天登的岛，他都记得。" },
 ];
