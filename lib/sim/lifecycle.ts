@@ -17,7 +17,8 @@ export function hoursUntilNextTick(now = new Date()): number {
   }).formatToParts(now);
   const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0) % 24;
   const m = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
-  const minutesUntil = (8 * 60 - (h * 60 + m) + 24 * 60) % (24 * 60);
+  // 恰好 08:00 时距"下一个"早八是 24h（今天这班刚开走），不是 0
+  const minutesUntil = ((8 * 60 - (h * 60 + m) + 24 * 60 - 1) % (24 * 60)) + 1;
   return minutesUntil / 60;
 }
 
