@@ -84,10 +84,10 @@ export function WechatConnectClient({ catName }: { catName: string }) {
             className="mx-auto border border-line"
           />
           {phase === "qr" ? (
-            <p className="mt-2 text-xs text-ink-soft">用微信扫一下——扫完,对它说第一句话,它就找到你了。</p>
+            <p className="mt-2 text-xs text-ink-soft">用微信扫一下——扫完，对它说第一句话，它就找到你了。</p>
           ) : (
             <p className="mt-2 text-sm text-ink">
-              扫到了。现在在微信里对{catName}说第一句话——
+              扫到了。海螺通了——对{catName}说第一句话，
               <br />
               说什么都行,它等着呢。
             </p>

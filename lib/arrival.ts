@@ -81,7 +81,7 @@ export function buildArrivalChecklist(
       ? {
           key: "reach",
           label: "给它留一个能找到你的方式",
-          hint: "让它加上你的微信——明早它想第一时间找到你",
+          hint: "给它一只能找到你的海螺——明早它想第一时间找到你",
           done: Boolean(reach?.done),
           justDone: false,
           cheer: "连上了——明早它醒来，第一件事就来找你。",

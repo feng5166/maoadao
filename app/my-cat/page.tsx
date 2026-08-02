@@ -221,7 +221,7 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
       {/* 微信来的路(doc/11 修订 §五):确认刚才那句话已收进——只说"收到",不说"照做" */}
       {from === "wechat" && pendingNudge?.message && (
         <p className="mt-1.5 text-center text-xs text-ink-soft">
-          你刚从微信里告诉它:「{pendingNudge.message}」——它把这句话收进了今天的纸条。
+          你刚对着海螺说:「{pendingNudge.message}」——它把这句话收进了今天的纸条。
         </p>
       )}
       <p className="mt-1 text-center text-xs text-ink-soft">这会儿的心情：{state?.mood ?? "平静"}</p>
@@ -476,7 +476,7 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
           <p className="font-diary mt-2 whitespace-pre-wrap text-[15px] leading-[1.9] text-ink">
             {unsentLetter.content.split("\n").filter((l) => !l.includes("http")).join("\n").trim()}
           </p>
-          <p className="mt-2 text-xs text-ink-soft">在微信回它一句，信就能寄到了——隔太久没说话，送信的路就生了。</p>
+          <p className="mt-2 text-xs text-ink-soft">对着海螺说句话，信就能寄到——隔太久没动静，海螺会睡着。</p>
         </div>
       )}
 
