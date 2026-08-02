@@ -134,3 +134,51 @@ export async function toggleNotify() {
   await prisma.user.update({ where: { id: uid }, data: { notifyDaily: !user.notifyDaily } });
   revalidatePath("/account");
 }
+
+// ============ 送它离开：放弃当前的猫，重新领养 ============
+// 世界观口径是"送它离开小岛"，数据口径是彻底删除——日记/照片/关系/记忆一并清空，无法找回。
+// 重新领养走正常流程（需要一张新船票）。visitDays/lastSeenDay 归零，新猫的关系曲线从头开始。
+
+export async function releaseCat(formData: FormData) {
+  if (formData.get("confirmRelease") !== "on") {
+    throw new Error("要送它离开的话，先勾选确认——这一步没有回头路");
+  }
+  const uid = await getViewerId();
+  if (!uid) return;
+  const cat = await prisma.cat.findFirst({ where: { ownerId: uid, isNpc: false } });
+  if (!cat) return;
+
+  await prisma.$transaction(
+    async (tx) => {
+      const summaries = await tx.catDailySummary.findMany({ where: { catId: cat.id }, select: { id: true } });
+      if (summaries.length > 0) {
+        await tx.contentRating.deleteMany({ where: { summaryId: { in: summaries.map((s) => s.id) } } });
+      }
+      // 无外键的表直接清
+      await tx.catDailySummary.deleteMany({ where: { catId: cat.id } });
+      await tx.event.deleteMany({ where: { catId: cat.id } });
+      await tx.relationship.deleteMany({ where: { OR: [{ catAId: cat.id }, { catBId: cat.id }] } });
+      await tx.memoryEntry.deleteMany({ where: { catId: cat.id } });
+      await tx.ownerNudge.deleteMany({ where: { catId: cat.id } });
+      await tx.portrait.deleteMany({ where: { catId: cat.id } });
+      await tx.arrivalPhoto.deleteMany({ where: { catId: cat.id } });
+      await tx.arrivalNote.deleteMany({ where: { catId: cat.id } });
+      await tx.weekBook.deleteMany({ where: { catId: cat.id } });
+      await tx.newsTip.deleteMany({ where: { catId: cat.id } });
+      await tx.islandNews.deleteMany({ where: { catId: cat.id } });
+      await tx.item.deleteMany({ where: { catId: cat.id } });
+      // 有外键约束的子表先删，最后删猫
+      await tx.diaryEntry.deleteMany({ where: { catId: cat.id } });
+      await tx.storyline.deleteMany({ where: { catId: cat.id } });
+      await tx.catState.deleteMany({ where: { catId: cat.id } });
+      await tx.cat.delete({ where: { id: cat.id } });
+      // 回访计数归零：新猫的关系曲线（bondStage）从头开始
+      await tx.user.update({ where: { id: uid }, data: { lastSeenDay: null, visitDays: 0 } });
+    },
+    { timeout: 15000 },
+  );
+
+  await track("release_cat", {});
+  revalidatePath("/");
+  redirect("/adopt");
+}
