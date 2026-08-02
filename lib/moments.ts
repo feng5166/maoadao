@@ -51,6 +51,11 @@ export function nowLine(catName: string, ev: NowEvent | null, hour: number, loca
   const d = ev.data;
   const at = (fallback: string) => String(d.location ?? location ?? fallback);
   switch (ev.type) {
+    // 首日剧本(ARRIVAL_DAY,doc/12 §五):世界时间优先于现实时间
+    case "arrival":
+      return `${catName}刚到岛上，棉花正带它四处认认地方。`;
+    case "arrival_home":
+      return `${catName}在小屋里收拾它的新家。`;
     case "fish":
       return `${catName}现在在${at("海边礁石")}钓鱼。`;
     case "explore":

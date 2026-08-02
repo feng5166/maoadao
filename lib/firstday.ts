@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "./db";
 import { narrateOwnerDay } from "./narrative/narrator";
+import { firstImpression, firstSecret } from "./narrative/firstimpression";
 import type { Fact } from "./sim/types";
 
 // 首日体验：领养后不能面对空白页（定义·八 Step5）。
@@ -49,7 +50,24 @@ export async function generateArrivalDay(catId: string): Promise<void> {
       deltas: {},
       contentValue: 5,
     },
+    // 首日小秘密(doc/12 §八.7):结构化事实,日记的"小秘密"槽位取自这里——不给钥匙
+    {
+      catId,
+      day,
+      segment: "evening",
+      type: "first_secret",
+      outcome: "success",
+      data: {
+        scene: firstSecret(catId, cat.firstWords, cat.ownerNick || "主人"),
+        location: "自家小屋",
+      },
+      deltas: {},
+      contentValue: 3,
+    },
   ];
+
+  // 猫对主人的第一印象(doc/12 §三.4):确定性生成的关系事实,双向关系的起点
+  const impression = firstImpression(cat, cat.firstWords, cat.ownerNick || "主人");
 
   // LLM 叙事在事务外先算好（耗时且可失败）；失败走兜底，写库始终原子。
   // 第一句话（firstWords）作为主人留言进叙事：首日日记必须回应它（doc/10 §3 Asset 2）
@@ -69,7 +87,8 @@ export async function generateArrivalDay(catId: string): Promise<void> {
     mood: "既紧张又兴奋",
     facts,
     mainFact: facts[0],
-    memories: [],
+    // 第一印象作为素材进首日日记("对你的第一印象"段与亮相屏同源,doc/12 §三.4)
+    memories: [impression],
     relationHints: [],
     ownerNick: cat.ownerNick ?? undefined,
     ownerMessage: cat.firstWords ?? undefined,
@@ -85,25 +104,22 @@ export async function generateArrivalDay(catId: string): Promise<void> {
     const exists = await tx.catDailySummary.findUnique({ where: { catId_day: { catId, day } } });
     if (exists) return;
 
-    const eventIds: string[] = [];
-    for (const f of facts) {
-      const id = randomUUID();
-      eventIds.push(id);
-      await tx.event.create({
-        data: {
-          id,
-          day,
-          segment: f.segment,
-          catId,
-          type: f.type,
-          outcome: f.outcome,
-          data: f.data as object,
-          deltas: {},
-          contentValue: f.contentValue,
-          isMain: f.type === "arrival",
-        },
-      });
-    }
+    // 批量写事件：跨洋链路下逐条 create 会顶爆事务时限
+    const eventIds = facts.map(() => randomUUID());
+    await tx.event.createMany({
+      data: facts.map((f, i) => ({
+        id: eventIds[i],
+        day,
+        segment: f.segment,
+        catId,
+        type: f.type,
+        outcome: f.outcome,
+        data: f.data as object,
+        deltas: {},
+        contentValue: f.contentValue,
+        isMain: f.type === "arrival",
+      })),
+    });
     await tx.diaryEntry.create({
       data: {
         id: randomUUID(),
@@ -134,19 +150,31 @@ export async function generateArrivalDay(catId: string): Promise<void> {
     });
     // 第一句话 = 永久记忆（doc/10 §3 Asset 2）：importance 10 保证进 D7 纪念册；
     // 进日常叙事的时机由 renarrate 的引用规则控制（首周/低谷日/每逢七天），防复读
-    if (cat.firstWords) {
-      await tx.memoryEntry.create({
-        data: {
+    // 第一句话 + 第一印象(doc/12 §三.4)一次批量落库——亮相屏与日记引用同一条事实
+    await tx.memoryEntry.createMany({
+      data: [
+        ...(cat.firstWords
+          ? [{
+              id: randomUUID(),
+              catId,
+              day,
+              kind: "first_meeting",
+              content: `第一次见面，${cat.ownerNick || "主人"}对你说：「${cat.firstWords}」`,
+              importance: 10,
+              visibility: "public",
+            }]
+          : []),
+        {
           id: randomUUID(),
           catId,
           day,
-          kind: "first_meeting",
-          content: `第一次见面，${cat.ownerNick || "主人"}对你说：「${cat.firstWords}」`,
-          importance: 10,
+          kind: "first_impression",
+          content: impression,
+          importance: 8,
           visibility: "public",
         },
-      });
-    }
+      ],
+    });
     // 首屏"这会儿的心情"对齐首日叙事（默认建态是"平静"，第一天不该平静）
     await tx.catState.updateMany({ where: { catId }, data: { mood: "既紧张又兴奋" } });
     // 旧钥匙不是文案钩子，是真事件线：模拟器后续会推进它（问来历 → 打开隔层）
@@ -162,5 +190,6 @@ export async function generateArrivalDay(catId: string): Promise<void> {
         startDay: day,
       },
     });
-  });
+    // 跨洋链路 + 六段写入:默认 5s 事务时限不够(可靠性测试曾在 5.3s 处翻车)
+  }, { timeout: 15_000 });
 }

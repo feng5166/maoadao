@@ -7,7 +7,7 @@ import { prisma } from "./db";
 export const MEET_TARGET = 1; // 认识一位朋友就算数（D1 动作预算有限，公告栏动线教学一次即可）
 
 export interface ArrivalTask {
-  key: "message" | "meet" | "promise";
+  key: "message" | "meet" | "promise" | "reach";
   label: string;
   hint: string;
   done: boolean;
@@ -52,10 +52,14 @@ export function buildArrivalChecklist(
   firstWords: string | null,
   note: ArrivalNoteData | null,
   nudgeCount: number,
+  // 第三件事(doc/13 T3):微信通道开着 → "给它留一个能找到你的方式"(connect);
+  // 通道关闭 → 保持原来的"明天再来看它"(promise)。信任动作不因渠道缺席而消失。
+  reach?: { mode: "connect" | "promise"; done: boolean },
 ): ArrivalChecklist | null {
   if (note?.archivedAt) return null;
   const metCount = note?.metNpcIds.length ?? 0;
   const celebrated = note?.celebratedKeys ?? [];
+  const reachMode = reach?.mode ?? "promise";
   const tasks: ArrivalTask[] = [
     {
       key: "message",
@@ -73,14 +77,23 @@ export function buildArrivalChecklist(
       justDone: false,
       cheer: "记住了——岛上开始有猫认得它了。",
     },
-    {
-      key: "promise",
-      label: "明天再来看它",
-      hint: "它的第一篇日记明早八点写好",
-      done: Boolean(note?.promisedAt),
-      justDone: false,
-      cheer: "约好了——明早八点，它在小屋等你。",
-    },
+    reachMode === "connect"
+      ? {
+          key: "reach",
+          label: "给它留一个能找到你的方式",
+          hint: "让它加上你的微信——明早它想第一时间找到你",
+          done: Boolean(reach?.done),
+          justDone: false,
+          cheer: "连上了——明早它醒来，第一件事就来找你。",
+        }
+      : {
+          key: "promise",
+          label: "明天再来看它",
+          hint: "它的第一篇日记明早八点写好",
+          done: Boolean(note?.promisedAt),
+          justDone: false,
+          cheer: "约好了——明早八点，它在小屋等你。",
+        },
   ];
   for (const t of tasks) t.justDone = t.done && !celebrated.includes(t.key);
   const allDone = tasks.every((t) => t.done);

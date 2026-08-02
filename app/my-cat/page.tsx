@@ -2,8 +2,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { BoatArriving } from "@/components/BoatArriving";
 import { PetCat } from "@/components/PetCat";
 import { StayTrack } from "@/components/StayTrack";
+import { WechatConnect } from "@/components/WechatConnect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Track } from "@/components/Track";
 import { keepArrivalPromise, renameCat, saveNudge } from "@/lib/actions";
@@ -12,6 +14,7 @@ import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay, unlockedSegments } from "@/lib/moments";
+import { wechatEnabled } from "@/lib/wechat/openclaw";
 import { bondStage } from "@/lib/sim/firstweek";
 import { factSummary } from "@/lib/sim/engine";
 import { SEGMENT_CN, type Fact, type Segment } from "@/lib/sim/types";
@@ -56,8 +59,18 @@ export default async function MyCatPage() {
   const echoHistory = summary ? echoRaw.filter((e) => e.day < summary.day).slice(0, 5) : [];
 
   // 第一天的小约定：note/nudgeCount 已在第一波预取，纯构建不再查库；
-  // 刚记住的单件这次高亮庆祝一次，展示过就记下，下次回归安静的划掉态
-  const arrival = buildArrivalChecklist(cat.name, cat.firstWords, arrivalNote, nudgeTotal);
+  // 刚记住的单件这次高亮庆祝一次，展示过就记下，下次回归安静的划掉态。
+  // 第三件事按通道开关切换：微信可用 → "给它留一个能找到你的方式"(doc/13 T3)
+  const wechatBound = wechatEnabled() && arrivalNote?.archivedAt == null
+    ? Boolean(await prisma.channel.findFirst({ where: { userId: viewerId!, kind: "wechat_openclaw" }, select: { id: true } }))
+    : false;
+  const arrival = buildArrivalChecklist(
+    cat.name,
+    cat.firstWords,
+    arrivalNote,
+    nudgeTotal,
+    wechatEnabled() ? { mode: "connect", done: wechatBound } : undefined,
+  );
   const justDoneKeys = arrival?.tasks.filter((t) => t.justDone).map((t) => t.key) ?? [];
   if (arrival?.allDone) after(() => archiveArrivalNote(cat.id));
   else if (justDoneKeys.length > 0) after(() => markArrivalCelebrated(cat.id, justDoneKeys));
@@ -94,8 +107,11 @@ export default async function MyCatPage() {
   const segOrder: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
   todayEvents.sort((a, b) => (segOrder[a.segment] ?? 0) - (segOrder[b.segment] ?? 0) || (a.isMain ? -1 : 1));
   const targetIds = [...new Set(todayEvents.map((e) => e.targetId).filter((x): x is string => !!x))];
-  // 早八 cron 还没跑完时 world.day 还是昨天——那是完整过完的一天，不做时段裁剪
-  const gating = hour < 8 || (world.lastTickAt != null && sameBeijingDay(world.lastTickAt, new Date()));
+  // 早八 cron 还没跑完时 world.day 还是昨天——那是完整过完的一天，不做时段裁剪。
+  // ARRIVAL_DAY(doc/12 §五):来岛第一天是全产品唯一豁免时段门的一天——
+  // 任何现实时刻登岛,首日剧本完整播放;世界时间 ≠ 用户时间。
+  const arrivalDay = daysOnIsland <= 1;
+  const gating = !arrivalDay && (hour < 8 || (world.lastTickAt != null && sameBeijingDay(world.lastTickAt, new Date())));
   const unlocked = new Set<string>(gating ? unlockedSegments(hour) : ["morning", "afternoon", "evening"]);
   const dayComplete = unlocked.size === 3;
   // 日记是一天的收束（doc/09 §5）：晚上六点起亮出今天的；白天先读昨天的，早八先看"它怎么说"。
@@ -123,7 +139,11 @@ export default async function MyCatPage() {
   const commissionNpc = commission ? String((commission.data as Record<string, unknown>).npcName ?? "") : "";
   const targetById = new Map(targets.map((t) => [t.id, { name: t.name }]));
   const seg = gating ? currentSegment(hour) : null;
-  const nowEvent = seg ? (todayEvents.find((e) => e.segment === seg && e.isMain) ?? todayEvents.find((e) => e.segment === seg) ?? null) : null;
+  const nowEvent = arrivalDay
+    ? (todayEvents.find((e) => e.type === "arrival_home") ?? todayEvents.find((e) => e.type === "arrival") ?? null)
+    : seg
+      ? (todayEvents.find((e) => e.segment === seg && e.isMain) ?? todayEvents.find((e) => e.segment === seg) ?? null)
+      : null;
   const nowText = nowLine(
     cat.name,
     nowEvent
@@ -150,6 +170,23 @@ export default async function MyCatPage() {
     ? await prisma.diaryEntry.findUnique({ where: { catId_day: { catId: cat.id, day: displayed.day } }, select: { form: true } })
     : null;
 
+  // 未寄出的信(doc/11 §六):24h 窗口关了发不出去的消息不丢弃——
+  // 变成 Web 上的一封信,提示回微信一句重开窗口。只展示最新且未被后续送达取代的一封。
+  const unsentLetter = wechatEnabled()
+    ? await prisma.outboundMessage.findFirst({
+        where: { userId: viewerId!, createdAt: { gte: new Date(Date.now() - 3 * 86400_000) } },
+        orderBy: { createdAt: "desc" },
+      }).then((m) => (m?.status === "window_closed" ? m : null))
+    : null;
+
+  // D2 双向履约(doc/12 §八.3):主人答应回来,并真的回来了——只在 D2 首次有效回访出现一次
+  const promiseKept = daysOnIsland === 2 && isNewVisitDay;
+  if (promiseKept) funnelEvents.push({ name: "d2_promise_view" });
+
+  // 猫对主人的第一印象(doc/12 §三.4):亮相期(D1-2)在照片下露一行
+  const impressionMemo =
+    daysOnIsland <= 2 ? await prisma.memoryEntry.findFirst({ where: { catId: cat.id, kind: "first_impression" } }) : null;
+
   return (
     <div className="mx-auto max-w-lg">
       <Track events={funnelEvents} />
@@ -160,6 +197,11 @@ export default async function MyCatPage() {
         {todayLabel()} · 来岛第 {daysOnIsland} 天 · {world.weather}
       </p>
 
+      {/* D2 双向履约:先确认"你回来了",再看它怎么说(doc/12 §八.3,一次性) */}
+      {promiseKept && (
+        <p className="font-diary mt-4 text-center text-[17px] text-ink">你真的来了。</p>
+      )}
+
       {/* 首屏 = 它现在怎么样（doc/10 §5）：场景、此刻、心情——先看见它在生活，再读故事 */}
       <div className="relative mt-3 overflow-hidden rounded-lg border border-line">
         <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
@@ -169,7 +211,10 @@ export default async function MyCatPage() {
       {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}
       <p className="font-diary mt-4 text-center text-[15px] text-ink">{nowText}</p>
       <p className="mt-1 text-center text-xs text-ink-soft">这会儿的心情：{state?.mood ?? "平静"}</p>
-      {!cat.portraitUrl && <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>}
+      {/* 船靠岸(doc/12 §八.9):首日的生成等待是世界过程,不是 loading */}
+      {!cat.portraitUrl &&
+        (arrivalDay ? <BoatArriving stage="boat" /> : <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>)}
+      {arrivalDay && cat.portraitUrl && !cat.arrivalPhotoUrl && <BoatArriving stage="photo" />}
       <p className="mt-1.5 text-center text-xs text-ink-faint">{bond.line}</p>
       {missedOne && (
         <p className="mt-1 text-center text-xs text-ink-faint">昨天你没来，它还是把日记写好了。</p>
@@ -202,10 +247,20 @@ export default async function MyCatPage() {
               height={687}
               className="h-auto w-full"
             />
-            <p className="font-diary mt-2 text-center text-[14px] text-ink-soft">来岛第一天 · 码头</p>
+            <p className="font-diary mt-2 text-center text-[14px] text-ink-soft">猫啊岛历 第 1 天 · 码头</p>
           </div>
           <p className="mt-1.5 text-center text-xs text-ink-faint">你们的第一张照片，它会一直收着。</p>
         </div>
+      )}
+
+      {/* 猫对主人的第一印象(doc/12 §三.4):亮相屏一行,与首日日记同源 */}
+      {impressionMemo && (
+        <p className="font-diary mt-3 text-center text-[14px] text-ink-soft">{impressionMemo.content}</p>
+      )}
+
+      {/* 让它找到你(doc/11):亮相后的主曝光——情感峰值点接关系动作 */}
+      {daysOnIsland <= 2 && (
+        <WechatConnect userId={viewerId!} catName={cat.name} catId={cat.id} variant="prominent" />
       )}
 
       {/* 第一天的小约定：码头塞给新岛民的一张纸，记满收进生活册。
@@ -398,6 +453,17 @@ export default async function MyCatPage() {
             ))}
           </div>
         </details>
+      )}
+
+      {/* 未寄出的信：窗口关了没送出去的话（doc/11 §六,平台限制翻译成情感资产） */}
+      {unsentLetter && (
+        <div className="note-slip mt-8 p-4" style={{ transform: "rotate(0.4deg)" }}>
+          <p className="text-xs tracking-widest text-ink-faint">它写给你、没寄出去的信</p>
+          <p className="font-diary mt-2 whitespace-pre-wrap text-[15px] leading-[1.9] text-ink">
+            {unsentLetter.content.split("\n").filter((l) => !l.includes("http")).join("\n").trim()}
+          </p>
+          <p className="mt-2 text-xs text-ink-soft">在微信回它一句，信就能寄到了——隔太久没说话，送信的路就生了。</p>
+        </div>
       )}
 
       {/* 今晚给它留句话（唯一的明显容器） */}

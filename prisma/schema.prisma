@@ -142,6 +142,51 @@ model WorldState {
   weather    String    @default("晴")
   lastTickAt     DateTime? // 每日幂等闸门：距上次推进不足最小间隔则拒绝
   adoptionPaused Boolean   @default(false) // 后台一键暂停新领养
+  wechatPaused   Boolean   @default(false) // 微信通道熔断：admin 手动或监控自动停发（doc/13 T8）
+}
+
+// ============ 现实连接通道（doc/11 生命连接层）============
+// 绑定资产永远落 userId，通道(kind)可替换——换号/迁通道不丢关系。
+model Channel {
+  id              String    @id
+  userId          String
+  kind            String // wechat_openclaw | email
+  externalId      String // openclaw 侧的 wxid / 联系人 id
+  windowOpenUntil DateTime? // 24h 硬窗口：用户任何一次入站消息刷新（doc/11 §六）
+  boundAt         DateTime
+  mutedAt         DateTime? // 用户说"别再捎信"
+
+  @@unique([kind, externalId])
+  @@index([userId])
+}
+
+// 暗号配对（无 OAuth）：Web 展示口令，用户在微信里念给它 → 配对
+model PairingCode {
+  code      String    @id // 形如「红绳-483」
+  userId    String
+  catId     String
+  createdAt DateTime
+  usedAt    DateTime?
+
+  @@index([userId])
+}
+
+// 出站信箱：tick 时排队，dispatch cron 错峰发送；窗口外的落 window_closed = "未寄出的信"
+model OutboundMessage {
+  id        String    @id
+  userId    String
+  catId     String
+  day       Int // 世界日
+  kind      String // handshake | d2_promise | event | absence
+  content   String
+  link      String?
+  status    String    @default("queued") // queued | sent | window_closed | failed
+  sendAfter DateTime // 8:00-8:40 随机打散（防群发特征）
+  sentAt    DateTime?
+  createdAt DateTime
+
+  @@index([status, sendAfter])
+  @@index([userId, day])
 }
 
 // 双层记忆的主观层：观察/关系/情节/语义（客观事实由上面的结构化表维护）

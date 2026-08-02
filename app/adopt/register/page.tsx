@@ -75,11 +75,31 @@ export default function RegisterPage() {
             id="name" name="name" required maxLength={12} placeholder="煤球" aria-label="它的名字"
             className="mt-3 w-full border-0 border-b border-line bg-transparent px-1 py-2 focus:border-sea-deep focus:outline-none"
           />
-          <label htmlFor="appearance" className="mt-4 block text-sm text-ink-soft">它长什么样？</label>
-          <input
-            id="appearance" name="appearance" maxLength={60} placeholder="圆脸的黑猫，左脚是白色的"
-            className="mt-1.5 w-full border-0 border-b border-line bg-transparent px-1 py-2 text-sm focus:border-sea-deep focus:outline-none"
-          />
+          {/* 外貌去参数化(doc/12 §三.7):不是 prompt 描述框,是"认识一只猫"的问题 */}
+          <p className="mt-4 text-sm text-ink-soft">你第一眼注意到它哪里？</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            {[
+              { v: "tail", label: "毛茸茸的大尾巴" },
+              { v: "eyes", label: "圆圆的眼睛" },
+              { v: "ears", label: "小小的耳朵" },
+              { v: "messy", label: "总是乱糟糟的毛" },
+            ].map((o, i) => (
+              <label
+                key={o.v}
+                className="flex cursor-pointer items-center gap-2 border border-line px-3 py-2 has-[:checked]:border-sea-deep has-[:checked]:bg-paper-deep"
+              >
+                <input type="radio" name="firstSight" value={o.v} defaultChecked={i === 0} className="accent-[#5c7382]" />
+                {o.label}
+              </label>
+            ))}
+          </div>
+          <details className="mt-2 text-xs text-ink-faint">
+            <summary className="cursor-pointer">如果你愿意，也可以告诉我们更多</summary>
+            <input
+              id="appearance" name="appearance" maxLength={60} placeholder="圆脸的黑猫，左脚是白色的"
+              className="mt-2 w-full border-0 border-b border-line bg-transparent px-1 py-2 text-sm focus:border-sea-deep focus:outline-none"
+            />
+          </details>
           <details className="mt-3 text-xs text-ink-faint">
             <summary className="cursor-pointer">它是怎么来到岛上的？（可以不填）</summary>
             <textarea

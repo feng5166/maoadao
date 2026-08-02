@@ -90,13 +90,13 @@ describe.skipIf(!hasDb)("可靠性回归（真实数据库，测试数据自清�
       prisma.catDailySummary.count({ where: { catId: "cat-test-firstday" } }),
       prisma.storyline.count({ where: { catId: "cat-test-firstday", kind: "arrival_key" } }),
     ]);
-    expect(events).toBe(2); // 到岛 + 旧钥匙，各一条
+    expect(events).toBe(3); // 到岛 + 旧钥匙 + 小秘密(doc/12 §八.7)，各一条
     expect(diaries).toBe(1);
     expect(summaries).toBe(1);
     expect(threads).toBe(1);
     // 追溯链：日记 eventIds 指向真实事件
     const diary = await prisma.diaryEntry.findFirst({ where: { catId: "cat-test-firstday" } });
-    expect(diary?.eventIds.length).toBe(2);
+    expect(diary?.eventIds.length).toBe(3);
   }, 60_000);
 
   it("叙事缺口探测：有事件无日记的猫会被 narrationGap 计入", async () => {

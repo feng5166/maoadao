@@ -8,6 +8,10 @@
     {
       "path": "/api/warm",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/wechat/dispatch",
+      "schedule": "*/5 0 * * *"
     }
   ]
 }

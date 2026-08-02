@@ -27,10 +27,20 @@ function axisOf(formData: FormData, field: keyof typeof IMPRESSION_AXES): number
   return IMPRESSION_AXES[field][String(formData.get(field) ?? "")] ?? 50;
 }
 
+// 外貌四选一 → 立绘描述词(doc/12 §三.7):选择保证有画面,自由补充保留个性
+const FIRST_SIGHT: Record<string, string> = {
+  tail: "一条毛茸茸的大尾巴",
+  eyes: "圆圆的大眼睛",
+  ears: "一对小小的耳朵",
+  messy: "总是乱糟糟的毛",
+};
+
 export async function createCat(formData: FormData) {
+  const sight = FIRST_SIGHT[String(formData.get("firstSight") ?? "")] ?? "";
+  const extra = String(formData.get("appearance") ?? "").trim().slice(0, 60);
   const input = {
     name: String(formData.get("name") ?? "").trim().slice(0, 12),
-    appearance: String(formData.get("appearance") ?? "").trim().slice(0, 60),
+    appearance: [sight, extra].filter(Boolean).join("，").slice(0, 80) || extra,
     bio: String(formData.get("bio") ?? "").trim().slice(0, 120),
     tagsRaw: String(formData.get("tags") ?? "").trim().slice(0, 60),
     ownerNick: String(formData.get("ownerNick") ?? "").trim().slice(0, 8),

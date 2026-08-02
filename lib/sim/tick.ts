@@ -279,7 +279,12 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
       where: { emailVerifiedAt: { not: null }, notifyDaily: true, cats: { some: {} } },
       include: { cats: { take: 1 } },
     });
+    // 双通道去重(doc/11 §四):已连微信的主人由猫直接捎信,不再发每日邮件
+    const wechatUsers = new Set(
+      (await prisma.channel.findMany({ where: { kind: "wechat_openclaw", mutedAt: null }, select: { userId: true } })).map((c) => c.userId),
+    );
     for (const owner of owners) {
+      if (wechatUsers.has(owner.id)) continue;
       const ownerCat = owner.cats[0];
       if (!ownerCat) continue;
       const s = await prisma.catDailySummary.findUnique({ where: { catId_day: { catId: ownerCat.id, day } } });

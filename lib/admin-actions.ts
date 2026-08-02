@@ -42,6 +42,15 @@ export async function toggleAdoptionPause() {
   revalidatePath("/admin");
 }
 
+/** 微信通道熔断开关(doc/13 T8):监控自动停发后也从这里恢复 */
+export async function toggleWechatPause() {
+  await requireAdmin();
+  const world = await prisma.worldState.findUnique({ where: { id: 1 } });
+  if (!world) return;
+  await prisma.worldState.update({ where: { id: 1 }, data: { wechatPaused: !world.wechatPaused } });
+  revalidatePath("/admin");
+}
+
 /** 内容人工评分（7 维，可反复修改） */
 export async function rateContent(formData: FormData) {
   await requireAdmin();

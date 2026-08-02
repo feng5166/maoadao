@@ -1,6 +1,8 @@
 import { revalidatePath } from "next/cache";
 import { advanceOneDay, TickInProgressError } from "@/lib/sim/tick";
 import { narrateCommittedDay, narrationGap } from "@/lib/sim/renarrate";
+import { enqueueDailyWechat } from "@/lib/wechat/daily";
+import { wechatEnabled } from "@/lib/wechat/openclaw";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -21,11 +23,15 @@ export async function GET(req: Request) {
     const gap = await narrationGap(currentDay);
     if (gap > 0) {
       const r = await narrateCommittedDay(currentDay, { mode: "missing" });
+      // 恢复路径同样补排微信消息(enqueue 自带每人每天一条的幂等)
+      if (wechatEnabled()) await enqueueDailyWechat(currentDay).catch((e) => console.error("[wechat-enqueue]", e));
       revalidatePath("/");
       return Response.json({ recovered: true, gapBefore: gap, ...r });
     }
 
     const result = await advanceOneDay({ narrate: true });
+    // 叙事完成后排今日微信消息(D2 兑现/事件/缺席),dispatch cron 错峰投递
+    if (wechatEnabled()) await enqueueDailyWechat(result.day).catch((e) => console.error("[wechat-enqueue]", e));
     revalidatePath("/");
     return Response.json(result);
   } catch (err) {

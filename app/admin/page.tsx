@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { firstWeekPlan } from "@/lib/sim/firstweek";
 import { adminLogin, isAdmin } from "@/lib/admin-auth";
-import { createInviteCodes, disableInviteCode, rateContent, toggleAdoptionPause } from "@/lib/admin-actions";
+import { createInviteCodes, disableInviteCode, rateContent, toggleAdoptionPause, toggleWechatPause } from "@/lib/admin-actions";
 import { adminLogout } from "@/lib/admin-auth";
 import { SubmitButton } from "@/components/SubmitButton";
 
@@ -146,6 +146,11 @@ export default async function AdminPage() {
           <form action={toggleAdoptionPause}>
             <SubmitButton pendingText="…" className="rounded-full border border-[#E0D5C0] px-3 py-1.5">
               {world?.adoptionPaused ? "恢复领养" : "暂停领养"}
+            </SubmitButton>
+          </form>
+          <form action={toggleWechatPause}>
+            <SubmitButton pendingText="…" className="rounded-full border border-[#E0D5C0] px-3 py-1.5">
+              {world?.wechatPaused ? "恢复微信捎信" : "暂停微信捎信"}
             </SubmitButton>
           </form>
         </div>
