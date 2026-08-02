@@ -47,7 +47,8 @@ function Page({ no, title, children }: { no: string; title: string; children: Re
   );
 }
 
-export default function RegisterPage() {
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ err?: string }> }) {
+  const { err } = await searchParams;
   return (
     <div className="mx-auto max-w-lg">
       <Track events={[{ name: "adopt_start" }]} />
@@ -55,11 +56,18 @@ export default function RegisterPage() {
       <div className="text-center">
         <p className="seal">岛民登记册</p>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          它就蹲在登记台边上打量你。将军翻开册子：
+          它就蹲在登记台边上打量你。棉花帮你翻开岛民册：
           <br />
-          「几个问题。答完，它就是你的猫了。」
+          「就几个问题——答完，它就是你的猫啦。」
         </p>
       </div>
+
+      {/* 预期错误（无效船票/审核不过）：世界观口径的错误条，不再是整页服务器错误 */}
+      {err && (
+        <div className="mt-5 border-l-2 border-brick bg-paper-deep/40 p-3 text-sm leading-relaxed text-ink">
+          棉花有点抱歉地看着你：「{err}」
+        </div>
+      )}
 
       <form action={createCat} className="mt-8 space-y-6">
         <div>
@@ -175,7 +183,7 @@ export default function RegisterPage() {
         </Page>
 
         <div className="pt-2 text-center">
-          <SubmitButton pendingText="将军正在盖章…（约几秒）" className="stamp-btn w-full">
+          <SubmitButton pendingText="它竖起了耳朵，朝你走过来……" className="stamp-btn w-full">
             就是它了 🐾
           </SubmitButton>
           <p className="mt-2 text-xs text-ink-faint">登记完成后，它今天就住进小屋，晚上写下来岛第一天的日记。</p>

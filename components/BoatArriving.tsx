@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-// 船靠岸(doc/12 §三.5 / §八.9):把生成延迟解释为世界过程,不显示"加载中/生成中"。
-// stage=boat:立绘还没定稿(船在靠岸);stage=photo:立绘已好,相遇照片在冲洗。
+// 相遇等待(doc/12 §八.9):把生成延迟解释为世界过程,不显示"加载中/生成中"。
+// 世界观修正(2026-08-02):相遇页它已蹲在码头行李堆旁——等待不是"等船",
+// 是"你们在互相看清对方"。stage=boat:立绘未定稿;stage=photo:合影在冲洗。
 // 超时不阻塞:文案切到"晚点洗出来",继续慢速轮询,资产随后补齐。
 
-const BOAT_LINES = ["船正在靠近猫啊岛。", "棉花已经在码头等你。", "它好像有点紧张。"];
-const BOAT_LATE = "船今天有点晚点——你先四处看看,它到了就在这儿。";
+const BOAT_LINES = ["它从行李堆后面探出头,朝你这边看。", "棉花小声说:它认生,先让它闻闻你。", "它绕着你走了半圈,尾巴慢慢竖了起来。"];
+const BOAT_LATE = "它还在慢慢凑近——你先别动,快了。";
 const PHOTO_LINE = "码头的合影正在冲洗。";
 const PHOTO_LATE = "照片晚点洗出来——洗好第一时间给你看。";
 const TIMEOUT_MS = 90_000;
