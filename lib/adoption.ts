@@ -21,6 +21,8 @@ export interface AdoptInput {
   sociability: number;
   diligence: number;
   ticket: string;
+  /** 第一次见面说的话（D1 重构·最重要输入）：进永久记忆，首日日记回应 */
+  firstWords?: string;
 }
 
 export type AdoptResult = { ok: true; catId: string } | { ok: false; reason: "has_cat"; catId: string };
@@ -45,7 +47,7 @@ export async function adoptCat(uid: string, input: AdoptInput): Promise<AdoptRes
   }
 
   // 4. 内容审核（船票尚未消耗）
-  const mod = await moderateTexts([input.name, input.appearance, input.bio, input.tagsRaw, input.ownerNick]);
+  const mod = await moderateTexts([input.name, input.appearance, input.bio, input.tagsRaw, input.ownerNick, input.firstWords ?? ""]);
   if (!mod.ok) throw new AdoptError(mod.reason ?? "内容未通过审核，请修改后重试");
 
   const personaTags = input.tagsRaw
@@ -88,6 +90,7 @@ export async function adoptCat(uid: string, input: AdoptInput): Promise<AdoptRes
           boldness: input.boldness,
           sociability: input.sociability,
           diligence: input.diligence,
+          firstWords: input.firstWords || null,
           personaTags,
           appearance: input.appearance || "一只还没被描述过的猫",
           bio: input.bio || `${input.name}刚刚搬来猫啊岛，一切都是新的。`,

@@ -8,16 +8,24 @@ import { track } from "@vercel/analytics/server";
 import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
 import { adoptCat } from "./adoption";
-import { generatePortrait } from "./portrait";
+import { generateArrivalPhoto, generatePortrait } from "./portrait";
 import { generateArrivalDay } from "./firstday";
 import { ensureViewerId, getViewerId } from "./identity";
 import { cookies } from "next/headers";
 
-function clamp(n: number): number {
-  return Math.max(0, Math.min(100, Math.round(n)));
-}
-
 const GOALS = new Set(["earn", "friends", "explore", "chill"]);
+
+// 岛民登记册的心理选择题 → 三轴映射（doc/10 §2：性格参数彻底隐身）。
+// 三档粗粒度对模拟器足够（行为判定都是 >60/>70 的阈值），细粒度交给 tags 与叙事层。
+const IMPRESSION_AXES: Record<string, Record<string, number>> = {
+  impBold: { dash: 82, watch: 25, slow: 52 },
+  impSocial: { greet: 82, wait: 50, alone: 22 },
+  impDiligent: { busy: 82, nap: 25, mood: 52 },
+};
+
+function axisOf(formData: FormData, field: keyof typeof IMPRESSION_AXES): number {
+  return IMPRESSION_AXES[field][String(formData.get(field) ?? "")] ?? 50;
+}
 
 export async function createCat(formData: FormData) {
   const input = {
@@ -27,10 +35,11 @@ export async function createCat(formData: FormData) {
     tagsRaw: String(formData.get("tags") ?? "").trim().slice(0, 60),
     ownerNick: String(formData.get("ownerNick") ?? "").trim().slice(0, 8),
     goal: GOALS.has(String(formData.get("goal") ?? "")) ? String(formData.get("goal")) : "chill",
-    boldness: clamp(Number(formData.get("boldness") ?? 50)),
-    sociability: clamp(Number(formData.get("sociability") ?? 50)),
-    diligence: clamp(Number(formData.get("diligence") ?? 50)),
+    boldness: axisOf(formData, "impBold"),
+    sociability: axisOf(formData, "impSocial"),
+    diligence: axisOf(formData, "impDiligent"),
     ticket: String(formData.get("ticket") ?? "").trim().toUpperCase(),
+    firstWords: String(formData.get("firstWords") ?? "").trim().slice(0, 60),
   };
   if (!input.name) throw new Error("猫得有个名字");
   if (!input.ticket) throw new Error("需要一张船票（邀请码）才能上岛");
@@ -39,15 +48,19 @@ export async function createCat(formData: FormData) {
   const result = await adoptCat(uid, input);
   if (!result.ok) redirect(`/my-cat`);
 
-  // 异步：首日事件（领养后不能面对空白页）+ 立绘生成，都不阻塞领养流程
+  // 异步生成，不阻塞领养流程。时序有讲究（doc/10 修订 1）：
+  // 首日内容 → 立绘定稿 → 相遇照片（照片由立绘合成，必须在定稿之后）
   after(async () => {
     await generateArrivalDay(result.catId).catch((e) => console.error("[firstday]", e));
     await generatePortrait(result.catId).catch((e) => console.error("[portrait]", e));
+    await generateArrivalPhoto(result.catId).catch((e) => console.error("[arrival-photo]", e));
   });
 
   const user = await prisma.user.findUnique({ where: { id: uid }, select: { inviteBatch: true } });
   const ref = (await cookies()).get("maoadao_ref")?.value ?? null;
   await track("adopt_complete", { goal: input.goal, referred: ref === "share_card", batch: user?.inviteBatch ?? "unknown" });
+  // D1 北极星：领养 ≠ 建立关系，第一句话才是关系开始（doc/10 §10）
+  if (input.firstWords) await track("first_words_submit", {});
   if (ref === "share_card") await track("referred_adopt_complete", {});
   revalidatePath("/");
   redirect(`/my-cat`);
@@ -101,6 +114,13 @@ export async function saveNudge(formData: FormData) {
   const priorCount = await prisma.ownerNudge.count({ where: { catId, consumedDay: { not: null } } });
   await track("intervention_submit", { hasMessage: Boolean(message), suggestion: suggestion ?? "none", first: priorCount === 0 });
   revalidatePath(`/cats/${catId}`);
+
+  // D1 夜晚离开仪式（doc/10 §8）：来岛第一天留完话不直接结束——
+  // 看一眼它把纸条放在床边，才建立"它会继续生活"。redirect 必须在所有写入之后。
+  const world = await prisma.worldState.findUnique({ where: { id: 1 } });
+  const firstEvent = await prisma.event.findFirst({ where: { catId }, orderBy: { day: "asc" }, select: { day: true } });
+  const catDay = (world?.day ?? 0) - (firstEvent?.day ?? world?.day ?? 0) + 1;
+  if (catDay <= 1) redirect("/my-cat/goodnight");
 }
 
 /** 给《猫啊岛日报》递一条线索：用户在这个世界里留下的痕迹，次日见报 */

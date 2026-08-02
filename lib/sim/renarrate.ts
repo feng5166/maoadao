@@ -82,8 +82,10 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
       diligence: catRow.diligence,
       personaTags: catRow.personaTags,
     };
+    // first_meeting（第一句话）不进日常记忆池：importance 10 会天天霸榜，感动会变复读。
+    // 引用时机由下面 !isNpc 分支的规则单独控制（doc/10 修订 2）。
     const memRows = await prisma.memoryEntry.findMany({
-      where: { catId, day: { lt: day }, visibility: "public" },
+      where: { catId, day: { lt: day }, visibility: "public", kind: { not: "first_meeting" } },
       orderBy: [{ importance: "desc" }, { day: "desc" }],
       take: 4,
     });
@@ -129,6 +131,12 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
       const catDay = day - (firstEvent?.day ?? day) + 1;
       const plan = firstWeekPlan(catDay);
       form = plan?.form === "weekbook" ? "diary" : (plan?.form ?? "diary");
+      // 第一句话的引用时机（doc/10 修订 2）：首周天天记得；之后只在低谷日（当日 fail≥2）
+      // 和每逢七天想起——低谷日想起第一句话，是最打动人的时刻
+      if (catDay > 1 && (catDay <= 7 || bad >= 2 || catDay % 7 === 0)) {
+        const firstMeeting = await prisma.memoryEntry.findFirst({ where: { catId, kind: "first_meeting" } });
+        if (firstMeeting) memories.unshift(`（第${firstMeeting.day}天·一直记着）${firstMeeting.content}`);
+      }
       const owner = catRow.ownerId ? await prisma.user.findUnique({ where: { id: catRow.ownerId }, select: { visitDays: true } }) : null;
       const nudgeTotal = await prisma.ownerNudge.count({ where: { catId } });
       const bond = bondStage(catDay, nudgeTotal, owner?.visitDays ?? 0);

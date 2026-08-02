@@ -58,9 +58,9 @@ export default async function MyCatPage() {
       })
     : [];
 
-  // 入岛三件事：三件做完时这次仍完整显示（庆祝+告别文案），渲染后收册；
-  // 刚办妥的单件这次高亮庆祝一次，展示过就记下，下次回归安静的划掉态
-  const arrival = await getArrivalChecklist(cat.id, cat.name);
+  // 第一天的小约定：三件记满时这次仍完整显示（庆祝+告别文案），渲染后收册；
+  // 刚记住的单件这次高亮庆祝一次，展示过就记下，下次回归安静的划掉态
+  const arrival = await getArrivalChecklist(cat.id, cat.name, cat.firstWords);
   const justDoneKeys = arrival?.tasks.filter((t) => t.justDone).map((t) => t.key) ?? [];
   if (arrival?.allDone) after(() => archiveArrivalNote(cat.id));
   else if (justDoneKeys.length > 0) after(() => markArrivalCelebrated(cat.id, justDoneKeys));
@@ -157,9 +157,24 @@ export default async function MyCatPage() {
         {todayLabel()} · 来岛第 {daysOnIsland} 天 · {world.weather}
       </p>
 
+      {/* 首屏 = 它现在怎么样（doc/10 §5）：场景、此刻、心情——先看见它在生活，再读故事 */}
+      <div className="relative mt-3 overflow-hidden rounded-lg border border-line">
+        <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
+        <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
+      </div>
+
+      {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}
+      <p className="font-diary mt-4 text-center text-[15px] text-ink">{nowText}</p>
+      <p className="mt-1 text-center text-xs text-ink-soft">这会儿的心情：{state?.mood ?? "平静"}</p>
+      {!cat.portraitUrl && <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>}
+      <p className="mt-1.5 text-center text-xs text-ink-faint">{bond.line}</p>
+      {missedOne && (
+        <p className="mt-1 text-center text-xs text-ink-faint">昨天你没来，它还是把日记写好了。</p>
+      )}
+
       {/* 首访引导：三句话讲清产品，完成第一次留言后消失 */}
       {!everNudged && (
-        <div className="mt-4 border border-line bg-paper-deep/40 p-4 text-center">
+        <div className="mt-5 border border-line bg-paper-deep/40 p-4 text-center">
           <p className="font-diary text-[15px] leading-[2] text-ink">
             这是{cat.name}在岛上的家。
             <br />
@@ -167,20 +182,33 @@ export default async function MyCatPage() {
             <br />
             你说的话它会记住，但听不听，它有自己的主意。
           </p>
-          <p className="mt-2 text-xs text-ink-soft">↓ 往下翻，给它留下第一句话，明早八点回来看它怎么说</p>
+          <p className="mt-2 text-xs text-ink-soft">↓ 往下翻，给它留句话，明早八点回来看它怎么说</p>
         </div>
       )}
 
-      {/* 入岛三件事：码头塞给新岛民的一张纸，做完收进生活册。
-          刚办妥的一件高亮庆祝一次；三件全办妥是件大事——盖章、道贺、交代往后的日子 */}
+      {/* 相遇照片：第一天你和它的第一张照片（立绘定稿后合成，D1 的小高潮） */}
+      {cat.arrivalPhotoUrl && daysOnIsland <= 2 && (
+        <div className="mt-5">
+          <Track events={[{ name: "arrival_photo_view" }]} />
+          <div className="note-slip mx-auto max-w-sm p-3" style={{ transform: "rotate(-0.8deg)" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- 动态合成图走自有 API，长缓存 */}
+            <img src={cat.arrivalPhotoUrl} alt={`${cat.name}来岛第一天的照片`} className="w-full" />
+            <p className="font-diary mt-2 text-center text-[14px] text-ink-soft">来岛第一天 · 码头</p>
+          </div>
+          <p className="mt-1.5 text-center text-xs text-ink-faint">你们的第一张照片，它会一直收着。</p>
+        </div>
+      )}
+
+      {/* 第一天的小约定：码头塞给新岛民的一张纸，记满收进生活册。
+          刚记住的一件高亮庆祝一次；三件记满郑重收束——盖章、道贺、交代往后的日子 */}
       {arrival && (
         <div className="note-slip mt-4 p-4" style={{ transform: "rotate(0.5deg)" }}>
           <div className="flex items-center justify-between">
-            <p className="font-title text-sm font-bold">入岛须知</p>
-            {arrival.allDone && <span className="seal">都办妥了</span>}
+            <p className="font-title text-sm font-bold">第一天的小约定</p>
+            {arrival.allDone && <span className="seal">记住了</span>}
           </div>
           <p className="mt-0.5 text-xs text-ink-faint">
-            {arrival.allDone ? `三件事全办妥——${cat.name}在猫啊岛正式安顿下来了。` : `把${cat.name}安顿好，就这三件事。`}
+            {arrival.allDone ? `今天，${cat.name}记住了三件事。` : "不是要办的事——是它第一天想记住的三件小事。"}
           </p>
           <ul className="mt-2.5 space-y-2">
             {arrival.tasks.map((t) => (
@@ -203,7 +231,7 @@ export default async function MyCatPage() {
                 {!t.done && t.key === "promise" && (
                   <form action={keepArrivalPromise} className="mt-1">
                     <SubmitButton pendingText="…" className="border border-line px-3 py-1 text-xs text-sea-deep hover:border-sea-deep">
-                      记住了，明早八点见
+                      记住了，明天见
                     </SubmitButton>
                   </form>
                 )}
@@ -219,20 +247,6 @@ export default async function MyCatPage() {
             </div>
           )}
         </div>
-      )}
-
-      {/* 场景 + 猫（可摸摸它：每天一句由状态确定性生成的反应） */}
-      <div className="relative mt-3 overflow-hidden rounded-lg border border-line">
-        <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
-        <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
-      </div>
-
-      {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}
-      <p className="font-diary mt-4 text-center text-[15px] text-ink">{nowText}</p>
-      {!cat.portraitUrl && <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>}
-      <p className="mt-1.5 text-center text-xs text-ink-faint">{bond.line}</p>
-      {missedOne && (
-        <p className="mt-1 text-center text-xs text-ink-faint">昨天你没来，它还是把日记写好了。</p>
       )}
 
       {/* 你不在的这几天 */}
@@ -397,29 +411,46 @@ export default async function MyCatPage() {
               <input type="checkbox" name="isPublic" className="accent-[#5c7382]" />
               它可以在日记里提到这句话（不勾选就只有它自己知道）
             </label>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-xs text-ink-soft">
-                {commissionNpc ? `${commissionNpc}托付的事，你希望它……` : choices ? "这件事，你希望它……" : "你希望它明天……"}
-              </span>
-              {(choices
-                ? [{ v: "", label: "让它自己拿主意" }, ...choices.map((c) => ({ v: c.value, label: c.label }))]
-                : [
-                    { v: "", label: "随它去" },
-                    { v: "earn", label: "去赚点鱼币" },
-                    { v: "explore", label: "出门走走" },
-                    { v: "social", label: "找朋友玩" },
-                    { v: "rest", label: "好好休息" },
-                  ]
-              ).map((o, i) => (
-                <label
-                  key={o.v}
-                  className="cursor-pointer border border-line px-2.5 py-1 has-[:checked]:border-sea-deep has-[:checked]:bg-paper"
-                >
-                  <input type="radio" name="suggestion" value={o.v} defaultChecked={i === 0} className="hidden" />
-                  {o.label}
-                </label>
-              ))}
-            </div>
+            {/* 建议选择器。D1 收进二级（doc/10 §7）：第一次见面不让主人"管理"猫——不选=它自己决定 */}
+            {(() => {
+              const picker = (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  {daysOnIsland > 1 && (
+                    <span className="text-xs text-ink-soft">
+                      {commissionNpc ? `${commissionNpc}托付的事，你希望它……` : choices ? "这件事，你希望它……" : "你希望它明天……"}
+                    </span>
+                  )}
+                  {(choices
+                    ? [{ v: "", label: "让它自己拿主意" }, ...choices.map((c) => ({ v: c.value, label: c.label }))]
+                    : [
+                        { v: "", label: "随它去" },
+                        { v: "earn", label: "去赚点鱼币" },
+                        { v: "explore", label: "出门走走" },
+                        { v: "social", label: "找朋友玩" },
+                        { v: "rest", label: "好好休息" },
+                      ]
+                  ).map((o, i) => (
+                    <label
+                      key={o.v}
+                      className="cursor-pointer border border-line px-2.5 py-1 has-[:checked]:border-sea-deep has-[:checked]:bg-paper"
+                    >
+                      <input type="radio" name="suggestion" value={o.v} defaultChecked={i === 0} className="hidden" />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
+              );
+              return daysOnIsland <= 1 ? (
+                <details>
+                  <summary className="cursor-pointer text-xs text-ink-soft">
+                    你希望它明天更接近哪种生活？（不选的话，它自己决定）
+                  </summary>
+                  <div className="mt-2">{picker}</div>
+                </details>
+              ) : (
+                picker
+              );
+            })()}
             <SubmitButton pendingText="正在交给它…" className="stamp-btn px-5 py-1.5 text-sm">
               交给它
             </SubmitButton>

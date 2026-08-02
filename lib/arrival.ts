@@ -1,10 +1,10 @@
 import { prisma } from "./db";
 
-// 入岛三件事：一次性的到岸便条，不是每日任务。
-// 世界观口径——这是码头塞给新岛民的一张纸，做完三件就收进生活册，永不再现。
-// 刻意不给奖励、不计分、不催促：驱动力是"把这只猫安顿好"，不是完成度。
+// 第一天的小约定（doc/10 §6，原"入岛三件事"）：不是任务，是它第一天想记住的三件小事。
+// 世界观口径——码头塞给新岛民的一张纸，记满三件就收进生活册，永不再现。
+// 刻意不给奖励、不计分、不催促：驱动力是"和这只猫的约定"，不是完成度。
 
-export const MEET_TARGET = 2; // 认识几只邻居算数
+export const MEET_TARGET = 1; // 认识一位朋友就算数（D1 动作预算有限，公告栏动线教学一次即可）
 
 export interface ArrivalTask {
   key: "message" | "meet" | "promise";
@@ -25,8 +25,12 @@ export interface ArrivalChecklist {
   metCount: number;
 }
 
-/** 读取三件事状态；已收册返回 null（页面不再显示） */
-export async function getArrivalChecklist(catId: string, catName: string): Promise<ArrivalChecklist | null> {
+/** 读取小约定状态；已收册返回 null（页面不再显示）。firstWords：登记册第四页说过话也算"告诉它一句话" */
+export async function getArrivalChecklist(
+  catId: string,
+  catName: string,
+  firstWords?: string | null,
+): Promise<ArrivalChecklist | null> {
   const note = await prisma.arrivalNote.findUnique({ where: { catId } });
   if (note?.archivedAt) return null;
 
@@ -36,27 +40,27 @@ export async function getArrivalChecklist(catId: string, catName: string): Promi
   const tasks: ArrivalTask[] = [
     {
       key: "message",
-      label: `给${catName}留下第一句话`,
+      label: "告诉它一句话",
       hint: "它不一定照做，但会记住",
-      done: nudgeCount > 0,
+      done: Boolean(firstWords) || nudgeCount > 0,
       justDone: false,
-      cheer: "办妥了——它把这句话收好了，明早八点看它怎么回应。",
+      cheer: firstWords && nudgeCount === 0 ? "记住了——你在码头说的那句话，它收好了。" : "记住了——它把这句话收好了，明早看它怎么回应。",
     },
     {
       key: "meet",
-      label: `带它认识 ${MEET_TARGET} 位邻居`,
+      label: "带它认识岛上的一位朋友",
       hint: metCount > 0 ? `已经认识了 ${metCount} 位` : "去公告栏点开一只猫看看",
       done: metCount >= MEET_TARGET,
       justDone: false,
-      cheer: "办妥了——岛上开始有猫认得它了。",
+      cheer: "记住了——岛上开始有猫认得它了。",
     },
     {
       key: "promise",
-      label: "和它约好明早八点",
-      hint: "它的第一篇日记那时候写好",
+      label: "明天再来看它",
+      hint: "它的第一篇日记明早八点写好",
       done: Boolean(note?.promisedAt),
       justDone: false,
-      cheer: "约好了——明早八点，它的第一篇日记准时送到。",
+      cheer: "约好了——明早八点，它在小屋等你。",
     },
   ];
   for (const t of tasks) t.justDone = t.done && !celebrated.includes(t.key);

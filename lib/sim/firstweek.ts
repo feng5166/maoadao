@@ -33,7 +33,8 @@ export function firstWeekPlan(catDay: number): FirstWeekPlan | null {
 
 /** 各主题给叙事层的硬要求（进提示词） */
 export const THEME_NARRATION_RULES: Record<WeekTheme, string> = {
-  相遇: "这是它来岛第一天：写出初来乍到的新鲜和一点不安，明确提到迎接它的猫和门口的旧钥匙。",
+  相遇:
+    "这是它来岛第一天，写一篇相遇的日记而不是冒险的开篇。大致结构：三成写它是谁（初来乍到的新鲜和一点不安），三成写今天经历的事（码头、迎接它的猫），两成写对主人的第一印象（主人留了话就必须真诚回应那句话），两成留一个只属于它的小秘密。门口的旧钥匙只当一个生活里的小发现随手提一句，绝不能写成'任务开始''谜题待解'的腔调。",
   记住: "今天必须兑现记忆：至少做到一件——引用主人昨天留下的话、回应主人的建议（听了或没听都要说清）、用主人的称呼、或提到第一天捡到的旧钥匙。结尾可以带一句：它开始记住主人说话的方式了。",
   意外: "今天它没有完全按主人说的做（或计划被打断）：要写清它自己的理由（性格使然），并且偏离必须带来一个值得看的收获或相遇——不是惩罚。",
   关系: "今天聚焦它和一只猫的关系变深：第二次见面、提到早前的共同经历、称呼发生变化。日记结尾让它主动问主人一个和'朋友'有关的小问题。",
@@ -53,8 +54,8 @@ export const FORM_RULES: Record<ContentForm, string> = {
 
 /** 主人关系四阶段：非数值，自然语言，不因缺席惩罚 */
 export function bondStage(catDay: number, nudgeCount: number, visitDays: number): { stage: number; line: string } {
-  if (catDay >= 7 && nudgeCount >= 4 && visitDays >= 4) return { stage: 4, line: "你已经成为它在岛上生活的一部分。" };
+  if (catDay >= 7 && nudgeCount >= 4 && visitDays >= 4) return { stage: 4, line: "它习惯把发生的事告诉你了。" };
   if (catDay >= 4 && nudgeCount >= 3) return { stage: 3, line: "遇到事情的时候，它会先想到你。" };
-  if (catDay >= 2 && nudgeCount >= 1) return { stage: 2, line: "它开始期待你留下的话。" };
-  return { stage: 1, line: "它知道你是来接它的人。" };
+  if (catDay >= 2 && nudgeCount >= 1) return { stage: 2, line: "它开始期待你的留言。" };
+  return { stage: 1, line: "它知道你来了。" };
 }

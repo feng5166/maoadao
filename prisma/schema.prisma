@@ -45,6 +45,8 @@ model Cat {
   renamedAt   DateTime? // 改名机会只有一次
   appearance  String // 外形描述，生成立绘用
   portraitUrl String? // 定稿立绘，一次生成反复合成
+  arrivalPhotoUrl String? // 相遇照片：第一天你和它在码头（立绘定稿后合成，D1 重构·分享资产）
+  firstWords  String? // 主人第一次见面说的话（D1 最重要输入，它会记一辈子）
   bio         String
   createdAt   DateTime
 
@@ -182,6 +184,14 @@ model OwnerNudge {
 
 // 定稿立绘：一次生成反复复用（角色一致性的根基），bytes 直存 DB（MVP 规模足够）
 model Portrait {
+  catId     String   @id
+  data      Bytes
+  mime      String   @default("image/jpeg")
+  createdAt DateTime
+}
+
+// 相遇照片：第一天在码头的拍立得（立绘定稿后合成一次，永久保存）
+model ArrivalPhoto {
   catId     String   @id
   data      Bytes
   mime      String   @default("image/jpeg")

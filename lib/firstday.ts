@@ -51,7 +51,8 @@ export async function generateArrivalDay(catId: string): Promise<void> {
     },
   ];
 
-  // LLM 叙事在事务外先算好（耗时且可失败）；失败走兜底，写库始终原子
+  // LLM 叙事在事务外先算好（耗时且可失败）；失败走兜底，写库始终原子。
+  // 第一句话（firstWords）作为主人留言进叙事：首日日记必须回应它（doc/10 §3 Asset 2）
   const { summary, generatedBy } = await narrateOwnerDay({
     cat: {
       id: cat.id,
@@ -71,8 +72,10 @@ export async function generateArrivalDay(catId: string): Promise<void> {
     memories: [],
     relationHints: [],
     ownerNick: cat.ownerNick ?? undefined,
+    ownerMessage: cat.firstWords ?? undefined,
     suggestion: null,
     activeThreads: [],
+    weekTheme: "相遇",
     catById: new Map([[cat.id, { name: cat.name }], ...(secondNpc ? [[secondNpc.id, { name: secondNpc.name }] as const] : [])]),
   });
   const tomorrowHook = summary.tomorrowHook ?? "那把旧钥匙能打开什么？明天它大概会去问问岛上的老猫。";
@@ -123,10 +126,29 @@ export async function generateArrivalDay(catId: string): Promise<void> {
         interventionResponse: null,
         tomorrowHook,
         stateChanges: [],
-        threadProgress: [{ label: "旧钥匙的来历", step: 1 }],
+        // 钥匙降调（doc/10 §3 Asset 3）：D1 不挂进度条——今天它只是门口的一个小发现，
+        // 事件线照常从明天推进，未来才发现它重要
+        threadProgress: [],
         createdAt: new Date(),
       },
     });
+    // 第一句话 = 永久记忆（doc/10 §3 Asset 2）：importance 10 保证进 D7 纪念册；
+    // 进日常叙事的时机由 renarrate 的引用规则控制（首周/低谷日/每逢七天），防复读
+    if (cat.firstWords) {
+      await tx.memoryEntry.create({
+        data: {
+          id: randomUUID(),
+          catId,
+          day,
+          kind: "first_meeting",
+          content: `第一次见面，${cat.ownerNick || "主人"}对你说：「${cat.firstWords}」`,
+          importance: 10,
+          visibility: "public",
+        },
+      });
+    }
+    // 首屏"这会儿的心情"对齐首日叙事（默认建态是"平静"，第一天不该平静）
+    await tx.catState.updateMany({ where: { catId }, data: { mood: "既紧张又兴奋" } });
     // 旧钥匙不是文案钩子，是真事件线：模拟器后续会推进它（问来历 → 打开隔层）
     await tx.storyline.create({
       data: {
