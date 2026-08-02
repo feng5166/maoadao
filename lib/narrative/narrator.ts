@@ -115,7 +115,7 @@ export async function reflect(cat: SimCat, recentMemories: string[]): Promise<st
 export interface OwnerDayInput extends DiaryInput {
   ownerNick?: string; // 猫怎么称呼主人
   suggestion?: { label: string; followed: boolean } | null; // 今天消费的主人建议 + 是否有行动采纳
-  activeThreads: { label: string; step: number; total?: number }[];
+  activeThreads: { label: string; step: number; total?: number; done?: boolean; failed?: boolean }[];
   weekTheme?: WeekTheme; // 首周节奏主题（进提示词的硬要求）
   form?: ContentForm; // 内容形态：diary | dialogue | note
   bondLine?: string; // 主人关系阶段的自然语言（供语气参考）
@@ -144,7 +144,13 @@ export async function narrateOwnerDay(input: OwnerDayInput): Promise<{ summary: 
       ? `\n${nick}今天来看过你、留了悄悄话——可以提到${nick}来过、心里暖暖的，但不要编内容。`
       : "";
   const threadBlock = input.activeThreads.length
-    ? `\n你正在经历的事：${input.activeThreads.map((t) => `${t.label}（第 ${t.step}${t.total ? `/${t.total}` : ""} 步）`).join("；")}`
+    ? `\n你正在经历的事：${input.activeThreads
+        .map((t) =>
+          t.done
+            ? `${t.label}（今天${t.failed ? "到底没成，也算有了交代" : "办成了，有了结局"}——这是今天值得郑重写下的事）`
+            : `${t.label}（第 ${t.step}${t.total ? `/${t.total}` : ""} 步）`,
+        )
+        .join("；")}`
     : "";
 
   const system = `你是猫啊岛上的一只猫。根据今天的事实，输出严格的 JSON（不要多余文字），字段：
@@ -183,7 +189,7 @@ ${suggestionBlock}${ownerBlock}${threadBlock}${memoryBlock}`;
       headline: `第 ${input.day} 天`,
       narrative: `第 ${input.day} 天，天气${input.weather}。今天：\n${factLines}`,
       interventionResponse: input.suggestion ? `你建议「${input.suggestion.label}」，它${input.suggestion.followed ? "照做了" : "这次没听"}。` : null,
-      tomorrowHook: input.activeThreads.length ? `${input.activeThreads[0].label}还在继续。` : null,
+      tomorrowHook: input.activeThreads.find((t) => !t.done) ? `${input.activeThreads.find((t) => !t.done)!.label}还在继续。` : null,
     },
     generatedBy: "fallback",
   };

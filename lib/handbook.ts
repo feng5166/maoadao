@@ -26,7 +26,7 @@ export function todayLabel(): string {
 /** 状态变化标签 → 页边批注散文（"鱼币 +12" → "今天赚了 12 枚鱼币。"） */
 export function marginNotes(
   stateChanges: { label: string; delta: string }[],
-  threadProgress: { label: string; step: number; total?: number }[],
+  threadProgress: { label: string; step: number; total?: number; done?: boolean }[],
 ): string[] {
   const notes: string[] = [];
   for (const c of stateChanges) {
@@ -42,6 +42,7 @@ export function marginNotes(
     }
   }
   for (const t of threadProgress) {
+    if (t.done) continue; // 落幕线不进页边批注：页面有专门的收束时刻
     notes.push(`「${t.label}」${threadStage(t.step, t.total)}。`);
   }
   return notes;

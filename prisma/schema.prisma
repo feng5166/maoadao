@@ -269,10 +269,11 @@ model ContentRating {
 
 // 入岛三件事：新岛民的一次性到岸便条（不是每日任务，做完收进生活册永不再现）
 model ArrivalNote {
-  catId      String    @id
-  metNpcIds  String[] // 认识过的邻居（看过公开主页的 NPC）
-  promisedAt DateTime? // 记住了"明早八点"的约定
-  archivedAt DateTime? // 三件事做完并展示过一次后收册
+  catId          String    @id
+  metNpcIds      String[] // 认识过的邻居（看过公开主页的 NPC）
+  promisedAt     DateTime? // 记住了"明早八点"的约定
+  archivedAt     DateTime? // 三件事做完并展示过一次后收册
+  celebratedKeys String[]  @default([]) // 已展示过"刚办妥"庆祝的任务 key（每件事只庆祝一次）
 }
 
 // 读者来信：岛民给《猫啊岛日报》递的线索（用户在世界里留下痕迹）

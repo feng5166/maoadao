@@ -125,16 +125,30 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
         suggestionLabel = opts.find((o) => o.value === nudge.suggestion)?.label ?? "你的选择";
       }
       // 事件线快照：当日叙事用实时状态；补写历史日优先用当天留下的摘要快照，避免把未来剧情写进过去
-      let activeThreads: { label: string; step: number; total?: number }[];
+      // 今天落幕的线（endDay = 今天）也带上并标 done：页面据此展示"办成了"的收束时刻，
+      // 叙事层据此知道这件事今天有了结局——事件线的完成本该是最明显的一天
+      let activeThreads: { label: string; step: number; total?: number; done?: boolean; failed?: boolean }[];
       if (isCurrentDay) {
         const threads = await prisma.storyline.findMany({ where: { catId, status: "active" } });
-        activeThreads = threads.map((t) => ({
-          label: THREAD_LABELS[t.kind] ?? t.kind,
-          step: t.step,
-          total: THREAD_TOTALS[t.kind],
-        }));
+        const finishedToday = await prisma.storyline.findMany({
+          where: { catId, status: { in: ["resolved", "failed"] }, endDay: day },
+        });
+        const threadLabel = (t: (typeof threads)[number]) =>
+          t.kind === "commission" && (t.data as Record<string, unknown>).npcName
+            ? `${(t.data as Record<string, unknown>).npcName}托付的事`
+            : THREAD_LABELS[t.kind] ?? t.kind;
+        activeThreads = [
+          ...threads.map((t) => ({ label: threadLabel(t), step: t.step, total: THREAD_TOTALS[t.kind] })),
+          ...finishedToday.map((t) => ({
+            label: threadLabel(t),
+            step: t.step,
+            total: THREAD_TOTALS[t.kind],
+            done: true,
+            failed: t.status === "failed",
+          })),
+        ];
       } else {
-        activeThreads = ((existingSummary?.threadProgress ?? []) as { label: string; step: number; total?: number }[]) ?? [];
+        activeThreads = ((existingSummary?.threadProgress ?? []) as { label: string; step: number; total?: number; done?: boolean; failed?: boolean }[]) ?? [];
       }
       const { summary, generatedBy: gb } = await narrateOwnerDay({
         cat,

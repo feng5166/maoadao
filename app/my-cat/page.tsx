@@ -7,11 +7,14 @@ import { StayTrack } from "@/components/StayTrack";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Track } from "@/components/Track";
 import { keepArrivalPromise, renameCat, saveNudge } from "@/lib/actions";
-import { archiveArrivalNote, getArrivalChecklist } from "@/lib/arrival";
+import { archiveArrivalNote, getArrivalChecklist, markArrivalCelebrated } from "@/lib/arrival";
 import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
+import { beijingHour, currentSegment, nowLine, unlockedSegments } from "@/lib/moments";
 import { bondStage } from "@/lib/sim/firstweek";
+import { factSummary } from "@/lib/sim/engine";
+import { SEGMENT_CN, type Fact, type Segment } from "@/lib/sim/types";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -56,9 +59,12 @@ export default async function MyCatPage() {
       })
     : [];
 
-  // 入岛三件事：三件做完时这次仍完整显示（划掉+告别文案），渲染后收册
+  // 入岛三件事：三件做完时这次仍完整显示（庆祝+告别文案），渲染后收册；
+  // 刚办妥的单件这次高亮庆祝一次，展示过就记下，下次回归安静的划掉态
   const arrival = await getArrivalChecklist(cat.id, cat.name);
+  const justDoneKeys = arrival?.tasks.filter((t) => t.justDone).map((t) => t.key) ?? [];
   if (arrival?.allDone) after(() => archiveArrivalNote(cat.id));
+  else if (justDoneKeys.length > 0) after(() => markArrivalCelebrated(cat.id, justDoneKeys));
 
     const isNewVisitDay = viewer?.lastSeenDay !== world.day;
   after(() =>
@@ -69,8 +75,10 @@ export default async function MyCatPage() {
       })
       .catch(() => {}),
   );
+  const hour = beijingHour();
   const funnelEvents: { name: string; props?: Record<string, string | number | boolean> }[] = [
-    { name: "daily_story_view", props: { islandDay: world.day, catDay: daysOnIsland } },
+    // seg 进埋点：验证"时段解锁"是否带来同日二次打开（doc/09 §9）
+    { name: "daily_story_view", props: { islandDay: world.day, catDay: daysOnIsland, seg: currentSegment(hour) ?? "night" } },
   ];
   if (daysOnIsland <= 1) funnelEvents.push({ name: "first_story_view", props: { catId: cat.id } });
   else funnelEvents.push({ name: "next_day_return", props: { catDay: daysOnIsland } });
@@ -83,13 +91,48 @@ export default async function MyCatPage() {
     : null;
   const commissionNpc = commission ? String((commission.data as Record<string, unknown>).npcName ?? "") : "";
   const missedOne = viewer?.lastSeenDay != null && world.day - viewer.lastSeenDay === 2;
+  const threadProgress = ((summary?.threadProgress ?? []) as { label: string; step: number; total?: number; done?: boolean; failed?: boolean }[]) ?? [];
+  // 今天落幕的事件线：办成一件事是值得郑重庆祝的时刻，单独收束，不混进页边批注
+  const finishedThreads = threadProgress.filter((t) => t.done);
   const notes = summary
-    ? marginNotes(
-        (summary.stateChanges ?? []) as { label: string; delta: string }[],
-        (summary.threadProgress ?? []) as { label: string; step: number; total?: number }[],
-      )
+    ? marginNotes((summary.stateChanges ?? []) as { label: string; delta: string }[], threadProgress)
     : [];
   const scene = sceneFor(state?.location);
+
+  // ============ "它现在怎么样"（doc/09 §5）============
+  // tick 早上八点一次生成整天；展示层按现实时段解锁：上午 8 点起、下午 13 点起、晚上 18 点起。
+  // 打开的动作从"读昨天的总结"变成"看它此刻在干嘛"。
+  const todayEvents = await prisma.event.findMany({ where: { catId: cat.id, day: world.day } });
+  const segOrder: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
+  todayEvents.sort((a, b) => (segOrder[a.segment] ?? 0) - (segOrder[b.segment] ?? 0) || (a.isMain ? -1 : 1));
+  const targetIds = [...new Set(todayEvents.map((e) => e.targetId).filter((x): x is string => !!x))];
+  const targets = targetIds.length
+    ? await prisma.cat.findMany({ where: { id: { in: targetIds } }, select: { id: true, name: true } })
+    : [];
+  const targetById = new Map(targets.map((t) => [t.id, { name: t.name }]));
+  const seg = currentSegment(hour);
+  const nowEvent = seg ? (todayEvents.find((e) => e.segment === seg && e.isMain) ?? todayEvents.find((e) => e.segment === seg) ?? null) : null;
+  const nowText = nowLine(
+    cat.name,
+    nowEvent
+      ? {
+          type: nowEvent.type,
+          data: nowEvent.data as Record<string, unknown>,
+          targetName: nowEvent.targetId ? targetById.get(nowEvent.targetId)?.name : null,
+        }
+      : null,
+    hour,
+    state?.location,
+  );
+  const unlocked = new Set<string>(unlockedSegments(hour));
+  const timeline = todayEvents
+    .filter((e) => unlocked.has(e.segment))
+    .map((e) => ({
+      id: e.id,
+      seg: SEGMENT_CN[e.segment as Segment],
+      text: factSummary({ type: e.type, outcome: e.outcome, data: e.data as Record<string, unknown>, targetId: e.targetId ?? undefined } as Fact, targetById),
+    }));
+  const dayComplete = unlocked.size === 3;
 
   return (
     <div className="mx-auto max-w-lg">
@@ -115,19 +158,24 @@ export default async function MyCatPage() {
         </div>
       )}
 
-      {/* 入岛三件事：码头塞给新岛民的一张纸，做完收进生活册 */}
+      {/* 入岛三件事：码头塞给新岛民的一张纸，做完收进生活册。
+          刚办妥的一件高亮庆祝一次；三件全办妥是件大事——盖章、道贺、交代往后的日子 */}
       {arrival && (
         <div className="note-slip mt-4 p-4" style={{ transform: "rotate(0.5deg)" }}>
-          <p className="font-title text-sm font-bold">入岛须知</p>
+          <div className="flex items-center justify-between">
+            <p className="font-title text-sm font-bold">入岛须知</p>
+            {arrival.allDone && <span className="seal">都办妥了</span>}
+          </div>
           <p className="mt-0.5 text-xs text-ink-faint">
-            {arrival.allDone ? "都办妥了——这张纸收进生活册了。" : `把${cat.name}安顿好，就这三件事。`}
+            {arrival.allDone ? `三件事全办妥——${cat.name}在猫啊岛正式安顿下来了。` : `把${cat.name}安顿好，就这三件事。`}
           </p>
           <ul className="mt-2.5 space-y-2">
             {arrival.tasks.map((t) => (
               <li key={t.key} className="font-diary text-[15px] leading-snug">
-                <span className={t.done ? "text-ink-faint line-through" : "text-ink"}>
+                <span className={t.done ? (t.justDone ? "font-bold text-brick" : "text-ink-faint line-through") : "text-ink"}>
                   {t.done ? "✓" : "○"} {t.label}
                 </span>
+                {t.justDone && <span className="ml-1.5 text-xs text-brick">{t.cheer}</span>}
                 {!t.done && (
                   <span className="ml-1.5 text-xs text-ink-faint">
                     {t.hint}
@@ -149,6 +197,14 @@ export default async function MyCatPage() {
               </li>
             ))}
           </ul>
+          {arrival.allDone && (
+            <div className="mt-3 border-t border-line pt-2.5 text-xs leading-relaxed text-ink-soft">
+              往后的日子就简单了：每天早上八点来看它写了什么，睡前给它
+              <a href="#nudge" className="text-sea-deep hover:text-brick">留句话</a>，常去
+              <Link href="/island" className="text-sea-deep hover:text-brick">公告栏</Link>串串门。
+              <p className="mt-1 text-ink-faint">这张纸收进生活册了——它在岛上的日子，从今天正式开始。</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -158,10 +214,8 @@ export default async function MyCatPage() {
         <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
       </div>
 
-      {/* 一句当前状态 */}
-      <p className="font-diary mt-4 text-center text-[15px] text-ink">
-        {cat.name}现在在{state?.location ?? "小屋"}，看起来{state?.mood ?? "很平静"}。
-      </p>
+      {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}
+      <p className="font-diary mt-4 text-center text-[15px] text-ink">{nowText}</p>
       {!cat.portraitUrl && <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>}
       <p className="mt-1.5 text-center text-xs text-ink-faint">{bond.line}</p>
       {missedOne && (
@@ -185,6 +239,28 @@ export default async function MyCatPage() {
               </details>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 微瞬间时间轴：当日事实按现实时段解锁（下午的事，要到下午才知道） */}
+      {timeline.length > 0 && (
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="text-center text-xs tracking-widest text-ink-faint">
+            {dayComplete ? "它今天的一天" : "今天到现在"}
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {timeline.map((t) => (
+              <li key={t.id} className="font-diary text-[14px] leading-relaxed text-ink-soft">
+                <span className="mr-1.5 text-xs text-ink-faint">{t.seg}</span>
+                {t.text}
+              </li>
+            ))}
+          </ul>
+          {!dayComplete && (
+            <p className="mt-2 text-center text-xs text-ink-faint">
+              {hour < 13 ? "下午的事，要到下午才知道。" : "晚上的事，要到晚上才知道。"}
+            </p>
+          )}
         </div>
       )}
 
@@ -229,6 +305,24 @@ export default async function MyCatPage() {
               ))}
             </div>
           )}
+
+          {/* 事件线落幕：一件持续多日的事今天有了结局——郑重收束 + 交代往后 */}
+          {finishedThreads.length > 0 && (
+            <div className="note-slip mt-6 p-4 text-center" style={{ transform: "rotate(-0.4deg)" }}>
+              {finishedThreads.map((t) => (
+                <div key={t.label} className="mt-2 first:mt-0">
+                  <span className="seal">{t.failed ? "落幕" : "办成了"}</span>
+                  <p className="font-diary mt-1.5 text-[15px] text-ink">
+                    「{t.label}」{t.failed ? "到底没成——不过日子还长，岛上的事没有白经历的" : "有了结局"}。
+                  </p>
+                </div>
+              ))}
+              <p className="mt-2.5 text-xs text-ink-faint">
+                这条线收进<Link href="/my-cat/history" className="text-sea-deep hover:text-brick">生活册</Link>了，随时能回看整件事
+                ——过些天，还会有新的事找上它。
+              </p>
+            </div>
+          )}
         </article>
       ) : (
         <p className="font-diary mt-8 text-center text-[15px] leading-relaxed text-ink-soft">
@@ -256,7 +350,7 @@ export default async function MyCatPage() {
       )}
 
       {/* 今晚给它留句话（唯一的明显容器） */}
-      <div className="mt-8 border border-line bg-paper-deep/40 p-4">
+      <div id="nudge" className="mt-8 border border-line bg-paper-deep/40 p-4">
         <h2 className="font-title font-bold">今晚给它留句话</h2>
         {pendingNudge ? (
           <p className="font-diary mt-2 text-sm leading-relaxed text-ink">

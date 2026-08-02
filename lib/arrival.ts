@@ -11,6 +11,10 @@ export interface ArrivalTask {
   label: string;
   hint: string;
   done: boolean;
+  /** 这次来才发现办妥的：本次渲染要庆祝一下（之后归于平静的划掉态） */
+  justDone: boolean;
+  /** 刚办妥时的那句话：肯定这件事 + 交代它带来了什么 */
+  cheer: string;
 }
 
 export interface ArrivalChecklist {
@@ -28,28 +32,50 @@ export async function getArrivalChecklist(catId: string, catName: string): Promi
 
   const nudgeCount = await prisma.ownerNudge.count({ where: { catId } });
   const metCount = note?.metNpcIds.length ?? 0;
+  const celebrated = note?.celebratedKeys ?? [];
   const tasks: ArrivalTask[] = [
     {
       key: "message",
       label: `给${catName}留下第一句话`,
       hint: "它不一定照做，但会记住",
       done: nudgeCount > 0,
+      justDone: false,
+      cheer: "办妥了——它把这句话收好了，明早八点看它怎么回应。",
     },
     {
       key: "meet",
       label: `带它认识 ${MEET_TARGET} 位邻居`,
       hint: metCount > 0 ? `已经认识了 ${metCount} 位` : "去公告栏点开一只猫看看",
       done: metCount >= MEET_TARGET,
+      justDone: false,
+      cheer: "办妥了——岛上开始有猫认得它了。",
     },
     {
       key: "promise",
       label: "和它约好明早八点",
       hint: "它的第一篇日记那时候写好",
       done: Boolean(note?.promisedAt),
+      justDone: false,
+      cheer: "约好了——明早八点，它的第一篇日记准时送到。",
     },
   ];
+  for (const t of tasks) t.justDone = t.done && !celebrated.includes(t.key);
   const allDone = tasks.every((t) => t.done);
   return { tasks, allDone, justFinished: allDone, metCount };
+}
+
+/** 刚办妥的庆祝展示过一次后记下来，下次回归安静的划掉态 */
+export async function markArrivalCelebrated(catId: string, keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  const note = await prisma.arrivalNote.findUnique({ where: { catId } });
+  const merged = [...new Set([...(note?.celebratedKeys ?? []), ...keys])];
+  await prisma.arrivalNote
+    .upsert({
+      where: { catId },
+      update: { celebratedKeys: merged },
+      create: { catId, metNpcIds: [], celebratedKeys: merged },
+    })
+    .catch(() => {});
 }
 
 /** 逛到某只岛民的主页 = 认识了它（幂等，去重） */
