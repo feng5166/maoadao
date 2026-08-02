@@ -2,14 +2,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { CatAvatar } from "@/components/CatAvatar";
+import { PetCat } from "@/components/PetCat";
+import { StayTrack } from "@/components/StayTrack";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Track } from "@/components/Track";
 import { keepArrivalPromise, renameCat, saveNudge } from "@/lib/actions";
 import { archiveArrivalNote, getArrivalChecklist } from "@/lib/arrival";
 import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
-import { marginNotes, sceneFor, todayLabel } from "@/lib/handbook";
+import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
 import { bondStage } from "@/lib/sim/firstweek";
 import { prisma } from "@/lib/db";
 
@@ -44,6 +45,16 @@ export default async function MyCatPage() {
           orderBy: { day: "asc" },
         })
       : [];
+
+  // 留言回音历史：往期它对你留言的反应（当天的已在上方"它记得你昨天说的话"展示，这里收更早的）
+  const echoHistory = summary
+    ? await prisma.catDailySummary.findMany({
+        where: { catId: cat.id, day: { lt: summary.day }, interventionResponse: { not: null } },
+        orderBy: { day: "desc" },
+        take: 5,
+        select: { id: true, day: true, interventionResponse: true },
+      })
+    : [];
 
   // 入岛三件事：三件做完时这次仍完整显示（划掉+告别文案），渲染后收册
   const arrival = await getArrivalChecklist(cat.id, cat.name);
@@ -83,6 +94,7 @@ export default async function MyCatPage() {
   return (
     <div className="mx-auto max-w-lg">
       <Track events={funnelEvents} />
+      <StayTrack page="my-cat" />
 
       {/* 页眉：日期与天气（手账体例） */}
       <p className="text-center text-xs tracking-widest text-ink-faint">
@@ -140,12 +152,10 @@ export default async function MyCatPage() {
         </div>
       )}
 
-      {/* 场景 + 猫 */}
+      {/* 场景 + 猫（可摸摸它：每天一句由状态确定性生成的反应） */}
       <div className="relative mt-3 overflow-hidden rounded-lg border border-line">
         <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
-        <div className="absolute bottom-2 left-2 rounded-full border-2 border-paper">
-          <CatAvatar id={cat.id} size={64} portraitUrl={cat.portraitUrl} />
-        </div>
+        <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
       </div>
 
       {/* 一句当前状态 */}
@@ -226,6 +236,23 @@ export default async function MyCatPage() {
           <br />
           它会在你离开后继续生活，明天回来看看它写了什么。
         </p>
+      )}
+
+      {/* 往期回音：它这些天怎么回应你说过的话（读自己留下的痕迹，也喂"它记得我"的认知） */}
+      {echoHistory.length > 0 && (
+        <details className="mt-8 border-t border-line pt-4">
+          <summary className="cursor-pointer list-none text-xs tracking-widest text-ink-faint">
+            它这些天怎么回应你说过的话（{echoHistory.length}）
+          </summary>
+          <div className="mt-3 space-y-3">
+            {echoHistory.map((e) => (
+              <div key={e.id} className="border-l-2 border-line pl-3">
+                <p className="text-[11px] text-ink-faint">第 {e.day} 天</p>
+                <p className="font-diary mt-0.5 text-[15px] leading-relaxed text-ink">{e.interventionResponse}</p>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {/* 今晚给它留句话（唯一的明显容器） */}

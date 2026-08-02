@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CatAvatar } from "@/components/CatAvatar";
 import { LinkedText } from "@/components/LinkedText";
+import { StayTrack } from "@/components/StayTrack";
 import { SubmitButton } from "@/components/SubmitButton";
 import { submitNewsTip } from "@/lib/actions";
 import { getViewerId } from "@/lib/identity";
@@ -50,6 +51,7 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="mx-auto max-w-lg">
+      <StayTrack page="island" />
       <div className="text-center">
         <p className="seal">公告栏</p>
         <h1 className="font-title mt-2 text-xl font-bold">岛上的第 {day} 天</h1>

@@ -185,7 +185,9 @@ export default async function CatPage({
                   分享卡
                 </Link>
               </div>
-              <p className="mt-2 font-diary whitespace-pre-wrap text-[15px] leading-[1.9]">{d.content}</p>
+              <p className="mt-2 font-diary whitespace-pre-wrap text-[15px] leading-[1.9]">
+                <LinkedText text={d.content} cats={catIndex} excludeId={cat.id} />
+              </p>
             </article>
           ))}
         </div>

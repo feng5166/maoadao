@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { CatAvatar } from "@/components/CatAvatar";
+import { StayTrack } from "@/components/StayTrack";
 import { Track } from "@/components/Track";
 import { getViewerId } from "@/lib/identity";
 import { getHomeShowcase, getIslandNewsWithCats, getViewerCat } from "@/lib/queries";
@@ -26,6 +27,7 @@ export default async function HomePage() {
   return (
     <div className="space-y-12 py-4">
       <Track events={[{ name: "landing_view", props: { hasCat: Boolean(myCat) } }]} />
+      <StayTrack page="home" />
 
       {/* 第一屏：主视觉 + 一句话 + 世界在运转 + 一个动作 + 岛民名册 */}
       <div className="text-center">
