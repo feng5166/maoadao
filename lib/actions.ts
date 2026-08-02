@@ -11,6 +11,7 @@ import { adoptCat } from "./adoption";
 import { generateArrivalPhoto, generatePortrait } from "./portrait";
 import { generateArrivalDay } from "./firstday";
 import { ensureViewerId, getViewerId } from "./identity";
+import { catDayOf } from "./sim/lifecycle";
 import { cookies } from "next/headers";
 
 const GOALS = new Set(["earn", "friends", "explore", "chill"]);
@@ -128,8 +129,14 @@ export async function saveNudge(formData: FormData) {
   // D1 夜晚离开仪式（doc/10 §8）：来岛第一天留完话不直接结束——
   // 看一眼它把纸条放在床边，才建立"它会继续生活"。redirect 必须在所有写入之后。
   const world = await prisma.worldState.findUnique({ where: { id: 1 } });
-  const firstEvent = await prisma.event.findFirst({ where: { catId }, orderBy: { day: "asc" }, select: { day: true } });
-  const catDay = (world?.day ?? 0) - (firstEvent?.day ?? world?.day ?? 0) + 1;
+  // 猫龄改读 firstTickDay（doc/14 §一）；0 = 未回填历史数据，回退首事件倒推
+  let catDay: number;
+  if (cat.firstTickDay > 0) {
+    catDay = catDayOf(world?.day ?? 0, cat.firstTickDay);
+  } else {
+    const firstEvent = await prisma.event.findFirst({ where: { catId }, orderBy: { day: "asc" }, select: { day: true } });
+    catDay = (world?.day ?? 0) - (firstEvent?.day ?? world?.day ?? 0) + 1;
+  }
   if (catDay <= 1) redirect("/my-cat/goodnight");
 }
 

@@ -7,6 +7,7 @@ import { prisma } from "../db";
 import { factSummary } from "../sim/engine";
 import type { Fact, Segment } from "../sim/types";
 import { THREAD_LABELS } from "../sim/threads";
+import { catDayOf } from "../sim/lifecycle";
 import { sendWechat } from "./bridge";
 import { absenceMessage, d2Message, eventMessage } from "./messages";
 import { safeTrack, WECHAT_KIND } from "./service";
@@ -33,8 +34,14 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
     const dup = await prisma.outboundMessage.count({ where: { userId: ch.userId, day } });
     if (dup > 0) continue;
 
-    const firstEvent = await prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } });
-    const catDay = day - (firstEvent?.day ?? day) + 1;
+    // 猫龄改读 firstTickDay（doc/14 §一）；0 = 未回填历史数据，回退首事件倒推
+    let catDay: number;
+    if (cat.firstTickDay > 0) {
+      catDay = catDayOf(day, cat.firstTickDay);
+    } else {
+      const firstEvent = await prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } });
+      catDay = day - (firstEvent?.day ?? day) + 1;
+    }
 
     // 今晨主事件(事实素材,所有消息共用)
     const morningMain = await prisma.event.findFirst({

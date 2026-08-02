@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
 import { NPC_CATS } from "./sim/npcs";
+import { firstTickDayFor } from "./sim/lifecycle";
 import { failsInWindow } from "./authcode";
 import { grantBoatTickets } from "./tickets";
 
@@ -87,6 +88,9 @@ export async function adoptCat(uid: string, input: AdoptInput): Promise<AdoptRes
           ownerId: uid,
           ownerNick: input.ownerNick || null,
           goal: input.goal,
+          // 入场准入（doc/14 §一二）：身份事实显式落库；早八前 2 小时内领养跳过最近一次 tick
+          arrivalWorldDay: world?.day ?? 0,
+          firstTickDay: firstTickDayFor(world?.day ?? 0),
           boldness: input.boldness,
           sociability: input.sociability,
           diligence: input.diligence,

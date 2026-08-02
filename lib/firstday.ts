@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "./db";
-import { narrateOwnerDay } from "./narrative/narrator";
+import { NARRATOR_MODEL, PROMPT_VERSION, narrateOwnerDay } from "./narrative/narrator";
 import { firstImpression, firstSecret } from "./narrative/firstimpression";
 import type { Fact } from "./sim/types";
 
@@ -129,6 +129,8 @@ export async function generateArrivalDay(catId: string): Promise<void> {
         mood: "既紧张又兴奋",
         eventIds,
         generatedBy,
+        promptVersion: PROMPT_VERSION,
+        modelId: generatedBy === "llm" ? NARRATOR_MODEL : null,
         createdAt: new Date(),
       },
     });

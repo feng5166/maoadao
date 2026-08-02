@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
 import { newsLine } from "./engine";
 import { THREAD_LABELS, THREAD_TOTALS } from "./threads";
-import { narrateDiary, narrateOwnerDay, narrateWeekBook } from "../narrative/narrator";
+import { NARRATOR_MODEL, PROMPT_VERSION, narrateDiary, narrateOwnerDay, narrateWeekBook } from "../narrative/narrator";
+import { catDayOf } from "./lifecycle";
 import { bondStage, firstWeekPlan } from "./firstweek";
 import { hashSeed, mulberry32 } from "./rng";
 import { randomUUID as uuid } from "node:crypto";
@@ -18,10 +19,12 @@ const SUGGESTION_LABELS: Record<string, string> = { earn: "去赚钱", explore: 
 export interface NarrateOptions {
   mode?: "missing" | "force"; // missing：只补缺；force：全部重写
   catIds?: string[]; // 只处理指定猫
+  /** 熔断第二击（doc/14 §四）：跳过 LLM，缺失者直落兜底模板——可以暂时没有优质日记，不能冻结世界 */
+  fallbackOnly?: boolean;
 }
 
 export async function narrateCommittedDay(day: number, options: NarrateOptions = {}) {
-  const { mode = "missing", catIds } = options;
+  const { mode = "missing", catIds, fallbackOnly = false } = options;
   const world = await prisma.worldState.findUnique({ where: { id: 1 } });
   const isCurrentDay = (world?.day ?? 0) === day;
   const weather = weatherFor(day);
@@ -126,9 +129,15 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
     if (!catRow.isNpc) {
       const nudge = nudges.find((n) => n.catId === catId);
       const followed = facts.some((f) => f.data.nudged === true);
-      // 首周节奏：来岛第几天 → 主题与形态
-      const firstEvent = await prisma.event.findFirst({ where: { catId }, orderBy: { day: "asc" }, select: { day: true } });
-      const catDay = day - (firstEvent?.day ?? day) + 1;
+      // 首周节奏：来岛第几天 → 主题与形态。
+      // 猫龄改读 firstTickDay（doc/14 §一）：事件是内容事实不承担猫龄；0 = 未回填历史数据才回退倒推
+      let catDay: number;
+      if (catRow.firstTickDay > 0) {
+        catDay = catDayOf(day, catRow.firstTickDay);
+      } else {
+        const firstEvent = await prisma.event.findFirst({ where: { catId }, orderBy: { day: "asc" }, select: { day: true } });
+        catDay = day - (firstEvent?.day ?? day) + 1;
+      }
       const plan = firstWeekPlan(catDay);
       form = plan?.form === "weekbook" ? "diary" : (plan?.form ?? "diary");
       // 第一句话的引用时机（doc/10 修订 2）：首周天天记得；之后只在低谷日（当日 fail≥2）
@@ -198,7 +207,7 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
         form: form as "diary" | "dialogue" | "note",
         bondLine: bond.line,
         catById,
-      });
+      }, { fallbackOnly });
       content = summary.narrative;
       generatedBy = gb;
       const dayChoices = facts.flatMap((f) => (f.data.choices as { value: string; label: string }[] | undefined) ?? []);
@@ -243,15 +252,17 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
         );
       }
     } else {
-      const r = await narrateDiary({ cat, day, season, weather, mood, facts, mainFact, memories, relationHints, catById });
+      const r = await narrateDiary({ cat, day, season, weather, mood, facts, mainFact, memories, relationHints, catById }, { fallbackOnly });
       content = r.content;
       generatedBy = r.generatedBy;
     }
 
+    // 溯源（doc/14 §五）：来自哪些事实（eventIds）、哪版提示词、哪个模型
+    const provenance = { promptVersion: PROMPT_VERSION, modelId: generatedBy === "llm" ? NARRATOR_MODEL : null };
     await prisma.diaryEntry.upsert({
       where: { catId_day: { catId, day } },
-      update: { content, mood, eventIds, generatedBy, form },
-      create: { id: randomUUID(), catId, day, content, mood, eventIds, generatedBy, form, createdAt: new Date() },
+      update: { content, mood, eventIds, generatedBy, form, ...provenance },
+      create: { id: randomUUID(), catId, day, content, mood, eventIds, generatedBy, form, ...provenance, createdAt: new Date() },
     });
     regenerated++;
   });

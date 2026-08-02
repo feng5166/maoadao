@@ -5,6 +5,7 @@ import { runDay } from "./engine";
 import { reflect } from "../narrative/narrator";
 import { narrateCommittedDay } from "./renarrate";
 import { firstWeekPlan, type FirstWeekPlan } from "./firstweek";
+import { catDayOf } from "./lifecycle";
 import { dailyEmailHtml, emailEnabled, sendEmail } from "../email";
 import { weatherFor, type SimCat, type SimCatState, type SimThread, type WorldSnapshot } from "./types";
 
@@ -45,7 +46,10 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
       const weather = weatherFor(day);
 
       // ---- 装配世界快照 ----
-      const catRows = await tx.cat.findMany();
+      const allCatRows = await tx.cat.findMany();
+      // 入场准入（doc/14 §二）：ARRIVAL 阶段（firstTickDay > 本次目标日）的猫不参与模拟——
+      // 无事件、状态不动；其留言保留到它的第一次 tick（D2 兑现弹药不丢）
+      const catRows = allCatRows.filter((c) => c.isNpc || (c.firstTickDay ?? 0) <= day);
       const stateRows = await tx.catState.findMany();
       const relRows = await tx.relationship.findMany();
       // 委托线连已完成的一起带上：模拟器据此避免重复派同一件委托（threadFree 只查悬念线，不受影响）
@@ -54,7 +58,11 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
         where: { day: { gte: day - 8 } },
         select: { catId: true, type: true, day: true, outcome: true },
       });
-      const nudges = await tx.ownerNudge.findMany({ where: { consumedDay: null } });
+      const participatingIds = new Set(catRows.map((c) => c.id));
+      // 只消费参与本次模拟的猫的留言：ARRIVAL 猫的话留到它的第一次 tick
+      const nudges = (await tx.ownerNudge.findMany({ where: { consumedDay: null } })).filter((n) =>
+        participatingIds.has(n.catId),
+      );
 
       const cats: SimCat[] = catRows.map((c) => ({
         id: c.id,
@@ -100,11 +108,11 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
         lastUsedDay,
         recentBadOutcomes,
         suggestions: new Map(nudges.filter((n) => n.suggestion).map((n) => [n.catId, n.suggestion!])),
-        firstWeek: await (async () => {
+        // 猫龄改读 firstTickDay（doc/14 §一）：事件不再承担身份事实，也省掉每猫一次查询
+        firstWeek: (() => {
           const m = new Map<string, FirstWeekPlan>();
-          for (const c of cats.filter((x) => !x.isNpc)) {
-            const first = await tx.event.findFirst({ where: { catId: c.id }, orderBy: { day: "asc" }, select: { day: true } });
-            const plan = firstWeekPlan(day - (first?.day ?? day) + 1);
+          for (const c of catRows.filter((x) => !x.isNpc)) {
+            const plan = firstWeekPlan(catDayOf(day, c.firstTickDay > 0 ? c.firstTickDay : day));
             if (plan) m.set(c.id, plan);
           }
           return m;

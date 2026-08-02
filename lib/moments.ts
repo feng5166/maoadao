@@ -83,6 +83,8 @@ export function nowLine(catName: string, ev: NowEvent | null, hour: number, loca
       return `${catName}现在被${d.creditorName ?? "债主"}堵在门口，正在想辙。`;
     case "debt_repay":
       return `${catName}现在揣着鱼币出门了，去办一件郑重的事。`;
+    case "first_secret":
+      return `${catName}现在在自家小屋，心里藏着今天的一个小秘密。`;
     default:
       // 事件线/委托等：不细说，留悬念
       return `${catName}现在在${location ?? "岛上"}，心里揣着一件事。`;

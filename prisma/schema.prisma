@@ -47,6 +47,9 @@ model Cat {
   portraitUrl String? // 定稿立绘，一次生成反复合成
   arrivalPhotoUrl String? // 相遇照片：第一天你和它在码头（立绘定稿后合成，D1 重构·分享资产）
   firstWords  String? // 主人第一次见面说的话（D1 最重要输入，它会记一辈子）
+  // 入场准入（doc/14 §一二）：身份事实显式保存，不由事件倒推；NPC 恒为 0（始终参与模拟）
+  arrivalWorldDay Int @default(0) // 领养时的世界日
+  firstTickDay    Int @default(0) // 第一次参与 tick 的世界日；world.day < firstTickDay = ARRIVAL 阶段
   bio         String
   createdAt   DateTime
 
@@ -127,12 +130,25 @@ model DiaryEntry {
   day         Int
   content     String
   mood        String
-  eventIds    String[]
+  eventIds    String[] // 溯源：这段话来自哪些事实
   generatedBy String   @default("llm") // llm | fallback
   form        String   @default("diary") // diary | dialogue | note | weekbook
+  promptVersion String? // 溯源：当时的提示词版本（doc/14 §五）
+  modelId       String? // 溯源：实际使用的模型（fallback 时为空）
   createdAt   DateTime
 
   @@unique([catId, day])
+}
+
+// tick 可观测性 + 叙事熔断计数器（doc/14 §四七）：一天一行
+model TickRun {
+  targetDay              Int       @id
+  status                 String // recovering | completed | dead_letter_advanced
+  startedAt              DateTime
+  simulationCompletedAt  DateTime?
+  narrationCompletedAt   DateTime?
+  narrationAttempts      Int       @default(0) // 自愈补叙事的累计次数（熔断判据）
+  errorSummary           String?
 }
 
 model WorldState {
@@ -157,17 +173,6 @@ model Channel {
   mutedAt         DateTime? // 用户说"别再捎信"
 
   @@unique([kind, externalId])
-  @@index([userId])
-}
-
-// 暗号配对（无 OAuth）：Web 展示口令，用户在微信里念给它 → 配对
-model PairingCode {
-  code      String    @id // 形如「红绳-483」
-  userId    String
-  catId     String
-  createdAt DateTime
-  usedAt    DateTime?
-
   @@index([userId])
 }
 

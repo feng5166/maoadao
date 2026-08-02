@@ -16,6 +16,7 @@ import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay, unlockedSegments } from "@/lib/moments";
 import { wechatEnabled } from "@/lib/wechat/bridge";
 import { bondStage } from "@/lib/sim/firstweek";
+import { catDayOf, inArrival } from "@/lib/sim/lifecycle";
 import { factSummary } from "@/lib/sim/engine";
 import { SEGMENT_CN, type Fact, type Segment } from "@/lib/sim/types";
 import { prisma } from "@/lib/db";
@@ -112,9 +113,10 @@ export default async function MyCatPage() {
   todayEvents.sort((a, b) => (segOrder[a.segment] ?? 0) - (segOrder[b.segment] ?? 0) || (a.isMain ? -1 : 1));
   const targetIds = [...new Set(todayEvents.map((e) => e.targetId).filter((x): x is string => !!x))];
   // 早八 cron 还没跑完时 world.day 还是昨天——那是完整过完的一天，不做时段裁剪。
-  // ARRIVAL_DAY(doc/12 §五):来岛第一天是全产品唯一豁免时段门的一天——
+  // ARRIVAL_DAY(doc/12 §五 + doc/14 §三):来岛第一天是全产品唯一豁免时段门的一天——
   // 任何现实时刻登岛,首日剧本完整播放;世界时间 ≠ 用户时间。
-  const arrivalDay = daysOnIsland <= 1;
+  // catDayOf 锚定 firstTickDay 后，daysOnIsland<=1 与 ARRIVAL 阶段严格等价（被准入门跳过的那天也算 D1）
+  const arrivalDay = arrivalPhase;
   const gating = !arrivalDay && (hour < 8 || (world.lastTickAt != null && sameBeijingDay(world.lastTickAt, new Date())));
   const unlocked = new Set<string>(gating ? unlockedSegments(hour) : ["morning", "afternoon", "evening"]);
   const dayComplete = unlocked.size === 3;

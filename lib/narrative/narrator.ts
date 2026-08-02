@@ -7,6 +7,9 @@ import { voiceLine } from "./voice";
 
 const client = new Anthropic();
 const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-4-8";
+// 叙事溯源（doc/14 §五）：提示词改动时 bump；与 DiaryEntry.promptVersion/modelId 对应
+export const PROMPT_VERSION = "2026-08-02.1";
+export const NARRATOR_MODEL = MODEL;
 // 拒答兜底（fallbacks）是官方 Claude API 上 Fable 5 的特性；走中转或其他模型时用普通调用
 const useFallbacks = MODEL === "claude-fable-5" && !process.env.ANTHROPIC_BASE_URL;
 
@@ -44,7 +47,10 @@ export interface DiaryInput {
   catById: Map<string, { name: string }>;
 }
 
-export async function narrateDiary(input: DiaryInput): Promise<{ content: string; generatedBy: "llm" | "fallback" }> {
+export async function narrateDiary(
+  input: DiaryInput,
+  opts: { fallbackOnly?: boolean } = {}, // 熔断第二击（doc/14 §四）：跳过 LLM 直落兜底模板
+): Promise<{ content: string; generatedBy: "llm" | "fallback" }> {
   const factLines = input.facts
     .map((f) => `- [${SEGMENT_CN[f.segment]}] ${factSummary(f, input.catById)}${f === input.mainFact ? "（今天最重要的事）" : ""}`)
     .join("\n");
@@ -75,7 +81,7 @@ ${relationBlock}
 ${factLines}
 ${memoryBlock}${ownerBlock}`;
 
-  const text = await callLLM(system, user);
+  const text = opts.fallbackOnly ? null : await callLLM(system, user);
   if (!text) {
     return {
       content: `今天${input.cat.name}没来得及写日记，不过它这一天是这么过的：\n${factLines}`,
@@ -129,7 +135,10 @@ export interface OwnerDaySummary {
 }
 
 /** 主人猫的一天：一次调用产出 标题/日记/建议回执/明日悬念（结构化 JSON） */
-export async function narrateOwnerDay(input: OwnerDayInput): Promise<{ summary: OwnerDaySummary; generatedBy: "llm" | "fallback" }> {
+export async function narrateOwnerDay(
+  input: OwnerDayInput,
+  opts: { fallbackOnly?: boolean } = {}, // 熔断第二击（doc/14 §四）：跳过 LLM 直落兜底
+): Promise<{ summary: OwnerDaySummary; generatedBy: "llm" | "fallback" }> {
   const factLines = input.facts
     .map((f) => `- [${SEGMENT_CN[f.segment]}] ${factSummary(f, input.catById)}${f === input.mainFact ? "（今天最重要的事）" : ""}`)
     .join("\n");
@@ -172,7 +181,7 @@ ${voiceLine(input.cat)}
 ${factLines}
 ${suggestionBlock}${ownerBlock}${threadBlock}${memoryBlock}`;
 
-  const text = await callLLM(system, user, 600);
+  const text = opts.fallbackOnly ? null : await callLLM(system, user, 600);
   if (text) {
     try {
       const jsonStr = text.replace(/^```json?\s*/i, "").replace(/```\s*$/, "");
