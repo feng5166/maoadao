@@ -134,17 +134,18 @@ function recordSendResult(openId, r) {
 }
 
 async function maoadao(path, payload) {
+  // 30s:Vercel 冷启动 + 跨洋库 + 审核 LLM,15s 会把"慢但成功"的回调误判为失败(2026-08-02 实测踩坑)
   try {
     const r = await fetch(`${MAOADAO}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-bridge-secret": SECRET },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(30_000),
     });
     return await r.json().catch(() => ({}));
   } catch (e) {
     console.error(`[bridge] 回调猫啊岛失败 ${path}: ${e.message}`);
-    return {};
+    return null;
   }
 }
 
@@ -184,16 +185,25 @@ function startWorker(openId) {
         }
         const text = (m.item_list || []).filter((i) => i.type === 1 && i.text_item).map((i) => i.text_item.text).join("").trim();
 
-        // 首条消息 = 激活:回调猫啊岛建绑定,拿人格化握手文案回给用户(桥不写一句台词)
+        // 首条消息 = 激活:回调猫啊岛建绑定,拿人格化握手文案回给用户(桥不写一句台词)。
+        // 回调成功才置 activated——失败重试一次,再失败留给用户下一条消息自动重试(2026-08-02 超时踩坑后加固)
         if (!c.activated) {
-          c.activated = true;
-          saveCreds();
-          const res = await maoadao("/api/wechat/bind", { userId: c.userId, openId, text });
-          const p = [...pending.values()].find((x) => x.openId === openId);
-          if (p) p.state = "activated";
-          if (res?.replyText) {
-            await tryTyping(c.botToken, openId, c.contextToken);
-            recordSendResult(openId, await ilinkSend(c.botToken, openId, c.contextToken, res.replyText));
+          let res = await maoadao("/api/wechat/bind", { userId: c.userId, openId, text });
+          if (!res?.ok) {
+            await new Promise((s) => setTimeout(s, 3000));
+            res = await maoadao("/api/wechat/bind", { userId: c.userId, openId, text });
+          }
+          if (res?.ok) {
+            c.activated = true;
+            saveCreds();
+            const p = [...pending.values()].find((x) => x.openId === openId);
+            if (p) p.state = "activated";
+            if (res.replyText) {
+              await tryTyping(c.botToken, openId, c.contextToken);
+              recordSendResult(openId, await ilinkSend(c.botToken, openId, c.contextToken, res.replyText));
+            }
+          } else {
+            console.error(`[bridge] bind 回调两次失败 ${openId},等下一条消息重试`);
           }
           continue;
         }
