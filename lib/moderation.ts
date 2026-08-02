@@ -29,13 +29,18 @@ export async function moderateTexts(texts: string[]): Promise<{ ok: boolean; rea
   }
 
   try {
-    const response = await client.messages.create({
-      model: MODERATION_MODEL,
-      max_tokens: 50,
-      system:
-        "你是内容审核员。判断用户输入是否包含：政治敏感、色情、暴力、辱骂、真实个人隐私信息（电话/住址/证件号）、广告导流。只回答 PASS 或 BLOCK:原因（10字内）。拿不准时回答 PASS。",
-      messages: [{ role: "user", content: combined.slice(0, 500) }],
-    });
+    // 硬超时 4s 不重试：审核挡在领养/留言的关键路径上，中转慢的时候不能拖死提交——
+    // 超时按"LLM 不可用"处理，词表已兜底（宁可放行，不可卡人）
+    const response = await client.messages.create(
+      {
+        model: MODERATION_MODEL,
+        max_tokens: 50,
+        system:
+          "你是内容审核员。判断用户输入是否包含：政治敏感、色情、暴力、辱骂、真实个人隐私信息（电话/住址/证件号）、广告导流。只回答 PASS 或 BLOCK:原因（10字内）。拿不准时回答 PASS。",
+        messages: [{ role: "user", content: combined.slice(0, 500) }],
+      },
+      { timeout: 4000, maxRetries: 0 },
+    );
     if (response.stop_reason === "refusal") return { ok: false, reason: "内容未通过审核" };
     const text = response.content.find((b) => b.type === "text")?.text.trim() ?? "PASS";
     if (text.startsWith("BLOCK")) {

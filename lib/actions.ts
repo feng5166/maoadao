@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { track } from "@vercel/analytics/server";
 import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
-import { adoptCat } from "./adoption";
+import { AdoptError, adoptCat } from "./adoption";
 import { generateArrivalPhoto, generatePortrait } from "./portrait";
 import { generateArrivalDay } from "./firstday";
 import { ensureViewerId, getViewerId } from "./identity";
@@ -56,24 +56,44 @@ export async function createCat(formData: FormData) {
   if (!input.ticket) throw new Error("需要一张船票（邀请码）才能上岛");
 
   const uid = await ensureViewerId();
-  const result = await adoptCat(uid, input);
+  // 预期错误（无效船票/审核不通过）不再裸抛：生产环境裸抛会变成整页"服务器错误"，
+  // 这里转成回注册页 + 世界观口径的错误条
+  const t0 = Date.now();
+  let result: Awaited<ReturnType<typeof adoptCat>>;
+  try {
+    result = await adoptCat(uid, input);
+  } catch (err) {
+    const msg = err instanceof AdoptError ? err.message : "码头这会儿有点忙，稍等片刻再试一次";
+    if (!(err instanceof AdoptError)) console.error("[adopt] 未预期错误:", err);
+    redirect(`/adopt/register?err=${encodeURIComponent(msg)}`);
+  }
+  console.log(`[adopt] adoptCat 耗时 ${Date.now() - t0}ms`);
   if (!result.ok) redirect(`/my-cat`);
 
   // 异步生成，不阻塞领养流程。时序有讲究（doc/10 修订 1）：
-  // 首日内容 → 立绘定稿 → 相遇照片（照片由立绘合成，必须在定稿之后）
+  // 首日内容 → 立绘定稿 → 相遇照片（照片由立绘合成，必须在定稿之后）。
+  // 每段计时打日志：万一 after 抢跑阻塞响应，日志时间线能立刻暴露
   after(async () => {
+    const g0 = Date.now();
     await generateArrivalDay(result.catId).catch((e) => console.error("[firstday]", e));
+    const g1 = Date.now();
     await generatePortrait(result.catId).catch((e) => console.error("[portrait]", e));
+    const g2 = Date.now();
     await generateArrivalPhoto(result.catId).catch((e) => console.error("[arrival-photo]", e));
+    console.log(`[adopt-after] 首日 ${g1 - g0}ms 立绘 ${g2 - g1}ms 相遇照 ${Date.now() - g2}ms`);
   });
 
-  const user = await prisma.user.findUnique({ where: { id: uid }, select: { inviteBatch: true } });
+  // 埋点全部挪出关键路径：每个 track 都是一次出网往返，不该让用户等
   const ref = (await cookies()).get("maoadao_ref")?.value ?? null;
-  await track("adopt_complete", { goal: input.goal, referred: ref === "share_card", batch: user?.inviteBatch ?? "unknown" });
-  // D1 北极星：领养 ≠ 建立关系，第一句话才是关系开始（doc/10 §10）
-  if (input.firstWords) await track("first_words_submit", {});
-  if (ref === "share_card") await track("referred_adopt_complete", {});
+  after(async () => {
+    const user = await prisma.user.findUnique({ where: { id: uid }, select: { inviteBatch: true } });
+    await track("adopt_complete", { goal: input.goal, referred: ref === "share_card", batch: user?.inviteBatch ?? "unknown" });
+    // D1 北极星：领养 ≠ 建立关系，第一句话才是关系开始（doc/10 §10）
+    if (input.firstWords) await track("first_words_submit", {});
+    if (ref === "share_card") await track("referred_adopt_complete", {});
+  });
   revalidatePath("/");
+  console.log(`[adopt] 动作总耗时 ${Date.now() - t0}ms`);
   redirect(`/my-cat`);
 }
 
