@@ -148,6 +148,8 @@ export async function dispatchOutbound(): Promise<{ sent: number; windowClosed: 
     });
     if (r.ok) {
       sent++;
+      // 猫主动开口 = 新一轮对话:清零当日回复计数,用户回应推送必得实质回复(一来一回语义)
+      await prisma.channel.update({ where: { id: ch.id }, data: { repliesInDay: 0 } }).catch(() => {});
       await safeTrack("wechat_msg_sent", { kind: msg.kind });
     } else {
       failed++;
