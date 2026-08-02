@@ -1,5 +1,12 @@
 # 猫啊岛微信桥(iLink)
 
+> **已部署(2026-08-02)**:47.84.8.167(新加坡 ECS,i-t4n7n557ll7e8ia2pi16)`/opt/maoadao-bridge`,
+> systemd 单元 `maoadao-bridge`,监听 127.0.0.1:8788;公网入口 `https://bridge.stocktell.me/maoadao`
+> (复用 stocktell 桥的宝塔 nginx+TLS,路径反代,配置在 `/www/server/panel/vhost/nginx/proxy/bridge.stocktell.me/maoadao.conf`)。
+> Vercel 已配 `WECHAT_BRIDGE_URL` / `WECHAT_BRIDGE_SECRET`,通道已点亮。
+> 运维:`systemctl status maoadao-bridge` / `journalctl -u maoadao-bridge -n 100`;
+> 改桥代码后:`scp -i ~/.ssh/my_ssh wechat-bridge/server.mjs root@47.84.8.167:/opt/maoadao-bridge/ && ssh -i ~/.ssh/my_ssh root@47.84.8.167 systemctl restart maoadao-bridge`
+
 腾讯官方 iLink 个人号 Bot 协议直连(`ilinkai.weixin.qq.com`),fork 自 stocktell `ilink-bridge`,
 协议细节对齐 `wechat-ilink-demo` / `@tencent-weixin/openclaw-weixin` 1.0.2。
 
