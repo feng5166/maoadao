@@ -7,7 +7,7 @@ import { prisma } from "../db";
 import { factSummary } from "../sim/engine";
 import type { Fact, Segment } from "../sim/types";
 import { THREAD_LABELS } from "../sim/threads";
-import { sendWechat } from "./openclaw";
+import { sendWechat } from "./bridge";
 import { absenceMessage, d2Message, eventMessage } from "./messages";
 import { safeTrack, WECHAT_KIND } from "./service";
 import { hashSeed, mulberry32 } from "../sim/rng";

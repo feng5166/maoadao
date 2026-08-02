@@ -1,0 +1,10 @@
+{
+  "name": "maoadao-wechat-bridge",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "猫啊岛微信桥:iLink 直连,哑管道(全量转发,不产一句台词)",
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}

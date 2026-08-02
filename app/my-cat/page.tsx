@@ -14,7 +14,7 @@ import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay, unlockedSegments } from "@/lib/moments";
-import { wechatEnabled } from "@/lib/wechat/openclaw";
+import { wechatEnabled } from "@/lib/wechat/bridge";
 import { bondStage } from "@/lib/sim/firstweek";
 import { factSummary } from "@/lib/sim/engine";
 import { SEGMENT_CN, type Fact, type Segment } from "@/lib/sim/types";
@@ -53,7 +53,11 @@ export default async function MyCatPage() {
       prisma.event.findMany({ where: { catId: cat.id, day: world.day } }),
     ]);
 
-  const daysOnIsland = Math.max(1, world.day - (firstEvent?.day ?? world.day) + 1);
+  // 猫龄改读 firstTickDay（doc/14 §一）；0 = 未回填历史数据，回退首事件倒推
+  const firstTickDay = cat.firstTickDay > 0 ? cat.firstTickDay : (firstEvent?.day ?? world.day) + 1;
+  // ARRIVAL 阶段（doc/14 §三）：D1 是入岛微型时间，按相遇流程揭示，豁免正常时段门
+  const arrivalPhase = inArrival(world.day, firstTickDay);
+  const daysOnIsland = catDayOf(world.day, firstTickDay);
   const everNudged = nudgeTotal > 0;
   const missedDays = viewer?.lastSeenDay != null ? world.day - viewer.lastSeenDay : 0;
   const echoHistory = summary ? echoRaw.filter((e) => e.day < summary.day).slice(0, 5) : [];
@@ -138,7 +142,8 @@ export default async function MyCatPage() {
   ]);
   const commissionNpc = commission ? String((commission.data as Record<string, unknown>).npcName ?? "") : "";
   const targetById = new Map(targets.map((t) => [t.id, { name: t.name }]));
-  const seg = gating ? currentSegment(hour) : null;
+  // ARRIVAL 阶段"此刻"照走现实时段（深夜自动睡下变体），事件集是到岛专用的三条
+  const seg = gating || arrivalPhase ? currentSegment(hour) : null;
   const nowEvent = arrivalDay
     ? (todayEvents.find((e) => e.type === "arrival_home") ?? todayEvents.find((e) => e.type === "arrival") ?? null)
     : seg
@@ -260,7 +265,7 @@ export default async function MyCatPage() {
 
       {/* 让它找到你(doc/11):亮相后的主曝光——情感峰值点接关系动作 */}
       {daysOnIsland <= 2 && (
-        <WechatConnect userId={viewerId!} catName={cat.name} catId={cat.id} variant="prominent" />
+        <WechatConnect userId={viewerId!} catName={cat.name} variant="prominent" />
       )}
 
       {/* 第一天的小约定：码头塞给新岛民的一张纸，记满收进生活册。

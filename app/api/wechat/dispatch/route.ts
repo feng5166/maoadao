@@ -1,5 +1,5 @@
 import { dispatchOutbound } from "@/lib/wechat/daily";
-import { wechatEnabled } from "@/lib/wechat/openclaw";
+import { wechatEnabled } from "@/lib/wechat/bridge";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;

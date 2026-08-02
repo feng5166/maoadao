@@ -83,10 +83,6 @@ export function unsubscribeAck(catName: string): string {
   return `${header(catName)}好。我就不捎信了——你想我的时候，岛上见。`;
 }
 
-export function pairFailReply(): string {
-  return "口令不对，再看一眼你家猫的页面？（口令长这样：红绳-483）";
-}
-
 // ============ T6 每日消息模板(内容素材由调用方从事实取)============
 /** D2 兑现:今晨第一件事。morningLine 来自 factSummary,responseLine 来自回执摘句,都不许编。 */
 export function d2Message(cat: MsgCat, morningLine: string, responseLine: string | null, link: string): string {

@@ -76,7 +76,7 @@ export default async function GoodnightPage() {
       </div>
 
       {/* 让它找到你:离岛页的第二次曝光(doc/11 §四,时态用将来时) */}
-      <WechatConnect userId={viewerId!} catName={cat.name} catId={cat.id} variant="compact" />
+      <WechatConnect userId={viewerId!} catName={cat.name} variant="compact" />
 
       <div className="mt-10 text-center">
         <Link href="/my-cat" className="stamp-btn inline-block px-8 py-2.5">

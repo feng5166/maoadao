@@ -10,9 +10,9 @@ const T = 60_000;
 const hasDb = Boolean(process.env.DATABASE_URL);
 
 const U = "u-test-wx-1";
-const WXID = "wxid-test-0001";
+const WXID = "wxid-test-0001"; // iLink 侧 openId
 
-describe.skipIf(!hasDb)("微信通道:配对/窗口/频控/留言合并(真实数据库,自清理)", () => {
+describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言合并(真实数据库,自清理)", () => {
   afterAll(async () => {
     const { prisma } = await import("../lib/db");
     const cats = await prisma.cat.findMany({ where: { ownerId: U }, select: { id: true } });
@@ -20,7 +20,6 @@ describe.skipIf(!hasDb)("微信通道:配对/窗口/频控/留言合并(真实�
     await prisma.$transaction([
       prisma.outboundMessage.deleteMany({ where: { userId: U } }),
       prisma.channel.deleteMany({ where: { userId: U } }),
-      prisma.pairingCode.deleteMany({ where: { userId: U } }),
       prisma.ownerNudge.deleteMany({ where: { catId: { in: catIds } } }),
       prisma.memoryEntry.deleteMany({ where: { catId: { in: catIds } } }),
       prisma.event.deleteMany({ where: { catId: { in: catIds } } }),
@@ -55,50 +54,55 @@ describe.skipIf(!hasDb)("微信通道:配对/窗口/频控/留言合并(真实�
     return { prisma, cat };
   }
 
-  it("暗号配对:口令命中 → 建通道+开窗+握手引用第一句话;口令一次性", async () => {
+  it("激活绑定:建通道+开窗+握手引用领养时的第一句话;首条消息落为留言", async () => {
     const { prisma, cat } = await setup();
-    const { getOrCreatePairingCode, handleInbound } = await import("../lib/wechat/service");
+    const { bindChannel } = await import("../lib/wechat/service");
 
-    const code = await getOrCreatePairingCode(U, cat.id);
-    expect(code).toMatch(/^.+-\d{3}$/);
-    // 幂等:再取还是同一个
-    expect(await getOrCreatePairingCode(U, cat.id)).toBe(code);
-
-    // 错口令
-    const miss = await handleInbound(WXID, "你好呀");
-    expect(miss.matched).toBe("pair_fail");
-
-    // 正确口令(带空格与全角横线也能认)
-    const hit = await handleInbound(WXID, ` ${code.replace("-", "－")} `);
-    expect(hit.matched).toBe("paired");
-    expect(hit.reply).toContain("不要害怕");
-    expect(hit.reply).toContain("测试煤球");
+    const { replyText } = await bindChannel(U, WXID, "我来啦,以后每天都来看你");
+    expect(replyText).toContain("测试煤球");
+    expect(replyText).toContain("不要害怕"); // 引用 firstWords
 
     const ch = await prisma.channel.findFirst({ where: { userId: U } });
     expect(ch).not.toBeNull();
+    expect(ch!.externalId).toBe(WXID);
     expect(ch!.windowOpenUntil!.getTime()).toBeGreaterThan(Date.now());
 
-    // 口令已核销:另一个 wxid 再用同口令配不上
-    const reuse = await handleInbound("wxid-test-0002", code);
-    expect(reuse.matched).toBe("pair_fail");
+    // 激活的第一句话 = 留言
+    const pending = await prisma.ownerNudge.findMany({ where: { catId: cat.id, consumedDay: null } });
+    expect(pending.length).toBe(1);
+    expect(pending[0].message).toBe("我来啦,以后每天都来看你");
   }, T);
 
-  it("回信即留言:落 nudge(isPublic)+确定性 ACK;连发合并为最新一条", async () => {
+  it("换绑幂等:同一用户再次激活(换微信)只保留一条通道", async () => {
+    const { prisma } = await setup();
+    const { bindChannel } = await import("../lib/wechat/service");
+    await bindChannel(U, "wxid-test-0002", "");
+    const chs = await prisma.channel.findMany({ where: { userId: U } });
+    expect(chs.length).toBe(1);
+    expect(chs[0].externalId).toBe("wxid-test-0002");
+    // 换回来,保持后续用例用 WXID
+    await bindChannel(U, WXID, "");
+  }, T);
+
+  it("回信即留言:确定性 ACK;连发合并为最新一条;未知 openId 引导回岛", async () => {
     const { prisma, cat } = await setup();
     const { handleInbound } = await import("../lib/wechat/service");
 
     const r1 = await handleInbound(WXID, "今天去海边玩玩吧");
     expect(r1.matched).toBe("nudge");
-    expect(r1.reply).toContain("测试煤球");
+    expect(r1.replyText).toContain("测试煤球");
 
     const r2 = await handleInbound(WXID, "还有,记得吃饭");
     expect(r2.matched).toBe("nudge");
-    expect(r2.reply).toContain("一天捎一句"); // 重复提示
+    expect(r2.replyText).toContain("一天捎一句"); // 重复提示
 
     const pending = await prisma.ownerNudge.findMany({ where: { catId: cat.id, consumedDay: null } });
     expect(pending.length).toBe(1); // 合并为最新
     expect(pending[0].message).toBe("还有,记得吃饭");
     expect(pending[0].isPublic).toBe(true);
+
+    const stranger = await handleInbound("wxid-nobody", "你好");
+    expect(stranger.matched).toBe("unknown");
   }, T);
 
   it("退订与说话即续订", async () => {
