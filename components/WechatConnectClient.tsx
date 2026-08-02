@@ -78,13 +78,13 @@ export function WechatConnectClient({ catName }: { catName: string }) {
           {/* eslint-disable-next-line @next/next/no-img-element -- 二维码由公共服务渲染(内容是微信认的 URL) */}
           <img
             src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrImg)}`}
-            alt="用微信扫一扫"
+            alt="用海螺(微信)扫一扫"
             width={220}
             height={220}
             className="mx-auto border border-line"
           />
           {phase === "qr" ? (
-            <p className="mt-2 text-xs text-ink-soft">用微信扫一下——扫完，对它说第一句话，它就找到你了。</p>
+            <p className="mt-2 text-xs text-ink-soft">用海螺(微信)扫一下——扫完，对它说第一句话，它就找到你了。</p>
           ) : (
             <p className="mt-2 text-sm text-ink">
               扫到了。海螺通了——对{catName}说第一句话，
