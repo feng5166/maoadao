@@ -7,7 +7,7 @@ import { StayTrack } from "@/components/StayTrack";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Track } from "@/components/Track";
 import { keepArrivalPromise, renameCat, saveNudge } from "@/lib/actions";
-import { archiveArrivalNote, getArrivalChecklist, markArrivalCelebrated } from "@/lib/arrival";
+import { archiveArrivalNote, buildArrivalChecklist, markArrivalCelebrated } from "@/lib/arrival";
 import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
@@ -26,46 +26,43 @@ export default async function MyCatPage() {
   const viewerId = await getViewerId();
   const cat = await getViewerCat(viewerId);
   if (!cat) redirect("/adopt");
+  const world = await getWorld(); // 60s 模块缓存，通常不产生查询
 
-  const [state, world, summary, pendingNudge] = await Promise.all([
-    getCatState(cat.id),
-    getWorld(),
-    getLatestSummary(cat.id),
-    getPendingNudge(cat.id),
-  ]);
-  const firstEvent = await prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } });
-  const daysOnIsland = Math.max(1, world.day - (firstEvent?.day ?? world.day) + 1);
-  const nudgeTotal = await prisma.ownerNudge.count({ where: { catId: cat.id } });
-  const everNudged = nudgeTotal > 0;
-  const weekBook = await prisma.weekBook.findUnique({ where: { catId_weekIndex: { catId: cat.id, weekIndex: 1 } } });
-  const viewer = await prisma.user.findUnique({ where: { id: viewerId! }, select: { lastSeenDay: true, visitDays: true } });
-  const missedDays = viewer?.lastSeenDay != null ? world.day - viewer.lastSeenDay : 0;
-  const missedSummaries =
-    missedDays >= 3
-      ? await prisma.catDailySummary.findMany({
-          where: { catId: cat.id, day: { gt: viewer!.lastSeenDay!, lt: summary?.day ?? world.day } },
-          orderBy: { day: "asc" },
-        })
-      : [];
-
-  // 留言回音历史：往期它对你留言的反应（当天的已在上方"它记得你昨天说的话"展示，这里收更早的）
-  const echoHistory = summary
-    ? await prisma.catDailySummary.findMany({
-        where: { catId: cat.id, day: { lt: summary.day }, interventionResponse: { not: null } },
+  // ============ 第一波：彼此无依赖的查询全部并行（doc/11 P1-3）============
+  // 跨洋链路下每次串行往返 ~215ms：原先 14 次串行，现压成 2-3 波
+  const [state, summary, pendingNudge, firstEvent, nudgeTotal, weekBook, viewer, arrivalNote, echoRaw, todayEvents] =
+    await Promise.all([
+      getCatState(cat.id),
+      getLatestSummary(cat.id),
+      getPendingNudge(cat.id),
+      prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } }),
+      prisma.ownerNudge.count({ where: { catId: cat.id } }),
+      prisma.weekBook.findUnique({ where: { catId_weekIndex: { catId: cat.id, weekIndex: 1 } } }),
+      prisma.user.findUnique({ where: { id: viewerId! }, select: { lastSeenDay: true, visitDays: true } }),
+      prisma.arrivalNote.findUnique({ where: { catId: cat.id } }),
+      // 留言回音：多取一条，最新一天的（已在上方展示）由下面过滤
+      prisma.catDailySummary.findMany({
+        where: { catId: cat.id, interventionResponse: { not: null } },
         orderBy: { day: "desc" },
-        take: 5,
+        take: 6,
         select: { id: true, day: true, interventionResponse: true },
-      })
-    : [];
+      }),
+      prisma.event.findMany({ where: { catId: cat.id, day: world.day } }),
+    ]);
 
-  // 第一天的小约定：三件记满时这次仍完整显示（庆祝+告别文案），渲染后收册；
+  const daysOnIsland = Math.max(1, world.day - (firstEvent?.day ?? world.day) + 1);
+  const everNudged = nudgeTotal > 0;
+  const missedDays = viewer?.lastSeenDay != null ? world.day - viewer.lastSeenDay : 0;
+  const echoHistory = summary ? echoRaw.filter((e) => e.day < summary.day).slice(0, 5) : [];
+
+  // 第一天的小约定：note/nudgeCount 已在第一波预取，纯构建不再查库；
   // 刚记住的单件这次高亮庆祝一次，展示过就记下，下次回归安静的划掉态
-  const arrival = await getArrivalChecklist(cat.id, cat.name, cat.firstWords);
+  const arrival = buildArrivalChecklist(cat.name, cat.firstWords, arrivalNote, nudgeTotal);
   const justDoneKeys = arrival?.tasks.filter((t) => t.justDone).map((t) => t.key) ?? [];
   if (arrival?.allDone) after(() => archiveArrivalNote(cat.id));
   else if (justDoneKeys.length > 0) after(() => markArrivalCelebrated(cat.id, justDoneKeys));
 
-    const isNewVisitDay = viewer?.lastSeenDay !== world.day;
+  const isNewVisitDay = viewer?.lastSeenDay !== world.day;
   after(() =>
     prisma.user
       .update({
@@ -84,11 +81,6 @@ export default async function MyCatPage() {
 
   const bond = bondStage(daysOnIsland, nudgeTotal, viewer?.visitDays ?? 0);
   const choices = ((summary?.choices ?? null) as { value: string; label: string }[] | null) ?? null;
-  // 待办的邻居委托：把"这件事"具体成"棉花托你的事"
-  const commission = choices
-    ? await prisma.storyline.findFirst({ where: { catId: cat.id, kind: "commission", status: "active", step: 1 } })
-    : null;
-  const commissionNpc = commission ? String((commission.data as Record<string, unknown>).npcName ?? "") : "";
   const missedOne = viewer?.lastSeenDay != null && world.day - viewer.lastSeenDay === 2;
   const threadProgress = ((summary?.threadProgress ?? []) as { label: string; step: number; total?: number; done?: boolean; failed?: boolean }[]) ?? [];
   // 今天落幕的事件线：办成一件事是值得郑重庆祝的时刻，单独收束，不混进页边批注
@@ -98,20 +90,38 @@ export default async function MyCatPage() {
     : [];
   const scene = sceneFor(state?.location);
 
-  // ============ "它现在怎么样"（doc/09 §5）============
-  // tick 早上八点一次生成整天；展示层按现实时段解锁：上午 8 点起、下午 13 点起、晚上 18 点起。
-  // 打开的动作从"读昨天的总结"变成"看它此刻在干嘛"。
-  const todayEvents = await prisma.event.findMany({ where: { catId: cat.id, day: world.day } });
+  // ============ "它现在怎么样"（doc/09 §5）：时段门的推导，全部内存计算 ============
   const segOrder: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
   todayEvents.sort((a, b) => (segOrder[a.segment] ?? 0) - (segOrder[b.segment] ?? 0) || (a.isMain ? -1 : 1));
   const targetIds = [...new Set(todayEvents.map((e) => e.targetId).filter((x): x is string => !!x))];
-  const targets = targetIds.length
-    ? await prisma.cat.findMany({ where: { id: { in: targetIds } }, select: { id: true, name: true } })
-    : [];
-  const targetById = new Map(targets.map((t) => [t.id, { name: t.name }]));
   // 早八 cron 还没跑完时 world.day 还是昨天——那是完整过完的一天，不做时段裁剪
-  const lastTickAt = "lastTickAt" in world ? (world.lastTickAt as Date | null) : null;
-  const gating = hour < 8 || (lastTickAt != null && sameBeijingDay(lastTickAt, new Date()));
+  const gating = hour < 8 || (world.lastTickAt != null && sameBeijingDay(world.lastTickAt, new Date()));
+  const unlocked = new Set<string>(gating ? unlockedSegments(hour) : ["morning", "afternoon", "evening"]);
+  const dayComplete = unlocked.size === 3;
+  // 日记是一天的收束（doc/09 §5）：晚上六点起亮出今天的；白天先读昨天的，早八先看"它怎么说"。
+  const showTodayStory = dayComplete || (summary != null && summary.day < world.day);
+
+  // ============ 第二波：依赖第一波结果的查询并行 ============
+  const [missedSummaries, commission, targets, prevSummary] = await Promise.all([
+    missedDays >= 3
+      ? prisma.catDailySummary.findMany({
+          where: { catId: cat.id, day: { gt: viewer!.lastSeenDay!, lt: summary?.day ?? world.day } },
+          orderBy: { day: "asc" },
+        })
+      : Promise.resolve([]),
+    // 待办的邻居委托：把"这件事"具体成"棉花托你的事"
+    choices
+      ? prisma.storyline.findFirst({ where: { catId: cat.id, kind: "commission", status: "active", step: 1 } })
+      : Promise.resolve(null),
+    targetIds.length
+      ? prisma.cat.findMany({ where: { id: { in: targetIds } }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+    !showTodayStory && summary
+      ? prisma.catDailySummary.findFirst({ where: { catId: cat.id, day: { lt: summary.day } }, orderBy: { day: "desc" } })
+      : Promise.resolve(null),
+  ]);
+  const commissionNpc = commission ? String((commission.data as Record<string, unknown>).npcName ?? "") : "";
+  const targetById = new Map(targets.map((t) => [t.id, { name: t.name }]));
   const seg = gating ? currentSegment(hour) : null;
   const nowEvent = seg ? (todayEvents.find((e) => e.segment === seg && e.isMain) ?? todayEvents.find((e) => e.segment === seg) ?? null) : null;
   const nowText = nowLine(
@@ -126,7 +136,6 @@ export default async function MyCatPage() {
     hour,
     state?.location,
   );
-  const unlocked = new Set<string>(gating ? unlockedSegments(hour) : ["morning", "afternoon", "evening"]);
   const timeline = todayEvents
     .filter((e) => unlocked.has(e.segment))
     .map((e) => ({
@@ -134,14 +143,8 @@ export default async function MyCatPage() {
       seg: SEGMENT_CN[e.segment as Segment],
       text: factSummary({ type: e.type, outcome: e.outcome, data: e.data as Record<string, unknown>, targetId: e.targetId ?? undefined } as Fact, targetById),
     }));
-  const dayComplete = unlocked.size === 3;
-  // 日记是一天的收束（doc/09 §5）：晚上六点起亮出今天的；白天先读昨天的，早八先看"它怎么说"。
-  // 叙事迟到（summary.day < world.day）时照旧展示已有内容，不额外遮挡。
-  const showTodayStory = dayComplete || (summary != null && summary.day < world.day);
-  const prevSummary =
-    !showTodayStory && summary
-      ? await prisma.catDailySummary.findFirst({ where: { catId: cat.id, day: { lt: summary.day } }, orderBy: { day: "desc" } })
-      : null;
+
+  // 第三波（仅白天读昨日日记时多一跳）：展示那篇日记的形态
   const displayed = showTodayStory ? summary : prevSummary;
   const displayedDiary = displayed
     ? await prisma.diaryEntry.findUnique({ where: { catId_day: { catId: cat.id, day: displayed.day } }, select: { form: true } })
@@ -192,7 +195,13 @@ export default async function MyCatPage() {
           <Track events={[{ name: "arrival_photo_view" }]} />
           <div className="note-slip mx-auto max-w-sm p-3" style={{ transform: "rotate(-0.8deg)" }}>
             {/* eslint-disable-next-line @next/next/no-img-element -- 动态合成图走自有 API，长缓存 */}
-            <img src={cat.arrivalPhotoUrl} alt={`${cat.name}来岛第一天的照片`} className="w-full" />
+            <img
+              src={`${cat.arrivalPhotoUrl}?s=720`}
+              alt={`${cat.name}来岛第一天的照片`}
+              width={1000}
+              height={687}
+              className="h-auto w-full"
+            />
             <p className="font-diary mt-2 text-center text-[14px] text-ink-soft">来岛第一天 · 码头</p>
           </div>
           <p className="mt-1.5 text-center text-xs text-ink-faint">你们的第一张照片，它会一直收着。</p>
@@ -432,7 +441,7 @@ export default async function MyCatPage() {
                   ).map((o, i) => (
                     <label
                       key={o.v}
-                      className="cursor-pointer border border-line px-2.5 py-1 has-[:checked]:border-sea-deep has-[:checked]:bg-paper"
+                      className="cursor-pointer border border-line px-2.5 py-1.5 has-[:checked]:border-sea-deep has-[:checked]:bg-paper"
                     >
                       <input type="radio" name="suggestion" value={o.v} defaultChecked={i === 0} className="hidden" />
                       {o.label}

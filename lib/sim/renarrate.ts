@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
-import { factSummary, newsLine } from "./engine";
+import { newsLine } from "./engine";
 import { THREAD_LABELS, THREAD_TOTALS } from "./threads";
 import { narrateDiary, narrateOwnerDay, narrateWeekBook } from "../narrative/narrator";
 import { bondStage, firstWeekPlan } from "./firstweek";

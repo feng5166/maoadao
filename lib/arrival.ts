@@ -25,16 +25,35 @@ export interface ArrivalChecklist {
   metCount: number;
 }
 
-/** 读取小约定状态；已收册返回 null（页面不再显示）。firstWords：登记册第四页说过话也算"告诉它一句话" */
+interface ArrivalNoteData {
+  metNpcIds: string[];
+  promisedAt: Date | null;
+  archivedAt: Date | null;
+  celebratedKeys: string[];
+}
+
+/** 读取小约定状态；已收册返回 null。firstWords：登记册第四页说过话也算"告诉它一句话" */
 export async function getArrivalChecklist(
   catId: string,
   catName: string,
   firstWords?: string | null,
 ): Promise<ArrivalChecklist | null> {
-  const note = await prisma.arrivalNote.findUnique({ where: { catId } });
-  if (note?.archivedAt) return null;
+  // 两查并行（doc/11 P1-3：跨洋链路下少一次串行往返）
+  const [note, nudgeCount] = await Promise.all([
+    prisma.arrivalNote.findUnique({ where: { catId } }),
+    prisma.ownerNudge.count({ where: { catId } }),
+  ]);
+  return buildArrivalChecklist(catName, firstWords ?? null, note, nudgeCount);
+}
 
-  const nudgeCount = await prisma.ownerNudge.count({ where: { catId } });
+/** 纯构建器：页面已预取 note/nudgeCount 时直接用，省两次数据库往返 */
+export function buildArrivalChecklist(
+  catName: string,
+  firstWords: string | null,
+  note: ArrivalNoteData | null,
+  nudgeCount: number,
+): ArrivalChecklist | null {
+  if (note?.archivedAt) return null;
   const metCount = note?.metNpcIds.length ?? 0;
   const celebrated = note?.celebratedKeys ?? [];
   const tasks: ArrivalTask[] = [

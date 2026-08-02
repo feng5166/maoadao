@@ -26,7 +26,8 @@ export function CopyCode({ code }: { code: string }) {
 
   return (
     <div className="mt-2 flex items-stretch gap-2">
-      <p className="min-w-0 flex-1 bg-paper-deep px-3 py-3 text-center font-mono text-base tracking-wider text-ink sm:text-lg">
+      {/* 移动端：长码换行显示不截断；桌面端保持大字 */}
+      <p className="min-w-0 flex-1 break-all bg-paper-deep px-2 py-3 text-center font-mono text-sm tracking-wide text-ink sm:px-3 sm:text-lg sm:tracking-wider">
         {code}
       </p>
       <button

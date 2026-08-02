@@ -21,10 +21,14 @@ export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const viewerId = await getViewerId();
-  const user = viewerId ? await prisma.user.findUnique({ where: { id: viewerId } }) : null;
-  const cat = await getViewerCat(viewerId);
-  const recoveryCode = cat ? await ensureRecoveryCode() : null;
-  const tickets = cat && viewerId ? await ensureBoatTickets(viewerId) : [];
+  // 两波并行（doc/11 P1-3）：user/cat 互不依赖；找回码与船票依赖 cat 存在
+  const [user, cat] = await Promise.all([
+    viewerId ? prisma.user.findUnique({ where: { id: viewerId } }) : null,
+    getViewerCat(viewerId),
+  ]);
+  const [recoveryCode, tickets] = cat
+    ? await Promise.all([ensureRecoveryCode(), viewerId ? ensureBoatTickets(viewerId) : []])
+    : [null, [] as Awaited<ReturnType<typeof ensureBoatTickets>>];
   const mailReady = emailEnabled();
 
   return (
@@ -120,14 +124,15 @@ export default async function AccountPage() {
               </SubmitButton>
             </form>
             <form action={verifyEmailCode} className="space-y-2">
-              <div className="flex gap-2">
+              {/* 移动端竖排：三件套挤一行在 375px 下没法输入 */}
+              <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 name="email" type="email" placeholder="邮箱" required
-                className="w-2/5 border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none"
+                className="w-full border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none sm:w-2/5"
               />
               <input
                 name="code" placeholder="6 位验证码" maxLength={6} required
-                className="flex-1 border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none"
+                className="w-full border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none sm:flex-1"
               />
               <SubmitButton pendingText="验证中…" className="stamp-btn px-4 py-2 text-sm">
                 绑定/登录

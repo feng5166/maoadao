@@ -1,9 +1,17 @@
 import { cache } from "react";
 import { prisma } from "./db";
 
-// React.cache：同一次请求里 layout 和 page 重复调用只打一次数据库
-export const getWorld = cache(async () => {
-  return (await prisma.worldState.findUnique({ where: { id: 1 } })) ?? { id: 1, day: 0, season: "夏", weather: "晴" };
+// world 每天只在 tick 时变一次：模块级 60s 缓存跨请求复用（doc/11 P1-3），
+// React.cache 再保证同一请求内 layout/page 只走一次
+type WorldRow = { id: number; day: number; season: string; weather: string; lastTickAt: Date | null; adoptionPaused: boolean };
+let worldCache: { v: WorldRow; at: number } | null = null;
+export const getWorld = cache(async (): Promise<WorldRow> => {
+  if (worldCache && Date.now() - worldCache.at < 60_000) return worldCache.v;
+  const v =
+    (await prisma.worldState.findUnique({ where: { id: 1 } })) ??
+    ({ id: 1, day: 0, season: "夏", weather: "晴", lastTickAt: null, adoptionPaused: false } as WorldRow);
+  worldCache = { v, at: Date.now() };
+  return v;
 });
 
 export async function getFeed(limit = 50) {

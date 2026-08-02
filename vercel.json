@@ -4,6 +4,10 @@
     {
       "path": "/api/tick",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/warm",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

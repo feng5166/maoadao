@@ -39,20 +39,23 @@ export default async function CatPage({
   const { id } = await params;
   const { from } = await searchParams;
   if (from === "share_card") await track("share_open", { catId: id }).catch(() => {});
-  const cat = await getCat(id);
-  if (!cat) notFound();
   const viewerId = await getViewerId();
+  // 两波并行（doc/11 P1-3）：原先 7 次串行查询
+  const [cat, myCat] = await Promise.all([getCat(id), getViewerCat(viewerId)]);
+  if (!cat) notFound();
   const isOwner = !cat.isNpc && Boolean(cat.ownerId) && cat.ownerId === viewerId;
 
-  // 逛别的猫的主页 = 带自己的猫认识了一位邻居（入岛三件事之二）
-  const myCat = await getViewerCat(viewerId);
+  // 逛别的猫的主页 = 带自己的猫认识了一位邻居（小约定之二）
   if (myCat && myCat.id !== cat.id) after(() => recordMetNpc(myCat.id, cat.id).catch(() => {}));
 
-  const state = await getCatState(id);
-  const diaries = await getCatDiaries(id);
-  const friends = (await getFriends(id)).filter((f) => f.affinity > 0);
-  const storylines = await getActiveStorylines(id);
-  const catIndex = await getCatNameIndex();
+  const [state, diaries, friendsAll, storylines, catIndex] = await Promise.all([
+    getCatState(id),
+    getCatDiaries(id),
+    getFriends(id),
+    getActiveStorylines(id),
+    getCatNameIndex(),
+  ]);
+  const friends = friendsAll.filter((f) => f.affinity > 0);
 
   return (
     <div className="space-y-6">
@@ -92,11 +95,11 @@ export default async function CatPage({
               <p className="text-xs text-ink-faint">体力</p>
             </div>
             <div>
-              <p className="text-lg font-bold">{state.mood}</p>
+              <p className="truncate text-base font-bold sm:text-lg">{state.mood}</p>
               <p className="text-xs text-ink-faint">心情</p>
             </div>
             <div>
-              <p className="truncate text-lg font-bold">{state.location}</p>
+              <p className="truncate text-base font-bold sm:text-lg">{state.location}</p>
               <p className="text-xs text-ink-faint">位置</p>
             </div>
           </div>

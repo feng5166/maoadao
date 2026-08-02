@@ -14,31 +14,32 @@ export const dynamic = "force-dynamic";
 // 只看最近一天，往前一天天翻。
 
 export default async function IslandPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
-  const world = await getWorld();
+  const world = await getWorld(); // 60s 模块缓存，通常不产生查询
   const { day: dayParam } = await searchParams;
   const day = Math.min(world.day, Math.max(1, Number(dayParam) || world.day));
 
   const viewerId = await getViewerId();
-  const myCat = await getViewerCat(viewerId);
-  const [news, diariesRaw, myTip, catIndex] = await Promise.all([
+  // 两波并行（doc/11 P1-3）：myCat 与公共内容互不依赖；tip/关系依赖 myCat 进第二波
+  const [myCat, news, diariesRaw, catIndex] = await Promise.all([
+    getViewerCat(viewerId),
     getIslandNews(6).then((all) => all.filter((n) => n.day === day)),
     prisma.diaryEntry.findMany({
       where: { day },
       orderBy: { createdAt: "asc" },
       include: { cat: { select: { id: true, name: true, isNpc: true, portraitUrl: true } } },
     }),
-    myCat
-      ? prisma.newsTip.findFirst({ where: { catId: myCat.id }, orderBy: { createdAt: "desc" } })
-      : Promise.resolve(null),
     getCatNameIndex(),
   ]);
+  const [myTip, rels] = myCat
+    ? await Promise.all([
+        prisma.newsTip.findFirst({ where: { catId: myCat.id }, orderBy: { createdAt: "desc" } }),
+        prisma.relationship.findMany({ where: { OR: [{ catAId: myCat.id }, { catBId: myCat.id }] } }),
+      ])
+    : [null, []];
 
   // 你的猫认识谁：affinity 映射，用来把认识的邻居置顶 + 标注关系（停留时间：读别人日记的动力来自"和我的猫有关"）
   const knownAffinity = new Map<string, number>();
   if (myCat) {
-    const rels = await prisma.relationship.findMany({
-      where: { OR: [{ catAId: myCat.id }, { catBId: myCat.id }] },
-    });
     for (const r of rels) {
       knownAffinity.set(r.catAId === myCat.id ? r.catBId : r.catAId, r.affinity);
     }
