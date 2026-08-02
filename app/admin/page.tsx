@@ -135,9 +135,6 @@ export default async function AdminPage() {
                 <option value="strangers">strangers</option>
               </select>
             </label>
-            <label className="flex flex-col">每码次数
-              <input name="maxUses" type="number" defaultValue={3} min={1} max={50} className="mt-1 w-20 rounded border border-[#E0D5C0] px-2 py-1" />
-            </label>
             <label className="flex flex-col">张数
               <input name="count" type="number" defaultValue={5} min={1} max={20} className="mt-1 w-16 rounded border border-[#E0D5C0] px-2 py-1" />
             </label>

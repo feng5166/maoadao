@@ -12,17 +12,16 @@ async function requireAdmin() {
   if (!(await isAdmin())) throw new Error("无权限");
 }
 
-/** 发放邀请码（船票）：批次 + 每码可用次数 + 张数 */
+/** 发放邀请码（船票）：批次 + 张数。
+ *  产品规则(2026-08-02 拍板)：一张船票只能上一个人——激活一次即失效,
+ *  所有批次一律 maxUses=1。要邀多人就发多张,不发多次票。 */
 export async function createInviteCodes(formData: FormData) {
   await requireAdmin();
   const batch = String(formData.get("batch") ?? "team");
-  const maxUses = Math.max(1, Math.min(50, Number(formData.get("maxUses") ?? 1)));
   const count = Math.max(1, Math.min(20, Number(formData.get("count") ?? 1)));
-  for (let i = 0; i < count; i++) {
-    await prisma.inviteCode.create({
-      data: { code: makeTicketCode(), batch, maxUses, createdAt: new Date() },
-    });
-  }
+  await prisma.inviteCode.createMany({
+    data: Array.from({ length: count }, () => ({ code: makeTicketCode(), batch, maxUses: 1, createdAt: new Date() })),
+  });
   revalidatePath("/admin");
 }
 
