@@ -75,6 +75,105 @@ const FOUND_ITEMS = [
 ];
 const SNACKS = ["烤鱼串", "鱼糕", "小鱼干", "海苔卷", "虾饼", "鱼皮花生", "奶皮子", "烤墨鱼脚", "梅子水", "软乎乎的鱼松包"];
 const SHOP_KINDS = ["烤鱼店", "杂货铺", "毛线咖啡馆", "贝壳纪念品店"];
+// ============ Life Moment 微细节池（doc/09 §2）：低强度事件必须带一个可叙事的细节 ============
+// 标尺：小事要小得具体、具体得无用——不是"捡到树叶"，是"给薯片熨大波浪"。
+// 全部是事实数据（落 Event.data），LLM 只包装不编造。
+const FISH_MOMENTS = [
+  "浮标刚沉下去，鱼就被一只俯冲的海鸥截了胡",
+  "一只螃蟹全程在旁边横着踱步，像个监工",
+  "钓着钓着差点睡着，鱼竿是被浪声惊醒才想起来的",
+  "跟水里自己的倒影对视了很久，谁也没先眨眼",
+  "起风的时候胡子一直往一边飘，怎么捋都捋不直",
+  "一条小鱼咬了钩又吐掉，还在水面吐了个泡泡，像在道歉",
+  "数了数今天路过的船，一共三条，都朝着灯塔那边去",
+  "把鱼饵摆成了一排，按个头从小到大，摆完自己先满意了半天",
+  "尾巴尖不小心沾了水，甩了一路的小水点",
+  "隔壁礁石上有只不认识的水鸟，学它蹲了一下午",
+  "涨潮漫过爪子的那一下，浑身的毛都竖起来又慢慢顺回去",
+  "对着一朵长得像鱼的云看了很久，忘了收线",
+];
+const EXPLORE_SIGHTS = [
+  "看见两只寄居蟹换壳，围观了整个过程",
+  "发现一滩雨水洼，里面正好装着一整个天空",
+  "一路踩着自己的影子走，影子到中午就躲到脚底下了",
+  "数了沿路的松果，数到二十七就乱了",
+  "看见蚂蚁排队搬一粒鱼干渣，跟着走了好一段",
+  "找到一块晒得刚刚好的石头，躺上去的时候还是温的",
+  "风把一片叶子吹得贴在脸上，愣了一下才想起来拿掉",
+  "远远看见渡轮进港，白色的，和上周那艘不是同一艘",
+  "闻到一路若有若无的烤鱼味，跟着走却在集市口断了线",
+  "路过谁家窗台，里面的风铃响了一声，就一声",
+  "在松林里学了一声鸟叫，居然有鸟回了它一声",
+  "退潮后的沙滩上全是小洞，每个都蹲下来看了看",
+  "把一颗圆石子从坡顶推下去，追着追着忘了最初为什么推",
+  "太阳落到海里之前，把自己的耳朵照成了半透明的",
+];
+const JOB_MOMENTS = [
+  "干活干到一半被自己的影子吓了一跳，装作什么都没发生",
+  "搬东西的间隙偷偷比了比，今天搬的摞起来比自己高",
+  "认真干活的时候尾巴会不受控制地竖成一根旗杆",
+  "中途蹭了一鼻子灰，是收工洗脸时才发现的",
+  "把绳结打成了一朵花的形状，被夸了，其实是失误",
+  "歇脚时数工钱，数了两遍，两遍数得不一样",
+  "学着老板的样子叉腰检查了一遍活儿，越看越满意",
+  "干完活的爪垫上沾了木屑味，走一路闻一路",
+  "偷懒的三分钟里看了会儿云，云也慢吞吞的，像在陪它偷懒",
+  "收工时天刚好擦黑，一路小跑着回去，觉得自己特别能干",
+];
+const MARKET_SCENES = [
+  "在两个摊位之间来回走了四趟才下定决心",
+  "付钱的时候故意把鱼币摆成整齐的一小摞",
+  "买完直接原地吃掉了，连找零都是叼着吃的间隙收的",
+  "排队时前面的猫买走了最后一份，只好换了样，结果更好吃",
+  "跟摊主寒暄了两句天气，其实是想多闻一会儿香味",
+  "拎着吃的往回走，一路上护得很紧，见谁都绕着走",
+  "被试吃摊叫住，试吃了三块，最后不好意思地买了一份",
+  "买的时候多要了一点葱花，觉得自己很会生活",
+  "在集市口碰见风把谁家的招牌吹得团团转，看了好一会儿",
+  "把找零的一枚小鱼币塞进了路边的许愿罐",
+  "闻遍了整条街，最后还是买了每次都买的那样",
+  "摊主多送了一小块，说是给常客的，尾巴一下子就翘起来了",
+];
+const VISIT_DOINGS = [
+  "一起趴在窗台看了半下午的海",
+  "轮流讲最近听来的新鲜事，讲到一半忘了讲到哪",
+  "分吃了一包小鱼干，最后一根谦让了三个来回",
+  "一起研究了一个谁也拧不开的罐子，最后决定明天再说",
+  "晒着太阳背靠背打了个盹",
+  "比赛谁能盯着对方更久不眨眼，笑场了三次",
+  "一起给窗台上的花换了个位置，又换回来了",
+  "听对方讲了一遍讲过好几次的老故事，还是听完了",
+  "一起追了一会儿屋里进来的一只飞蛾，谁也没抓到",
+  "研究了半天对方新捡的宝贝，轮流闻了闻",
+  "把对方家的毛毯踩了个遍，找出了最舒服的一块",
+  "临走时在门口又聊了三轮，每轮都说'那我真走了'",
+  "一起把晾着的鱼干翻了个面，像干了件大事",
+  "教对方一个伸懒腰的新姿势，两只猫在地上滚成一团",
+];
+const VISIT_AWKWARDS = [
+  "一个想聊天气，一个想聊八卦，聊了半天都在各说各的",
+  "对方正忙着理毛，它坐了一会儿，觉得自己来得不是时候",
+  "为'到底哪家的烤鱼更好吃'各执一词，谁也没说服谁",
+  "它讲了个自认为好笑的事，对方没笑，屋里安静了三秒",
+  "对方的屋子刚收拾过，它一进门就踩乱了毛线，气氛就僵了",
+  "想借的东西对方也正要用，两只猫客气来客气去，最后都没用成",
+  "坐下没多久对方开始打哈欠，它识趣地找了个借口告辞",
+  "进门就说错了对方的名字，之后聊什么都不太对味",
+  "一个觉得窗户该开，一个觉得窗户该关，开开关关了四回",
+  "它夸了一句对方的摆设，对方听成了反话，解释了半天",
+];
+const STARGAZE_THOUGHTS = [
+  "试着给最亮的那颗星取名字，取了三个都不满意",
+  "想到白天没吃完的那半块鱼糕，明天一早就去吃",
+  "掰着爪垫数认识的猫，数着数着就困了",
+  "觉得海面上的星星比天上的更晃，看不太懂",
+  "想起一件很小的旧事，想完了发现尾巴一直在轻轻拍地",
+  "打了个大哈欠，把最圆的那颗星星哈得模糊了一下",
+  "许了个愿，许完觉得太小气，又追加了半个",
+  "看见一颗星星特别暗，替它担心了一小会儿",
+  "把星星连成了一条鱼的形状，越看越饿",
+  "夜风把耳朵吹得一抖一抖的，索性把耳朵压平了看",
+];
 const EXPLORE_MISHAPS = [
   "迷路绕了一大圈",
   "被突然的浪头浇成落汤猫",
@@ -120,6 +219,10 @@ const REST_POSES = [
   "半个身子挂在窗台边缘，睡得纹丝不动",
   "脸埋进毛毯里只露出耳朵",
   "抱着毛线球，睡得像只小虾米",
+  "追着挪动的太阳换了三个地方，每次挪完接着睡",
+  "睡前把尾巴仔细盘好，醒来发现压在了自己脸底下",
+  "睡到一半伸了个悠长的懒腰，前爪推出去老远，又原样缩回来",
+  "耳朵在梦里一直转来转去，像两个小雷达",
 ];
 const REST_DREAMS = [
   "梦见一条会发光的大鱼",
@@ -130,6 +233,12 @@ const REST_DREAMS = [
   "梦见灯塔跟它说话，声音像海浪",
   "梦见主人",
   "梦里一直在打喷嚏，醒来发现鼻尖沾着一根羽毛",
+  "梦见集市的摊位全在卖同一种鱼糕，怎么走都走不出去",
+  "梦见自己的尾巴独立行动，跑去别的猫家串门了",
+  "梦见下了一场小鱼干雨，接的时候用的居然是耳朵",
+  "梦见海退到很远很远，滩上摆满了发光的贝壳",
+  "梦见谁在很远的地方喊它的名字，声音很熟，就是想不起是谁",
+  "梦见自己变得很小，睡在一朵反着放的花里",
 ];
 
 // 八卦池：常青的角色向传闻（不涉及具体数值/状态，不会与模拟事实矛盾）。
@@ -222,7 +331,14 @@ export const TEMPLATES: EventTemplate[] = [
       }
       return {
         outcome: catchCount === 0 ? "fail" : "success",
-        data: { location: "海边礁石", catchCount, coins, weather: ctx.world.weather },
+        // moment：钓鱼过程里的小插曲（Life Moment，约六成有）——空手而归时必有，别让失败只剩一个数字
+        data: {
+          location: "海边礁石",
+          catchCount,
+          coins,
+          weather: ctx.world.weather,
+          moment: catchCount === 0 || ctx.rng() < 0.6 ? pick(ctx.rng, FISH_MOMENTS) : null,
+        },
         deltas: { coins, energy: -15 },
         cvBonus: catchCount === 0 ? 1 : 0,
       };
@@ -259,7 +375,8 @@ export const TEMPLATES: EventTemplate[] = [
           cvBonus: 1,
         };
       }
-      return { outcome: "partial", data: { location, found: null }, deltas: { energy: -20 } };
+      // 什么都没找到的一天最需要 Life Moment：转了一圈也要看见点什么
+      return { outcome: "partial", data: { location, found: null, sight: pick(ctx.rng, EXPLORE_SIGHTS) }, deltas: { energy: -20 } };
     },
   },
   {
@@ -288,7 +405,7 @@ export const TEMPLATES: EventTemplate[] = [
       const sloppy = ctx.rng() < (100 - ctx.cat.diligence) / 300;
       return {
         outcome: sloppy ? "partial" : "success",
-        data: { ...job, pay: sloppy ? Math.floor(pay / 2) : pay, sloppy },
+        data: { ...job, pay: sloppy ? Math.floor(pay / 2) : pay, sloppy, moment: ctx.rng() < 0.5 ? pick(ctx.rng, JOB_MOMENTS) : null },
         deltas: { coins: sloppy ? Math.floor(pay / 2) : pay, energy: -25 },
         cvBonus: sloppy ? 1 : 0,
       };
@@ -311,7 +428,13 @@ export const TEMPLATES: EventTemplate[] = [
       const overspend = ctx.rng() < 0.2 && ctx.state.coins > cost * 3;
       return {
         outcome: overspend ? "complication" : "success",
-        data: { location: "集市广场", bought: snack, cost: overspend ? cost * 3 : cost, overspend },
+        data: {
+          location: "集市广场",
+          bought: snack,
+          cost: overspend ? cost * 3 : cost,
+          overspend,
+          moment: ctx.rng() < 0.55 ? pick(ctx.rng, MARKET_SCENES) : null,
+        },
         deltas: { coins: -(overspend ? cost * 3 : cost), energy: -10 },
         cvBonus: overspend ? 2 : 0,
       };
@@ -351,7 +474,11 @@ export const TEMPLATES: EventTemplate[] = [
     personalityFit: (c) => 0.5 + (100 - c.sociability) / 150,
     resolve: (ctx) => ({
       outcome: "success",
-      data: { location: pick(ctx.rng, ["灯塔坡", "海边礁石"]), sky: pick(ctx.rng, STARGAZE_SKIES) },
+      data: {
+        location: pick(ctx.rng, ["灯塔坡", "海边礁石"]),
+        sky: pick(ctx.rng, STARGAZE_SKIES),
+        thought: ctx.rng() < 0.5 ? pick(ctx.rng, STARGAZE_THOUGHTS) : null,
+      },
       deltas: { energy: -5 },
       cvBonus: ctx.rng() < 0.2 ? 1 : 0,
     }),
@@ -379,7 +506,13 @@ export const TEMPLATES: EventTemplate[] = [
       const delta = wentWell ? 5 + Math.floor(ctx.rng() * 7) : -(3 + Math.floor(ctx.rng() * 5));
       return {
         outcome: wentWell ? "success" : "fail",
-        data: { targetId: target.id, targetName: target.name, wentWell },
+        // 串门必带细节：一起干了什么 / 具体怎么不投机——"玩得开心"四个字撑不起一次串门
+        data: {
+          targetId: target.id,
+          targetName: target.name,
+          wentWell,
+          doing: wentWell ? pick(ctx.rng, VISIT_DOINGS) : pick(ctx.rng, VISIT_AWKWARDS),
+        },
         deltas: { energy: -10 },
         affinityChanges: [{ catAId: ctx.cat.id, catBId: target.id, delta, reason: wentWell ? "愉快的串门" : "话不投机" }],
         cvBonus: wentWell ? 0 : 1,

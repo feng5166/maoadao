@@ -358,19 +358,25 @@ export function factSummary(f: Fact, catById: Map<string, { name: string }>): st
   const target = f.targetId ? catById.get(f.targetId)?.name ?? "" : "";
   switch (f.type) {
     case "fish":
-      return d.strangeItem ? `钓鱼钓上来一个${d.strangeItem}` : `钓鱼${d.catchCount ? `钓到 ${d.catchCount} 条` : "空手而归"}`;
+      return d.strangeItem
+        ? `钓鱼钓上来一个${d.strangeItem}`
+        : `钓鱼${d.catchCount ? `钓到 ${d.catchCount} 条` : "空手而归"}${d.moment ? `；${d.moment}` : ""}`;
     case "explore":
-      return d.mishap ? `探险出了岔子：${d.mishap}` : d.found ? `在${d.location}捡到${d.found}` : `去${d.location}转了一圈`;
+      return d.mishap
+        ? `探险出了岔子：${d.mishap}`
+        : d.found
+          ? `在${d.location}捡到${d.found}`
+          : `去${d.location}转了一圈${d.sight ? `，${d.sight}` : ""}`;
     case "odd_job":
-      return `给${d.boss}${d.what}${d.sloppy ? "，干得毛毛躁躁只拿了一半工钱" : `，挣了 ${d.pay} 鱼币`}`;
+      return `给${d.boss}${d.what}${d.sloppy ? "，干得毛毛躁躁只拿了一半工钱" : `，挣了 ${d.pay} 鱼币`}${d.moment ? `；${d.moment}` : ""}`;
     case "market":
-      return d.overspend ? `赶集买${d.bought}一激动花超了` : `赶集买了${d.bought}`;
+      return `${d.overspend ? `赶集买${d.bought}一激动花超了` : `赶集买了${d.bought}`}${d.moment ? `；${d.moment}` : ""}`;
     case "rest":
       return d.pose ? `${d.pose}睡了一觉${d.dream ? `，${d.dream}` : ""}` : "睡了一觉";
     case "stargaze":
-      return `看星星，${d.sky}`;
+      return `看星星，${d.sky}${d.thought ? `；${d.thought}` : ""}`;
     case "visit":
-      return d.wentWell ? `去找${target}玩得很开心` : `和${target}话不投机`;
+      return d.wentWell ? `去找${target}玩：${d.doing ?? "玩得很开心"}` : `去找${target}，不太对味：${d.doing ?? "话不投机"}`;
     case "gossip":
       return `从${target}那听说：${d.rumor}`;
     case "borrow_money":

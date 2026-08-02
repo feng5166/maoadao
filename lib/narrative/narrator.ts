@@ -3,6 +3,7 @@ import type { Fact, SimCat } from "../sim/types";
 import { SEGMENT_CN } from "../sim/types";
 import { factSummary } from "../sim/engine";
 import { FORM_RULES, THEME_NARRATION_RULES, type ContentForm, type WeekTheme } from "../sim/firstweek";
+import { voiceLine } from "./voice";
 
 const client = new Anthropic();
 const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-4-8";
@@ -67,6 +68,7 @@ export async function narrateDiary(input: DiaryInput): Promise<{ content: string
   const user = `你的资料：
 名字：${input.cat.name}
 性格：${input.cat.personaTags.join("、")}
+${voiceLine(input.cat)}
 今天是猫啊岛的第 ${input.day} 天，${input.season}天，天气${input.weather}，你现在的心情：${input.mood}
 ${relationBlock}
 今日事实：
@@ -106,7 +108,7 @@ export async function narrateIslandNews(input: NewsInput): Promise<string[]> {
 /** 关键节点反思：把近期记忆浓缩成一句长期认知（语义记忆） */
 export async function reflect(cat: SimCat, recentMemories: string[]): Promise<string | null> {
   if (recentMemories.length === 0) return null;
-  const system = `你是猫啊岛上的一只猫，性格：${cat.personaTags.join("、")}。根据你最近的经历，总结一条你对生活/朋友/自己的新认识。要求：第一人称、30 字以内、像猫会有的朴素感悟、必须基于经历不能编造。直接输出这一句话。`;
+  const system = `你是猫啊岛上的一只猫，性格：${cat.personaTags.join("、")}。${voiceLine(cat)}根据你最近的经历，总结一条你对生活/朋友/自己的新认识。要求：第一人称、30 字以内、像猫会有的朴素感悟、必须基于经历不能编造。直接输出这一句话。`;
   return callLLM(system, `你最近的经历：\n${recentMemories.map((m) => `- ${m}`).join("\n")}`, 100);
 }
 
@@ -158,6 +160,7 @@ ${input.form && FORM_RULES[input.form] ? FORM_RULES[input.form] : ""}
 ${input.bondLine ? `你和${nick}现在的关系：${input.bondLine}用相称的语气。` : ""}`;
 
   const user = `你的资料：名字 ${input.cat.name}，性格 ${input.cat.personaTags.join("、")}，你叫主人「${nick}」
+${voiceLine(input.cat)}
 今天是猫啊岛第 ${input.day} 天，${input.weather}，你的心情：${input.mood}
 今日事实：
 ${factLines}
@@ -206,7 +209,7 @@ export interface WeekBookContent {
 /** 第一周纪念册：一次调用产出结构化内容 */
 export async function narrateWeekBook(input: WeekBookInput): Promise<{ content: WeekBookContent; generatedBy: "llm" | "fallback" }> {
   const nick = input.ownerNick || "主人";
-  const system = `你是猫啊岛上的一只猫，性格：${input.cat.personaTags.join("、")}。回顾你来岛的第一周，输出严格 JSON：
+  const system = `你是猫啊岛上的一只猫，性格：${input.cat.personaTags.join("、")}。${voiceLine(input.cat)}回顾你来岛的第一周，输出严格 JSON：
 {
   "topMoments": ["本周最难忘的 3 件事，各一句话，第一人称，必须来自提供的真实经历"],
   "catLine": "对${nick}说的一句总结：个性化、有性格，能体现你们这一周的相处（比如'你总让我小心一点。虽然我不一定都听，但我知道你不是觉得我胆小'）",
