@@ -6,7 +6,7 @@ import { reflect } from "../narrative/narrator";
 import { narrateCommittedDay } from "./renarrate";
 import { firstWeekPlan, type FirstWeekPlan } from "./firstweek";
 import { dailyEmailHtml, emailEnabled, sendEmail } from "../email";
-import { weatherFor, type SimCat, type SimCatState, type WorldSnapshot } from "./types";
+import { weatherFor, type SimCat, type SimCatState, type SimThread, type WorldSnapshot } from "./types";
 
 // 单一岛屿的推进锁 key（pg advisory lock 命名空间）
 const TICK_LOCK_KEY = 8801;
@@ -48,7 +48,8 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
       const catRows = await tx.cat.findMany();
       const stateRows = await tx.catState.findMany();
       const relRows = await tx.relationship.findMany();
-      const threadRows = await tx.storyline.findMany({ where: { status: "active" } });
+      // 委托线连已完成的一起带上：模拟器据此避免重复派同一件委托（threadFree 只查悬念线，不受影响）
+      const threadRows = await tx.storyline.findMany({ where: { OR: [{ status: "active" }, { kind: "commission" }] } });
       const recentEvents = await tx.event.findMany({
         where: { day: { gte: day - 8 } },
         select: { catId: true, type: true, day: true, outcome: true },
@@ -91,7 +92,7 @@ export async function advanceOneDay(options: { narrate?: boolean } = {}) {
           key: t.kind,
           catId: t.catId,
           step: t.step,
-          status: t.status as "active",
+          status: t.status as SimThread["status"],
           data: t.data as Record<string, unknown>,
           startDay: t.startDay,
           lastAdvanceDay: t.lastAdvanceDay,

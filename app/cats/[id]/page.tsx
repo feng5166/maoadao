@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import { CatAvatar } from "@/components/CatAvatar";
+import { LinkedText } from "@/components/LinkedText";
 import { THREAD_LABELS } from "@/lib/sim/threads";
 import { saveNudge } from "@/lib/actions";
+import { recordMetNpc } from "@/lib/arrival";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getViewerId } from "@/lib/identity";
 import { track } from "@vercel/analytics/server";
@@ -10,8 +13,10 @@ import {
   getActiveStorylines,
   getCat,
   getCatDiaries,
+  getCatNameIndex,
   getCatState,
   getFriends,
+  getViewerCat,
 } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -39,10 +44,15 @@ export default async function CatPage({
   const viewerId = await getViewerId();
   const isOwner = !cat.isNpc && Boolean(cat.ownerId) && cat.ownerId === viewerId;
 
+  // 逛别的猫的主页 = 带自己的猫认识了一位邻居（入岛三件事之二）
+  const myCat = await getViewerCat(viewerId);
+  if (myCat && myCat.id !== cat.id) after(() => recordMetNpc(myCat.id, cat.id).catch(() => {}));
+
   const state = await getCatState(id);
   const diaries = await getCatDiaries(id);
   const friends = (await getFriends(id)).filter((f) => f.affinity > 0);
   const storylines = await getActiveStorylines(id);
+  const catIndex = await getCatNameIndex();
 
   return (
     <div className="space-y-6">

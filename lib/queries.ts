@@ -99,6 +99,11 @@ export async function getHomeShowcase() {
   return { world, npcs, totalCats, sampleDiary };
 }
 
+/** 全岛猫名索引（交叉视角链接用）：请求内缓存，一次查询全站复用 */
+export const getCatNameIndex = cache(async () => {
+  return prisma.cat.findMany({ select: { id: true, name: true } });
+});
+
 export const getViewerCat = cache(async (viewerId: string | null) => {
   if (!viewerId) return null;
   return prisma.cat.findFirst({ where: { ownerId: viewerId } });

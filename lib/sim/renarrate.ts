@@ -254,7 +254,30 @@ export async function narrateCommittedDay(day: number, options: NarrateOptions =
     }
   }
 
+  // 只往当期报纸登：补写/重写历史日不该把今天待发的线索登到旧报上
+  if (isCurrentDay) await publishNewsTips(day, catById);
+
   return { day, regenerated, failed };
+}
+
+/** 读者来信：把岛民递的线索登上当期日报（原话照登，署名它的猫） */
+async function publishNewsTips(day: number, catById: Map<string, { name: string }>): Promise<void> {
+  const tips = await prisma.newsTip.findMany({ where: { publishedAt: null }, orderBy: { createdAt: "asc" }, take: 3 });
+  for (const tip of tips) {
+    const name = catById.get(tip.catId)?.name ?? "一位岛民";
+    await prisma.islandNews.upsert({
+      where: { id: `tip-${tip.id}` },
+      update: {},
+      create: {
+        id: `tip-${tip.id}`,
+        day,
+        content: `读者来信：「${tip.content}」——${name}提供`,
+        catId: tip.catId,
+        createdAt: new Date(),
+      },
+    });
+    await prisma.newsTip.update({ where: { id: tip.id }, data: { publishedAt: new Date(), publishDay: day } });
+  }
 }
 
 /** 当前世界日是否存在"事件已提交但叙事缺失"的猫（Cron 恢复入口的判据） */

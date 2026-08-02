@@ -5,7 +5,8 @@ import { after } from "next/server";
 import { CatAvatar } from "@/components/CatAvatar";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Track } from "@/components/Track";
-import { renameCat, saveNudge } from "@/lib/actions";
+import { keepArrivalPromise, renameCat, saveNudge } from "@/lib/actions";
+import { archiveArrivalNote, getArrivalChecklist } from "@/lib/arrival";
 import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, sceneFor, todayLabel } from "@/lib/handbook";
@@ -44,6 +45,10 @@ export default async function MyCatPage() {
         })
       : [];
 
+  // 入岛三件事：三件做完时这次仍完整显示（划掉+告别文案），渲染后收册
+  const arrival = await getArrivalChecklist(cat.id, cat.name);
+  if (arrival?.allDone) after(() => archiveArrivalNote(cat.id));
+
     const isNewVisitDay = viewer?.lastSeenDay !== world.day;
   after(() =>
     prisma.user
@@ -61,6 +66,11 @@ export default async function MyCatPage() {
 
   const bond = bondStage(daysOnIsland, nudgeTotal, viewer?.visitDays ?? 0);
   const choices = ((summary?.choices ?? null) as { value: string; label: string }[] | null) ?? null;
+  // 待办的邻居委托：把"这件事"具体成"棉花托你的事"
+  const commission = choices
+    ? await prisma.storyline.findFirst({ where: { catId: cat.id, kind: "commission", status: "active", step: 1 } })
+    : null;
+  const commissionNpc = commission ? String((commission.data as Record<string, unknown>).npcName ?? "") : "";
   const missedOne = viewer?.lastSeenDay != null && world.day - viewer.lastSeenDay === 2;
   const notes = summary
     ? marginNotes(
@@ -90,6 +100,43 @@ export default async function MyCatPage() {
             你说的话它会记住，但听不听，它有自己的主意。
           </p>
           <p className="mt-2 text-xs text-ink-soft">↓ 往下翻，给它留下第一句话，明早八点回来看它怎么说</p>
+        </div>
+      )}
+
+      {/* 入岛三件事：码头塞给新岛民的一张纸，做完收进生活册 */}
+      {arrival && (
+        <div className="note-slip mt-4 p-4" style={{ transform: "rotate(0.5deg)" }}>
+          <p className="font-title text-sm font-bold">入岛须知</p>
+          <p className="mt-0.5 text-xs text-ink-faint">
+            {arrival.allDone ? "都办妥了——这张纸收进生活册了。" : `把${cat.name}安顿好，就这三件事。`}
+          </p>
+          <ul className="mt-2.5 space-y-2">
+            {arrival.tasks.map((t) => (
+              <li key={t.key} className="font-diary text-[15px] leading-snug">
+                <span className={t.done ? "text-ink-faint line-through" : "text-ink"}>
+                  {t.done ? "✓" : "○"} {t.label}
+                </span>
+                {!t.done && (
+                  <span className="ml-1.5 text-xs text-ink-faint">
+                    {t.hint}
+                    {t.key === "meet" && (
+                      <>
+                        {" · "}
+                        <Link href="/island" className="text-sea-deep hover:text-brick">去公告栏</Link>
+                      </>
+                    )}
+                  </span>
+                )}
+                {!t.done && t.key === "promise" && (
+                  <form action={keepArrivalPromise} className="mt-1">
+                    <SubmitButton pendingText="…" className="border border-line px-3 py-1 text-xs text-sea-deep hover:border-sea-deep">
+                      记住了，明早八点见
+                    </SubmitButton>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -202,7 +249,9 @@ export default async function MyCatPage() {
               它可以在日记里提到这句话（不勾选就只有它自己知道）
             </label>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-xs text-ink-soft">{choices ? "这件事，你希望它……" : "你希望它明天……"}</span>
+              <span className="text-xs text-ink-soft">
+                {commissionNpc ? `${commissionNpc}托付的事，你希望它……` : choices ? "这件事，你希望它……" : "你希望它明天……"}
+              </span>
               {(choices
                 ? [{ v: "", label: "让它自己拿主意" }, ...choices.map((c) => ({ v: c.value, label: c.label }))]
                 : [

@@ -17,7 +17,7 @@ export default async function HistoryPage() {
   const cat = await getViewerCat(viewerId);
   if (!cat) redirect("/adopt");
 
-  const [summaries, friendsAll, threads, keepsakes] = await Promise.all([
+  const [summaries, friendsAll, threads, keepsakes, arrivalNote] = await Promise.all([
     getSummaries(cat.id),
     getFriends(cat.id, 8),
     getActiveStorylines(cat.id),
@@ -26,6 +26,7 @@ export default async function HistoryPage() {
       orderBy: [{ importance: "desc" }, { day: "desc" }],
       take: 6,
     }),
+    prisma.arrivalNote.findUnique({ where: { catId: cat.id } }),
   ]);
   const friends = friendsAll.filter((f) => Math.abs(f.affinity) > 5);
   const firstDay = summaries.length ? summaries[summaries.length - 1].day : 0;
@@ -66,6 +67,17 @@ export default async function HistoryPage() {
               </Link>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 收进册子的入岛须知 */}
+      {arrivalNote?.archivedAt && (
+        <div className="note-slip mt-6 p-4" style={{ transform: "rotate(-0.5deg)" }}>
+          <p className="font-title text-sm font-bold text-ink-faint">入岛须知</p>
+          <p className="font-diary mt-1.5 text-[15px] leading-relaxed text-ink-faint line-through">
+            给{cat.name}留下第一句话 · 带它认识邻居 · 和它约好明早八点
+          </p>
+          <p className="mt-1 text-xs text-ink-faint">那天在码头领到的纸，三件都办妥了。</p>
         </div>
       )}
 

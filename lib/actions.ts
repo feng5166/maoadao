@@ -103,6 +103,40 @@ export async function saveNudge(formData: FormData) {
   revalidatePath(`/cats/${catId}`);
 }
 
+/** 给《猫啊岛日报》递一条线索：用户在这个世界里留下的痕迹，次日见报 */
+export async function submitNewsTip(formData: FormData) {
+  const content = String(formData.get("content") ?? "").trim().slice(0, 60);
+  if (!content) return;
+  const uid = await getViewerId();
+  const cat = await prisma.cat.findFirst({ where: { ownerId: uid ?? "__none__" }, select: { id: true } });
+  if (!cat) throw new Error("要先有一只猫，才能给小梅递线索");
+
+  // 一次只压一条待发线索：防刷版面
+  const pending = await prisma.newsTip.count({ where: { catId: cat.id, publishedAt: null } });
+  if (pending > 0) throw new Error("小梅手上还压着你的一条线索，等见了报再递下一条");
+
+  const mod = await moderateTexts([content]);
+  if (!mod.ok) throw new Error(mod.reason ?? "这条线索没通过小梅的审稿");
+
+  await prisma.newsTip.create({ data: { id: randomUUID(), catId: cat.id, content, createdAt: new Date() } });
+  await track("news_tip_submit", {});
+  revalidatePath("/island");
+}
+
+/** 入岛三件事之三：和它约好明早八点（一次性，不是签到） */
+export async function keepArrivalPromise() {
+  const uid = await getViewerId();
+  const cat = await prisma.cat.findFirst({ where: { ownerId: uid ?? "__none__" }, select: { id: true } });
+  if (!cat) return;
+  await prisma.arrivalNote.upsert({
+    where: { catId: cat.id },
+    update: { promisedAt: new Date() },
+    create: { catId: cat.id, metNpcIds: [], promisedAt: new Date() },
+  });
+  await track("arrival_promise", {});
+  revalidatePath("/my-cat");
+}
+
 export async function renameCat(formData: FormData) {
   const newName = String(formData.get("newName") ?? "").trim().slice(0, 12);
   if (!newName) return;

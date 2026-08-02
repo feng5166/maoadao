@@ -1,5 +1,7 @@
 // 手账页的展示辅助：系统数据 → 生活语言（v0.7 术语产品化）
 
+import { hashSeed, mulberry32, pick } from "./sim/rng";
+
 /** 地点 → 固定场景图（5-8 幅固定背景，避免头像漂浮） */
 export function sceneFor(location: string | undefined): string {
   const map: [string, string][] = [
@@ -43,6 +45,53 @@ export function marginNotes(
     notes.push(`「${t.label}」${threadStage(t.step, t.total)}。`);
   }
   return notes;
+}
+
+// ============ 摸摸它：每天一句确定性反应（状态+日期哈希，不调 LLM） ============
+const PET_HAPPY = [
+  "它把脑袋顶进你手心里蹭了蹭，呼噜开得很大声。",
+  "它就势翻了个肚皮——这待遇可不常有。",
+  "它眯着眼接受了，尾巴尖愉快地打了个卷。",
+  "它蹭完你的手，还顺势舔了一下你的指尖。",
+];
+const PET_TIRED = [
+  "它睡眼惺忪地抬了下头，又把自己缩回去了。",
+  "它含糊地哼了一声，算是回应过了。",
+  "它任你摸，眼睛都没睁开。",
+  "它打了个大哈欠，把下巴搁回爪子上。",
+];
+const PET_DOWN = [
+  "它往后缩了缩，今天不太想被摸。",
+  "它让你摸了，但尾巴一直没抬起来。",
+  "它把脸埋起来，只留一只耳朵给你。",
+  "它轻轻拱了下你的手，像是想说点什么，又没说。",
+];
+const PET_BUSY = [
+  "它心不在焉地接受了，眼睛一直盯着窗外。",
+  "它耳朵动了动，思绪明显在别的事上。",
+  "它匆匆蹭了一下就走开了，像有什么要紧事。",
+  "它看了你一眼，那眼神像是在说：回头再说。",
+];
+const PET_CALM = [
+  "它眯起眼睛，喉咙里滚出细小的呼噜。",
+  "它歪头看了你一会儿，轻轻蹭了下你的手背。",
+  "它抬头顶了顶你的掌心，然后继续看它的海。",
+  "它用尾巴在你手腕上绕了半圈。",
+];
+
+export function petLine(catId: string, day: number, mood?: string | null): string {
+  const rng = mulberry32(hashSeed(day, "pet", catId));
+  const m = mood ?? "";
+  const pool = ["得意", "眉开眼笑"].includes(m)
+    ? PET_HAPPY
+    : ["疲惫", "犯困"].includes(m)
+      ? PET_TIRED
+      : ["郁闷", "有点丧", "饿肚子", "愁钱"].includes(m)
+        ? PET_DOWN
+        : ["心事重重", "按捺不住好奇"].includes(m)
+          ? PET_BUSY
+          : PET_CALM;
+  return pick(rng, pool);
 }
 
 /** 事件线进度 → 阶段语（精确数字进档案页） */

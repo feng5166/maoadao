@@ -11,6 +11,7 @@ import type {
   WorldSnapshot,
 } from "./types";
 import { pick } from "./rng";
+import { COMMISSIONS, COMMISSION_BY_KEY, type Commission } from "./commissions";
 
 export interface TemplateCtx {
   world: WorldSnapshot;
@@ -585,6 +586,61 @@ export const TEMPLATES: EventTemplate[] = [
       };
     },
   },
+
+  // ============ NPC 委托：邻居捎来口信，主人替它做一次选择 ============
+  // 只给用户猫；首周让位给旧钥匙主线（两套选择撞车会让人不知道在选什么）
+  {
+    key: "npc_commission",
+    label: "邻居的口信",
+    category: "social",
+    segments: ["afternoon", "evening"],
+    cooldownDays: 5, // 委托是稀客，不是每日任务
+    baseWeight: 18,
+    contentValue: 7,
+    minEnergy: 5,
+    condition: (ctx) =>
+      !ctx.cat.isNpc &&
+      !ctx.threadsOfCat.some((t) => t.status === "active" && (t.key === "commission" || t.key === "arrival_key")) &&
+      eligibleCommissions(ctx).length > 0,
+    personalityFit: () => 1,
+    propose: (ctx) => {
+      const pool = eligibleCommissions(ctx);
+      if (pool.length === 0) return null;
+      const c = pick(ctx.rng, pool);
+      return { targetId: c.npcId, meta: { commissionKey: c.key } };
+    },
+    resolve: (ctx, intent) => {
+      const c = COMMISSION_BY_KEY.get(String(intent.meta.commissionKey))!;
+      const npc = ctx.catById.get(c.npcId)!;
+      return {
+        outcome: "complication", // 悬而未决：今天只是把信送到
+        data: { scene: c.letter, targetId: c.npcId, targetName: npc.name, commission: c.key, choices: c.choices },
+        deltas: { energy: -5 },
+        newThreads: [
+          {
+            key: "commission",
+            catId: ctx.cat.id,
+            step: 1,
+            data: { commissionKey: c.key, npcId: c.npcId, npcName: npc.name, letter: c.letter },
+            startDay: ctx.world.day,
+          },
+        ],
+        cvBonus: 3,
+      };
+    },
+  },
 ];
+
+/** 可发出的委托：委托猫在岛上、有交情（好感 ≥ 12）、这条委托没做过 */
+function eligibleCommissions(ctx: TemplateCtx): Commission[] {
+  const done = new Set(
+    ctx.world.threads
+      .filter((t) => t.key === "commission" && t.catId === ctx.cat.id)
+      .map((t) => String(t.data.commissionKey)),
+  );
+  return COMMISSIONS.filter(
+    (c) => !done.has(c.key) && ctx.catById.has(c.npcId) && c.npcId !== ctx.cat.id && ctx.affinityWith(c.npcId) >= 12,
+  );
+}
 
 export const TEMPLATE_BY_KEY = new Map(TEMPLATES.map((t) => [t.key, t]));

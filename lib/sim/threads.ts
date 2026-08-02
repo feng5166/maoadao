@@ -1,11 +1,13 @@
 import type { EventTemplate, TemplateCtx } from "./templates";
 import type { SimThread } from "./types";
 import { pick } from "./rng";
+import { COMMISSION_BY_KEY } from "./commissions";
 
 // 事件线系统：多步剧情跨天推进，每天最多前进一步（追更感的来源）。
 // 每条线：可选的每日自动事实（autoDaily，如店铺营业）+ 主角的推进意图（intentFor）。
 
 export const THREAD_LABELS: Record<string, string> = {
+  commission: "邻居托付的事",
   shop: "经营小店",
   debt: "欠着债",
   lighthouse: "灯塔之谜",
@@ -53,6 +55,44 @@ function stepTemplate(
 }
 
 export const THREAD_SYSTEMS: Record<string, ThreadSystem> = {
+  // ============ NPC 委托：次日兑现（主人的选择 × 猫的性格） ============
+  // 没选也照样发生：猫不会因为主人没发话就把邻居晾着——只是做法由性格决定。
+  commission: {
+    intentFor: (ctx, thread) => {
+      if (thread.step !== 1) return null;
+      const c = COMMISSION_BY_KEY.get(String(thread.data.commissionKey));
+      if (!c) return null;
+      const choice = ctx.world.suggestions?.get(thread.catId) ?? "";
+      const bold = ctx.cat.boldness > 60;
+      const outcome = c.outcomes[choice]?.(bold) ?? c.fallback(bold);
+      const chosen = Boolean(c.outcomes[choice]);
+      return stepTemplate("commission_done", `办${thread.data.npcName}托付的事`, {
+        contentValue: 7,
+        minEnergy: 5,
+        baseWeight: 70, // 答应了邻居的事第二天就得办：不能让它被钓鱼睡觉挤掉
+        resolve: () => ({
+          outcome: outcome.affinity >= 0 ? ("success" as const) : ("partial" as const),
+          data: {
+            scene: outcome.scene,
+            targetId: c.npcId,
+            targetName: String(thread.data.npcName),
+            commission: c.key,
+            nudged: chosen,
+          },
+          deltas: { coins: outcome.coins ?? 0, energy: -12 },
+          affinityChanges: [
+            { catAId: thread.catId, catBId: c.npcId, delta: outcome.affinity, reason: outcome.reason },
+            ...(outcome.side
+              ? [{ catAId: thread.catId, catBId: outcome.side.catId, delta: outcome.side.delta, reason: outcome.side.reason }]
+              : []),
+          ],
+          threadUpdates: [{ threadId: thread.id, step: 2, status: "resolved" as const, data: { ...thread.data, choice: choice || null } }],
+          cvBonus: 3,
+        }),
+      });
+    },
+  },
+
   // ============ 店铺线：开店后每天自动营业，连亏关店，赚了有里程碑 ============
   shop: {
     autoDaily: (ctx, thread) => {
