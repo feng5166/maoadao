@@ -180,7 +180,7 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
   if (isFinding) {
     if (replies >= 2) {
       await bumpReplies();
-      return { replyText: presenceReply(cat, beijingHour(), replies - 2, today), matched: "presence" };
+      return { replyText: presenceReply(cat, beijingHour(), replies - 2, today, link), matched: "presence" };
     }
     if (replies >= 1) {
       await bumpReplies();
@@ -202,7 +202,7 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
   if (replies >= 2) {
     await bumpReplies();
     // 微响应(doc/11 修订):不静默也不接话——留言照收,回一点岛上的动静
-    return { replyText: presenceReply(cat, beijingHour(), replies - 2, today), matched: "presence" };
+    return { replyText: presenceReply(cat, beijingHour(), replies - 2, today, link), matched: "presence" };
   }
   if (replies >= 1) {
     await bumpReplies();

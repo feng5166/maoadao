@@ -110,13 +110,14 @@ const PRESENCE_NIGHT = [
   "（枕头边的纸条又多了一张）",
 ];
 
-/** n = 今天第几次微响应(从 0 起):连发多条后收敛为一个爪印,防刷也防旁白疲劳 */
-export function presenceReply(cat: MsgCat, hourBJ: number, n: number, dayKey: number): string {
+/** n = 今天第几次微响应(从 0 起):连发多条后收敛为一个爪印,防刷也防旁白疲劳。
+ *  旁白档带短链(回复用户主动消息,无 spam 特征;给此刻就想去看它的人留门);🐾 档保持赤裸。 */
+export function presenceReply(cat: MsgCat, hourBJ: number, n: number, dayKey: number, link: string): string {
   if (n >= 4) return "🐾";
   const night = hourBJ >= 22 || hourBJ < 7;
   const pool = night ? PRESENCE_NIGHT : PRESENCE_DAY;
   const rng = mulberry32(hashSeed(dayKey, "presence", cat.id, n));
-  return pick(rng, pool);
+  return `${pick(rng, pool)}\n${link}`;
 }
 
 export const UNSUBSCRIBE_WORDS = ["别再捎信", "取消", "退订", "别发了"];
