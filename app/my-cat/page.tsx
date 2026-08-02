@@ -26,7 +26,8 @@ export const dynamic = "force-dynamic";
 // 今日手账：单页连续叙事，不是卡片集合（v0.7）。
 // 顺序：日期天气 → 场景与猫 → 一句状态 → 故事正文 → 它记得你昨天说的话 → 页边批注 → 今晚留句话 → 页尾悬念
 
-export default async function MyCatPage() {
+export default async function MyCatPage({ searchParams }: { searchParams: Promise<{ from?: string }> }) {
+  const { from } = await searchParams;
   const viewerId = await getViewerId();
   const cat = await getViewerCat(viewerId);
   if (!cat) redirect("/adopt");
@@ -217,6 +218,12 @@ export default async function MyCatPage() {
 
       {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}
       <p className="font-diary mt-4 text-center text-[15px] text-ink">{nowText}</p>
+      {/* 微信来的路(doc/11 修订 §五):确认刚才那句话已收进——只说"收到",不说"照做" */}
+      {from === "wechat" && pendingNudge?.message && (
+        <p className="mt-1.5 text-center text-xs text-ink-soft">
+          你刚从微信里告诉它:「{pendingNudge.message}」——它把这句话收进了今天的纸条。
+        </p>
+      )}
       <p className="mt-1 text-center text-xs text-ink-soft">这会儿的心情：{state?.mood ?? "平静"}</p>
       {/* 船靠岸(doc/12 §八.9):首日的生成等待是世界过程,不是 loading */}
       {!cat.portraitUrl &&

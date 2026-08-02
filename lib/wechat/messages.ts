@@ -60,22 +60,38 @@ export function handshakeMessage(cat: MsgCat, firstWords: string | null, hourBJ:
   return `${header(cat.name)}\n${opening}${quote}${promise}`;
 }
 
-// ============ T5 回信 ACK:确定性短句,按心情分池,绝不接续聊天 ============
-const ACK_DEFAULT = [
-  "记住啦。明早说给你听。",
-  "收到。我把它压在爪垫底下了。",
-  "嗯嗯，记下了。",
-];
-const ACK_HAPPY = ["收到收到！尾巴都翘起来了。", "记住啦！今天正好有好事，明早一起讲。"];
-const ACK_DOWN = ["……收到了。有你这句话，好受多了。", "记下了。今天有点蔫，明早再说。"];
-const ACK_REPEAT = "一天捎一句就够啦，我记性好。都记着呢。";
+// ============ 门铃三件套(doc/11 修订):一来一回,然后回岛。全部确定性,永不 LLM ============
+// 产品规则:猫不住在微信里,微信只是它偶尔伸到现实世界的一只爪子。
 
-export function ackLine(cat: MsgCat, day: number, mood: string | null | undefined, isRepeat: boolean): string {
-  if (isRepeat) return `${header(cat.name)}${ACK_REPEAT}`;
-  const rng = mulberry32(hashSeed(day, "wx-ack", cat.id));
-  const m = mood ?? "";
-  const pool = ["得意", "眉开眼笑"].includes(m) ? ACK_HAPPY : ["郁闷", "有点丧", "饿肚子", "愁钱"].includes(m) ? ACK_DOWN : ACK_DEFAULT;
-  return `${header(cat.name)}${pick(rng, pool)}`;
+/** 找猫("你在哪/在干嘛"):报当前已解锁的真实状态 + 回岛深链。nowFirstPerson 来自事实,绝不编造。 */
+export function statusReply(cat: MsgCat, nowFirstPerson: string, link: string, hourBJ: number): string {
+  const night = hourBJ >= 22 || hourBJ < 6;
+  if (night) {
+    return `${header(cat.name)}\n${nowFirstPerson}\n你也可以进来看看我——轻一点。\n${link}`;
+  }
+  return `${header(cat.name)}\n我现在不在微信里。${nowFirstPerson}\n\n来岛上找我吧：\n${link}`;
+}
+
+/** 留话回执:确认收到 + 性格小尾巴 + 回岛深链。不承诺照做,不展开对话。 */
+const RECEIPT_BOLD_LOW = "我收到啦。我会先想一想，再决定要不要照做。";
+const RECEIPT_BOLD_HIGH = "收到。不过我可能还是会先去看看。";
+const RECEIPT_DILIGENT_HIGH = "我记下来了，等忙完手上的事就认真想想。";
+const RECEIPT_DEFAULT = "我收到啦。这句话我会带回猫啊岛，等明天遇到事情的时候再想一想。";
+
+export function receiptReply(cat: MsgCat, link: string): string {
+  const axes: [number, string][] = [
+    [50 - cat.boldness, RECEIPT_BOLD_LOW],
+    [cat.boldness - 50, RECEIPT_BOLD_HIGH],
+    [cat.diligence - 50, RECEIPT_DILIGENT_HIGH],
+  ];
+  const best = axes.sort((a, b) => b[0] - a[0])[0];
+  const line = best[0] >= 20 ? best[1] : RECEIPT_DEFAULT;
+  return `${header(cat.name)}\n${line}\n\n你也可以现在来看看我：\n${link}`;
+}
+
+/** 收束(同一天第二次来消息):听见了,但不陪聊。之后当天静默,消息照收。 */
+export function closeReply(cat: MsgCat): string {
+  return `${header(cat.name)}你后面说的话我也收到了。我先回岛上了，晚点在那里见。`;
 }
 
 export const UNSUBSCRIBE_WORDS = ["别再捎信", "取消", "退订", "别发了"];

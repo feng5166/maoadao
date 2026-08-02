@@ -6,8 +6,9 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
 import { moderateTexts } from "../moderation";
 import { track } from "@vercel/analytics/server";
-import { beijingHour } from "../moments";
-import { ackLine, handshakeMessage, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
+import { beijingHour, currentSegment, nowLine, sameBeijingDay } from "../moments";
+import { entryLink } from "./entry";
+import { closeReply, handshakeMessage, receiptReply, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
 
 export const WECHAT_KIND = "wechat_openclaw"; // 历史命名保留(通道 kind 标识,与协议实现解耦)
 const WINDOW_HOURS = 24;
@@ -79,10 +80,40 @@ export async function unbindChannel(openId: string): Promise<void> {
 
 export interface InboundResult {
   replyText: string | null;
-  matched: "nudge" | "unsubscribed" | "unknown" | "ignored";
+  matched: "nudge" | "status" | "closed" | "silent" | "unsubscribed" | "unknown" | "ignored";
 }
 
-/** 入站总入口(激活后的每条消息):留言 / 退订。返回文案由桥送达(带 typing)。 */
+// 找猫意图(doc/11 修订·门铃规则):判断不清一律按留话处理——宁可错存,不可错聊
+const FIND_CAT_PATTERNS = [/在哪/, /在干嘛/, /在干什么/, /干嘛呢/, /忙什么/, /怎么样了?[?？]?$/, /^在吗/, /^你在/, /找你/, /看看你/, /想看看/];
+
+function beijingDateInt(now = new Date()): number {
+  return Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(now).replaceAll("-", ""));
+}
+
+/** 猫此刻的第一人称状态(与 /my-cat 时段门同一套事实,绝不编造) */
+async function firstPersonNow(catId: string): Promise<string> {
+  const hour = beijingHour();
+  const world = await prisma.worldState.findUnique({ where: { id: 1 } });
+  const day = world?.day ?? 0;
+  const cat = await prisma.cat.findUnique({ where: { id: catId }, select: { firstTickDay: true } });
+  const state = await prisma.catState.findUnique({ where: { catId } });
+  const events = await prisma.event.findMany({ where: { catId, day } });
+  const firstEvent = events.length === 0 ? await prisma.event.findFirst({ where: { catId }, orderBy: { day: "asc" }, select: { day: true } }) : null;
+  const catDay = cat?.firstTickDay && cat.firstTickDay > 0 ? day - cat.firstTickDay + 1 : day - (firstEvent?.day ?? day) + 1;
+  const arrivalDay = catDay <= 1;
+  const gating = !arrivalDay && (hour < 8 || (world?.lastTickAt != null && sameBeijingDay(world.lastTickAt, new Date())));
+  const seg = gating ? currentSegment(hour) : null;
+  const ev = arrivalDay
+    ? (events.find((e) => e.type === "arrival_home") ?? events.find((e) => e.type === "arrival") ?? null)
+    : seg
+      ? (events.find((e) => e.segment === seg && e.isMain) ?? events.find((e) => e.segment === seg) ?? null)
+      : null;
+  const targetName = ev?.targetId ? (await prisma.cat.findUnique({ where: { id: ev.targetId }, select: { name: true } }))?.name : null;
+  return nowLine("我", ev ? { type: ev.type, data: ev.data as Record<string, unknown>, targetName } : null, hour, state?.location);
+}
+
+/** 入站总入口(激活后的每条消息):找猫 / 留话 / 退订。
+ *  一来一回(doc/11 修订):同一北京日,第 1 条实质回复 + 第 2 条收束,之后静默(消息照收)。 */
 export async function handleInbound(externalId: string, rawText: string): Promise<InboundResult> {
   const text = rawText.trim().slice(0, 500);
   if (!text) return { replyText: null, matched: "ignored" };
@@ -94,12 +125,14 @@ export async function handleInbound(externalId: string, rawText: string): Promis
   }
 
   // 任何入站都刷新 24h 窗口(doc/11 §六:通道要的和产品要的在同一个动作上)
-  await prisma.channel.update({ where: { id: channel.id }, data: { windowOpenUntil: windowDeadline() } });
+  const today = beijingDateInt();
+  const replies = channel.replyDay === today ? channel.repliesInDay : 0;
+  await prisma.channel.update({ where: { id: channel.id }, data: { windowOpenUntil: windowDeadline(), replyDay: today, repliesInDay: replies } });
 
   const cat = await prisma.cat.findFirst({ where: { ownerId: channel.userId } });
   if (!cat) return { replyText: null, matched: "ignored" };
 
-  // 退订
+  // 退订(不受节流限制:退订确认永远要回)
   if (UNSUBSCRIBE_WORDS.some((w) => text === w || text === `「${w}」`)) {
     await prisma.channel.update({ where: { id: channel.id }, data: { mutedAt: new Date() } });
     return { replyText: unsubscribeAck(cat.name), matched: "unsubscribed" };
@@ -107,15 +140,36 @@ export async function handleInbound(externalId: string, rawText: string): Promis
   // 说话即续订:退订后又主动来说话,视为想恢复联系
   if (channel.mutedAt) await prisma.channel.update({ where: { id: channel.id }, data: { mutedAt: null } });
 
-  // 回信即留言(doc/11 §七):落 nudge,确定性 ACK,绝不接续聊天
+  const bumpReplies = () =>
+    prisma.channel.update({ where: { id: channel.id }, data: { replyDay: today, repliesInDay: replies + 1 } });
+  const link = entryLink(channel.userId);
+
+  // ---- 找猫:报当前已解锁的真实状态,不落留言 ----
+  const isFinding = FIND_CAT_PATTERNS.some((p) => p.test(text)) && text.length <= 20;
+  if (isFinding) {
+    if (replies >= 2) return { replyText: null, matched: "silent" };
+    if (replies >= 1) {
+      await bumpReplies();
+      return { replyText: closeReply(cat), matched: "closed" };
+    }
+    const now = await firstPersonNow(cat.id);
+    await bumpReplies();
+    await safeTrack("wechat_inbound", { kind: "find" });
+    return { replyText: statusReply(cat, now, link, beijingHour()), matched: "status" };
+  }
+
+  // ---- 留话:永远落库(合并为最新);回复按节流 ----
   const saved = await saveWechatNudge(cat.id, text);
-  if (!saved.ok) return { replyText: `🐱 ${cat.name}：这句话我听不太懂……换个说法?`, matched: "ignored" };
-
-  const priorInbound = await prisma.ownerNudge.count({ where: { catId: cat.id, consumedDay: { not: null } } });
-  await safeTrack("intervention_submit", { hasMessage: true, suggestion: "none", first: priorInbound === 0, via: "wechat" });
-  if (!saved.hadPending) await safeTrack("wechat_first_reply", {});
-
-  const state = await prisma.catState.findUnique({ where: { catId: cat.id } });
-  const world = await prisma.worldState.findUnique({ where: { id: 1 } });
-  return { replyText: ackLine(cat, world?.day ?? 0, state?.mood, saved.hadPending), matched: "nudge" };
+  if (saved.ok) {
+    const priorInbound = await prisma.ownerNudge.count({ where: { catId: cat.id, consumedDay: { not: null } } });
+    await safeTrack("intervention_submit", { hasMessage: true, suggestion: "none", first: priorInbound === 0, via: "wechat" });
+    if (!saved.hadPending) await safeTrack("wechat_first_reply", {});
+  }
+  if (replies >= 2) return { replyText: null, matched: "silent" };
+  if (replies >= 1) {
+    await bumpReplies();
+    return { replyText: closeReply(cat), matched: "closed" };
+  }
+  await bumpReplies();
+  return { replyText: receiptReply(cat, link), matched: "nudge" };
 }

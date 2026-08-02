@@ -84,17 +84,26 @@ describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言�
     await bindChannel(U, WXID, "");
   }, T);
 
-  it("回信即留言:确定性 ACK;连发合并为最新一条;未知 openId 引导回岛", async () => {
+  it("门铃规则:找猫→真实状态+深链(不落留言);留话→回执;一来一回后收束、再来静默;消息照收合并", async () => {
     const { prisma, cat } = await setup();
     const { handleInbound } = await import("../lib/wechat/service");
+    await prisma.ownerNudge.deleteMany({ where: { catId: cat.id, consumedDay: null } }); // 清掉上一用例的激活留言
 
+    // 第 1 条:找猫 → 状态回复(带免登录深链),不产生留言
+    const f = await handleInbound(WXID, "你在干嘛?");
+    expect(f.matched).toBe("status");
+    expect(f.replyText).toContain("/api/wechat/entry?wt=");
+    expect(await prisma.ownerNudge.count({ where: { catId: cat.id, consumedDay: null } })).toBe(0);
+
+    // 第 2 条:留话 → 已到收束(一次会话最多一条实质回复),但留言照存
     const r1 = await handleInbound(WXID, "今天去海边玩玩吧");
-    expect(r1.matched).toBe("nudge");
-    expect(r1.replyText).toContain("测试煤球");
+    expect(r1.matched).toBe("closed");
+    expect(r1.replyText).toContain("先回岛上了");
 
+    // 第 3 条:静默,但留言合并为最新
     const r2 = await handleInbound(WXID, "还有,记得吃饭");
-    expect(r2.matched).toBe("nudge");
-    expect(r2.replyText).toContain("一天捎一句"); // 重复提示
+    expect(r2.matched).toBe("silent");
+    expect(r2.replyText).toBeNull();
 
     const pending = await prisma.ownerNudge.findMany({ where: { catId: cat.id, consumedDay: null } });
     expect(pending.length).toBe(1); // 合并为最新
@@ -103,6 +112,13 @@ describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言�
 
     const stranger = await handleInbound("wxid-nobody", "你好");
     expect(stranger.matched).toBe("unknown");
+
+    // 重置计数(模拟新的一天):留话第 1 条 → 人格化回执 + 深链
+    await prisma.channel.updateMany({ where: { userId: U }, data: { repliesInDay: 0 } });
+    const fresh = await handleInbound(WXID, "早点睡哦");
+    expect(fresh.matched).toBe("nudge");
+    expect(fresh.replyText).toContain("我收到啦"); // 胆小型回执(boldness 30)
+    expect(fresh.replyText).toContain("/api/wechat/entry?wt=");
   }, T);
 
   it("退订与说话即续订", async () => {
