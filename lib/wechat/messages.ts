@@ -89,9 +89,9 @@ export function receiptReply(cat: MsgCat, link: string): string {
   return `${header(cat.name)}\n${line}\n\n你也可以现在来看看我：\n${link}`;
 }
 
-/** 收束(同一天第二次来消息):听见了,但不陪聊。 */
-export function closeReply(cat: MsgCat): string {
-  return `${header(cat.name)}你后面说的话我也收到了。我先回岛上了，晚点在那里见。`;
+/** 收束(同一天第二次来消息):听见了,但不陪聊——"那里"在哪,链接给出来。 */
+export function closeReply(cat: MsgCat, link: string): string {
+  return `${header(cat.name)}你后面说的话我也收到了。我先回岛上了，晚点在那里见：\n${link}`;
 }
 
 // ============ 微响应(收束之后):不静默也不接话——岛上漏过来的一点动静 ============
@@ -119,8 +119,8 @@ export function presenceReply(cat: MsgCat, hourBJ: number, n: number, dayKey: nu
 }
 
 export const UNSUBSCRIBE_WORDS = ["别再捎信", "取消", "退订", "别发了"];
-export function unsubscribeAck(catName: string): string {
-  return `${header(catName)}好。我就不捎信了——你想我的时候，岛上见。`;
+export function unsubscribeAck(catName: string, link: string): string {
+  return `${header(catName)}好。我就不捎信了——你想我的时候，岛上见：\n${link}`;
 }
 
 // ============ T6 每日消息模板(内容素材由调用方从事实取)============
@@ -138,6 +138,6 @@ export function eventMessage(cat: MsgCat, eventLine: string, link: string): stri
 }
 
 /** 缺席 3 天关怀:不责备体(v0.8 缺席原则)。todayLine 来自当日事实。 */
-export function absenceMessage(cat: MsgCat, todayLine: string): string {
-  return `${header(cat.name)}\n我没什么事。就是今天${todayLine}的时候，多看了两眼码头。`;
+export function absenceMessage(cat: MsgCat, todayLine: string, link: string): string {
+  return `${header(cat.name)}\n我没什么事。就是今天${todayLine}的时候，多看了两眼码头。\n\n${link}`;
 }

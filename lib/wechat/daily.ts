@@ -99,7 +99,7 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
         });
         if (owner?.lastSeenDay != null && day - owner.lastSeenDay >= ABSENCE_GAP_DAYS && recentAbsence === 0) {
           kind = "absence";
-          content = absenceMessage(cat, morningLine);
+          content = absenceMessage(cat, morningLine, LINK);
         }
       }
     }

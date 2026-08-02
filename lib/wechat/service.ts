@@ -163,10 +163,10 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
   const cat = await prisma.cat.findFirst({ where: { ownerId: channel.userId } });
   if (!cat) return { replyText: null, matched: "ignored" };
 
-  // 退订(不受节流限制:退订确认永远要回)
+  // 退订(不受节流限制:退订确认永远要回,带回岛链接)
   if (UNSUBSCRIBE_WORDS.some((w) => text === w || text === `「${w}」`)) {
     await prisma.channel.update({ where: { id: channel.id }, data: { mutedAt: new Date() } });
-    return { replyText: unsubscribeAck(cat.name), matched: "unsubscribed" };
+    return { replyText: unsubscribeAck(cat.name, await shortEntryLink(channel.userId)), matched: "unsubscribed" };
   }
   // 说话即续订:退订后又主动来说话,视为想恢复联系
   if (channel.mutedAt) await prisma.channel.update({ where: { id: channel.id }, data: { mutedAt: null } });
@@ -184,7 +184,7 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
     }
     if (replies >= 1) {
       await bumpReplies();
-      return { replyText: closeReply(cat), matched: "closed" };
+      return { replyText: closeReply(cat, link), matched: "closed" };
     }
     const now = await firstPersonNow(cat.id);
     await bumpReplies();
@@ -206,7 +206,7 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
   }
   if (replies >= 1) {
     await bumpReplies();
-    return { replyText: closeReply(cat), matched: "closed" };
+    return { replyText: closeReply(cat, link), matched: "closed" };
   }
   await bumpReplies();
   return { replyText: receiptReply(cat, link), matched: "nudge" };
