@@ -9,7 +9,7 @@ import { sendFeishu } from "../feishu";
 import { track } from "@vercel/analytics/server";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay } from "../moments";
 import { entryLink } from "./entry";
-import { closeReply, handshakeMessage, receiptReply, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
+import { closeReply, handshakeMessage, presenceReply, receiptReply, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
 
 export const WECHAT_KIND = "wechat_openclaw"; // 历史命名保留(通道 kind 标识,与协议实现解耦)
 const WINDOW_HOURS = 24;
@@ -99,7 +99,7 @@ export async function unbindChannel(openId: string): Promise<void> {
 
 export interface InboundResult {
   replyText: string | null;
-  matched: "nudge" | "status" | "closed" | "silent" | "unsubscribed" | "unknown" | "ignored";
+  matched: "nudge" | "status" | "closed" | "presence" | "unsubscribed" | "unknown" | "ignored";
 }
 
 // 找猫意图(doc/11 修订·门铃规则):判断不清一律按留话处理——宁可错存,不可错聊
@@ -178,7 +178,10 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
   // ---- 找猫:报当前已解锁的真实状态,不落留言 ----
   const isFinding = FIND_CAT_PATTERNS.some((p) => p.test(text)) && text.length <= 20;
   if (isFinding) {
-    if (replies >= 2) return { replyText: null, matched: "silent" };
+    if (replies >= 2) {
+      await bumpReplies();
+      return { replyText: presenceReply(cat, beijingHour(), replies - 2, today), matched: "presence" };
+    }
     if (replies >= 1) {
       await bumpReplies();
       return { replyText: closeReply(cat), matched: "closed" };
@@ -196,7 +199,11 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
     await safeTrack("intervention_submit", { hasMessage: true, suggestion: "none", first: priorInbound === 0, via: "wechat" });
     if (!saved.hadPending) await safeTrack("wechat_first_reply", {});
   }
-  if (replies >= 2) return { replyText: null, matched: "silent" };
+  if (replies >= 2) {
+    await bumpReplies();
+    // 微响应(doc/11 修订):不静默也不接话——留言照收,回一点岛上的动静
+    return { replyText: presenceReply(cat, beijingHour(), replies - 2, today), matched: "presence" };
+  }
   if (replies >= 1) {
     await bumpReplies();
     return { replyText: closeReply(cat), matched: "closed" };

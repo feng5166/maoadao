@@ -89,9 +89,33 @@ export function receiptReply(cat: MsgCat, link: string): string {
   return `${header(cat.name)}\n${line}\n\n你也可以现在来看看我：\n${link}`;
 }
 
-/** 收束(同一天第二次来消息):听见了,但不陪聊。之后当天静默,消息照收。 */
+/** 收束(同一天第二次来消息):听见了,但不陪聊。 */
 export function closeReply(cat: MsgCat): string {
   return `${header(cat.name)}你后面说的话我也收到了。我先回岛上了，晚点在那里见。`;
+}
+
+// ============ 微响应(收束之后):不静默也不接话——岛上漏过来的一点动静 ============
+// 括号旁白体:不是"猫在说话",是你隔着海看它的一眼。永不引用用户内容,防 Chatbot 化。
+const PRESENCE_DAY = [
+  "（它的耳朵朝这边转了一下，又转回去了）",
+  "（远处传来一声短短的喵）",
+  "（它正忙着岛上的事，尾巴尖朝你晃了晃）",
+  "（风把你的话捎过去了——它嗯了一声）",
+  "（它探出头看了你一眼，又缩回去晒太阳了）",
+];
+const PRESENCE_NIGHT = [
+  "（小屋的灯已经熄了）",
+  "（它睡得很沉，胡子抖了一下）",
+  "（枕头边的纸条又多了一张）",
+];
+
+/** n = 今天第几次微响应(从 0 起):连发多条后收敛为一个爪印,防刷也防旁白疲劳 */
+export function presenceReply(cat: MsgCat, hourBJ: number, n: number, dayKey: number): string {
+  if (n >= 4) return "🐾";
+  const night = hourBJ >= 22 || hourBJ < 7;
+  const pool = night ? PRESENCE_NIGHT : PRESENCE_DAY;
+  const rng = mulberry32(hashSeed(dayKey, "presence", cat.id, n));
+  return pick(rng, pool);
 }
 
 export const UNSUBSCRIBE_WORDS = ["别再捎信", "取消", "退订", "别发了"];
