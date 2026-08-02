@@ -56,7 +56,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       <div className="text-center">
         <p className="seal">岛民登记册</p>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-          它就蹲在登记台边上打量你。岛主陈皮翻开岛民册，笔尖蘸了蘸：
+          它就蹲在登记台边上打量你。岛主猫阿道翻开岛民册，笔尖蘸了蘸：
           <br />
           「几个小问题。答完，这只猫，就交给你啦。」
         </p>
