@@ -18,9 +18,10 @@ export function BoatArriving({ stage }: { stage: "boat" | "photo" }) {
   const router = useRouter();
   const [i, setI] = useState(0);
   const [late, setLate] = useState(false);
-  const startRef = useRef(Date.now());
+  const startRef = useRef(0);
 
   useEffect(() => {
+    if (startRef.current === 0) startRef.current = Date.now();
     const textTimer = setInterval(() => setI((x) => x + 1), 6000);
     const lateTimer = setTimeout(() => setLate(true), TIMEOUT_MS);
     let pollTimer: ReturnType<typeof setInterval> | null = setInterval(() => {

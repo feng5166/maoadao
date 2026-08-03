@@ -129,6 +129,15 @@ export async function getPendingNudge(catId: string) {
   return prisma.ownerNudge.findFirst({ where: { catId, consumedDay: null }, orderBy: { createdAt: "desc" } });
 }
 
+/** 未寄出的信（doc/11 §六）：近三天最新一封，且没被后续送达取代（window_closed 才算未寄出） */
+export async function getUnsentLetter(userId: string) {
+  const m = await prisma.outboundMessage.findFirst({
+    where: { userId, createdAt: { gte: new Date(Date.now() - 3 * 86400_000) } },
+    orderBy: { createdAt: "desc" },
+  });
+  return m?.status === "window_closed" ? m : null;
+}
+
 /** 关系数值翻译成人话（定义：不要只显示数值） */
 export function describeAffinity(affinity: number): string {
   if (affinity > 60) return "形影不离的挚友";

@@ -1,7 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { prisma } from "./db";
+import { generateImage } from "./imagegen";
 
 // 定稿立绘：创建时生成一次，之后所有页面和分享卡复用——绝不每天重生成（定义·十三）。
 
@@ -13,51 +14,58 @@ const STYLE =
   "整只猫最多使用6种颜色，色彩中低饱和；纯米白色背景（#FAF6EE），无任何环境和道具；" +
   "扁平上色带轻微水彩纸纹理和铅笔瑕疵感；不要写实毛发细节，不要摄影感，不要3D渲染，无文字无水印";
 
-function buildPrompt(cat: { name: string; appearance: string; personaTags: string[] }): string {
+// 风格锚点：拿几张已定稿立绘当画风参考，比纯文字 STYLE 稳得多。
+// 三只花色跨度大的 NPC（白长毛/黑短毛/三花）——花色差距大，模型才学"画风"而不是"这只猫长什么样"。
+const ANCHOR_IDS = ["npc-mianhua", "npc-heidou", "npc-xiaomei"];
+const ANCHOR_NOTE =
+  "参考图只规定画风（线条、上色、纸纹、光线、轮廓处理），必须与参考图画风完全一致；" +
+  "但不要模仿参考图里猫的花色、品种、体型和姿势——这是另一只完全不同的猫。";
+
+function buildPrompt(cat: { name: string; appearance: string; personaTags: string[] }, withAnchors: boolean): string {
   const persona = cat.personaTags.slice(0, 3).join("、");
-  return `一只猫的角色立绘：${cat.appearance}。性格${persona}，用站姿和表情体现性格。${STYLE}`;
+  return `一只猫的角色立绘：${cat.appearance}。性格${persona}，用站姿和表情体现性格。${STYLE}${withAnchors ? `。${ANCHOR_NOTE}` : ""}`;
 }
 
-/** 生成立绘并入库；幂等（已有立绘直接返回）。耗时 10~30 秒。 */
-export async function generatePortrait(catId: string, options: { force?: boolean } = {}): Promise<boolean> {
+/** 取风格锚点立绘（排除自己——force 重绘锚点猫时不能拿旧图当参考）。库里还没有就退回纯文字约束。 */
+async function styleAnchors(excludeCatId: string): Promise<{ data: Buffer; mime: string }[]> {
+  if (process.env.PORTRAIT_STYLE_ANCHORS === "off") return [];
+  const rows = await prisma.portrait.findMany({
+    where: { catId: { in: ANCHOR_IDS.filter((id) => id !== excludeCatId) } },
+  });
+  // 保持 ANCHOR_IDS 的既定顺序，输出稳定可复现
+  return ANCHOR_IDS.map((id) => rows.find((r) => r.catId === id))
+    .filter((r): r is NonNullable<typeof r> => Boolean(r))
+    .map((r) => ({ data: Buffer.from(r.data), mime: r.mime }));
+}
+
+/** 生成立绘并入库；幂等（已有立绘直接返回）。耗时 10~30 秒。
+ *  archiveDir：脚本环境下把 API 原图落盘归档（serverless 无持久盘，线上调用不传）。 */
+export async function generatePortrait(
+  catId: string,
+  options: { force?: boolean; archiveDir?: string } = {},
+): Promise<boolean> {
   const cat = await prisma.cat.findUnique({ where: { id: catId } });
   if (!cat) return false;
   if (cat.portraitUrl && !options.force) return true;
 
-  const base = process.env.IMAGE_API_BASE ?? "https://api.modelverse.cn";
-  const key = process.env.IMAGE_API_KEY;
-  const model = process.env.PORTRAIT_MODEL ?? "doubao-seedream-4.5";
-  if (!key) {
-    console.error("[portrait] 缺少 IMAGE_API_KEY，跳过生成");
-    return false;
-  }
-
   try {
-    const res = await fetch(`${base}/v1/images/generations`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, prompt: buildPrompt(cat), size: "2048x2048", n: 1 }),
+    const anchors = await styleAnchors(catId);
+    const raw = await generateImage({
+      prompt: buildPrompt(cat, anchors.length > 0),
+      size: "2048x2048",
+      referenceImages: anchors,
     });
-    if (!res.ok) {
-      console.error(`[portrait] 生成失败 ${res.status}:`, (await res.text()).slice(0, 200));
-      return false;
-    }
-    const json = (await res.json()) as { data?: { url?: string; b64_json?: string }[] };
-    const item = json.data?.[0];
-    let raw: Buffer;
-    if (item?.b64_json) {
-      raw = Buffer.from(item.b64_json, "base64");
-    } else if (item?.url) {
-      const imgRes = await fetch(item.url);
-      if (!imgRes.ok) return false;
-      raw = Buffer.from(await imgRes.arrayBuffer());
-    } else {
-      console.error("[portrait] 响应里没有图片:", JSON.stringify(json).slice(0, 200));
-      return false;
+    if (!raw) return false;
+
+    if (options.archiveDir) {
+      await mkdir(options.archiveDir, { recursive: true });
+      const ext = raw[0] === 0x89 ? "png" : "jpg";
+      await writeFile(path.join(options.archiveDir, `${catId}.${ext}`), raw);
     }
 
-    // 压到 768：页面和分享卡都够用，DB 体积可控（~100KB/张）
-    const jpegBuf = await sharp(raw).resize(768, 768, { fit: "cover" }).jpeg({ quality: 82 }).toBuffer();
+    // 入库主图 1600：展示全走 ?s= 缩略图路由，页面重量不受影响；
+    // 主图同时是分享卡/相遇照片/未来周边的母版，768 太小（原图只在归档盘里有）。
+    const jpegBuf = await sharp(raw).resize(1600, 1600, { fit: "cover" }).jpeg({ quality: 85 }).toBuffer();
     const jpeg = new Uint8Array(jpegBuf); // Prisma Bytes 需要 Uint8Array<ArrayBuffer>
 
     await prisma.portrait.upsert({
@@ -88,10 +96,10 @@ async function loadDockScene(): Promise<Buffer> {
 // 相遇照片（doc/10 §3 Asset 1，合成路线）：码头场景 + 定稿立绘贴纸 → 拍立得。
 // 不烙文字进图（serverless 中文字体不可控），说明文字由页面 HTML 承担。
 // 一致性 100%：照片里的猫就是立绘那只猫——必须在立绘定稿之后调用。
-export async function generateArrivalPhoto(catId: string): Promise<boolean> {
+export async function generateArrivalPhoto(catId: string, options: { force?: boolean } = {}): Promise<boolean> {
   const cat = await prisma.cat.findUnique({ where: { id: catId } });
   if (!cat || cat.isNpc) return false;
-  if (cat.arrivalPhotoUrl) return true;
+  if (cat.arrivalPhotoUrl && !options.force) return true;
   const portrait = await prisma.portrait.findUnique({ where: { catId } });
   if (!portrait) {
     console.error("[arrival-photo] 立绘还没定稿，跳过（下次领养流程重试或手动补）");

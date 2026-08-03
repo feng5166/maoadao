@@ -11,7 +11,7 @@ import { Track } from "@/components/Track";
 import { keepArrivalPromise, renameCat, saveNudge } from "@/lib/actions";
 import { archiveArrivalNote, buildArrivalChecklist, markArrivalCelebrated } from "@/lib/arrival";
 import { getViewerId } from "@/lib/identity";
-import { getCatState, getLatestSummary, getPendingNudge, getViewerCat, getWorld } from "@/lib/queries";
+import { getCatState, getLatestSummary, getPendingNudge, getUnsentLetter, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay, unlockedSegments } from "@/lib/moments";
 import { wechatEnabled } from "@/lib/wechat/bridge";
@@ -180,12 +180,7 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
 
   // 未寄出的信(doc/11 §六):24h 窗口关了发不出去的消息不丢弃——
   // 变成 Web 上的一封信,提示回微信一句重开窗口。只展示最新且未被后续送达取代的一封。
-  const unsentLetter = wechatEnabled()
-    ? await prisma.outboundMessage.findFirst({
-        where: { userId: viewerId!, createdAt: { gte: new Date(Date.now() - 3 * 86400_000) } },
-        orderBy: { createdAt: "desc" },
-      }).then((m) => (m?.status === "window_closed" ? m : null))
-    : null;
+  const unsentLetter = wechatEnabled() ? await getUnsentLetter(viewerId!) : null;
 
   // D2 双向履约(doc/12 §八.3):主人答应回来,并真的回来了——只在 D2 首次有效回访出现一次
   const promiseKept = daysOnIsland === 2 && isNewVisitDay;
