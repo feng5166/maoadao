@@ -3,6 +3,16 @@ import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { CatAvatar } from "@/components/CatAvatar";
 import { LinkedText } from "@/components/LinkedText";
+import {
+  IconCompass,
+  IconFishCoin,
+  IconHeart,
+  IconHouse,
+  IconLighthouse,
+  IconMood,
+  IconPaw,
+  IconSpark,
+} from "@/components/icons";
 import { THREAD_LABELS } from "@/lib/sim/threads";
 import { saveNudge } from "@/lib/actions";
 import { recordMetNpc } from "@/lib/arrival";
@@ -21,11 +31,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const GOAL_LABELS: Record<string, string> = {
-  chill: "🛋️ 舒服躺平",
-  earn: "🐟 攒钱开店",
-  friends: "💕 交遍朋友",
-  explore: "🗺️ 探索全岛",
+const GOAL_LABELS: Record<string, { Icon: typeof IconHouse; label: string }> = {
+  chill: { Icon: IconHouse, label: "舒服躺平" },
+  earn: { Icon: IconFishCoin, label: "攒钱开店" },
+  friends: { Icon: IconHeart, label: "交遍朋友" },
+  explore: { Icon: IconCompass, label: "探索全岛" },
 };
 
 
@@ -48,6 +58,9 @@ export default async function CatPage({
   // 逛别的猫的主页 = 带自己的猫认识了一位邻居（小约定之二）
   if (myCat && myCat.id !== cat.id) after(() => recordMetNpc(myCat.id, cat.id).catch(() => {}));
 
+  const goal = cat.goal ? GOAL_LABELS[cat.goal] : null;
+  const GoalIcon = goal?.Icon;
+
   const [state, diaries, friendsAll, storylines, catIndex] = await Promise.all([
     getCatState(id),
     getCatDiaries(id),
@@ -66,12 +79,13 @@ export default async function CatPage({
             <h1 className="font-title text-2xl font-bold">{cat.name}</h1>
             <p className="mt-0.5 text-sm text-ink-soft">{cat.appearance}</p>
             {!cat.isNpc && !cat.portraitUrl && (
-              <p className="mt-0.5 text-xs text-[#C4A24C]">🎨 专属立绘绘制中，稍后刷新查看</p>
+              <p className="mt-0.5 text-xs text-[#C4A24C]">专属立绘绘制中，稍后刷新查看</p>
             )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               {cat.goal && (
-                <span className="border border-line px-2 py-0.5 text-xs text-sage">
-                  {GOAL_LABELS[cat.goal] ?? cat.goal}
+                <span className="flex items-center gap-1 border border-line px-2 py-0.5 text-xs text-sage">
+                  {GoalIcon && <GoalIcon size={13} />}
+                  {goal?.label ?? cat.goal}
                 </span>
               )}
               {cat.personaTags.map((tag) => (
@@ -87,19 +101,19 @@ export default async function CatPage({
         {state && (
           <div className="mt-4 grid grid-cols-4 gap-2 border-t border-line pt-4 text-center">
             <div>
-              <p className="text-lg font-bold">🐟 {state.coins}</p>
+              <p className="flex items-center justify-center gap-1 text-lg font-bold"><IconFishCoin size={16} className="text-lamp" /> {state.coins}</p>
               <p className="text-xs text-ink-faint">鱼币</p>
             </div>
             <div>
-              <p className="text-lg font-bold">⚡ {state.energy}</p>
+              <p className="flex items-center justify-center gap-1 text-lg font-bold"><IconSpark size={16} className="text-ink-soft" /> {state.energy}</p>
               <p className="text-xs text-ink-faint">体力</p>
             </div>
             <div>
-              <p className="truncate text-base font-bold sm:text-lg">{state.mood}</p>
+              <p className="flex items-center justify-center gap-1 text-base font-bold sm:text-lg"><IconMood size={16} className="shrink-0 text-ink-soft" /> <span className="truncate">{state.mood}</span></p>
               <p className="text-xs text-ink-faint">心情</p>
             </div>
             <div>
-              <p className="truncate text-base font-bold sm:text-lg">{state.location}</p>
+              <p className="flex items-center justify-center gap-1 text-base font-bold sm:text-lg"><IconPaw size={16} className="shrink-0 text-ink-soft" /> <span className="truncate">{state.location}</span></p>
               <p className="text-xs text-ink-faint">位置</p>
             </div>
           </div>
@@ -108,8 +122,8 @@ export default async function CatPage({
         {storylines.length > 0 && (
           <div className="mt-3 border-l-2 border-line pl-3 text-sm">
             {storylines.map((s) => (
-              <p key={s.id}>
-                📌 {s.kind === "shop"
+              <p key={s.id} className="flex items-start gap-1.5">
+                <IconLighthouse size={14} className="mt-1 shrink-0 text-sea-deep" /> {s.kind === "shop"
                   ? `正在经营「${String((s.data as Record<string, unknown> | null)?.name ?? "小店")}」（第 ${s.startDay} 天开张）`
                   : `${THREAD_LABELS[s.kind] ?? s.kind}（进行到第 ${s.step} 步）`}
               </p>
@@ -125,7 +139,7 @@ export default async function CatPage({
                 <Link key={f.id} href={`/cats/${f.otherId}`} className="flex items-center gap-1.5 text-sm hover:text-brick">
                   <CatAvatar id={f.otherId} size={28} />
                   {f.otherName}
-                  <span className="text-xs text-ink-faint">{f.affinity > 40 ? "❤️" : "·"}</span>
+                  <span className="text-xs text-ink-faint">{f.affinity > 40 ? <IconHeart size={12} className="text-brick" /> : "·"}</span>
                 </Link>
               ))}
             </div>
@@ -163,7 +177,7 @@ export default async function CatPage({
               ))}
             </div>
             <SubmitButton pendingText="送出中…" className="stamp-btn px-4 py-1.5 text-sm">
-              送给它 🐾
+              送给它 <IconPaw size={14} />
             </SubmitButton>
           </form>
         </section>

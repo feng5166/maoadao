@@ -46,7 +46,8 @@ body {
   letter-spacing: 0.02em;
 }
 .font-diary {
-  font-family: "Kaiti SC", "KaiTi", "STKaiti", "Songti SC", serif;
+  /* Apple 优先系统楷体；其余平台用自托管 LXGW 文楷（比 Windows KaiTi 更接近手账手写感） */
+  font-family: "Kaiti SC", "STKaiti", "LXGW WenKai Lite", "KaiTi", "Songti SC", "Noto Serif SC", serif;
 }
 .font-press {
   font-family: "Songti SC", "Noto Serif SC", serif;

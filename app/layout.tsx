@@ -4,6 +4,11 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getViewerId } from "@/lib/identity";
 import { getViewerCat } from "@/lib/queries";
+// 自托管中文 webfont（unicode-range 分片，按需下载）：Apple 设备命中系统宋体/楷体
+// 不会下载；Android/Windows 缺字库时兜底，避免手账感退化成默认黑体。
+import "@fontsource/noto-serif-sc/400.css";
+import "@fontsource/noto-serif-sc/700.css";
+import "lxgw-wenkai-lite-webfont/lxgwwenkailite-regular.css";
 import "./globals.css";
 
 export const metadata: Metadata = {

@@ -1,6 +1,7 @@
 import { createCat } from "@/lib/actions";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Track } from "@/components/Track";
+import { IconPaw } from "@/components/icons";
 
 export const maxDuration = 120; // 领养后 after() 里异步生成首日内容、立绘与相遇照片
 
@@ -184,7 +185,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
 
         <div className="pt-2 text-center">
           <SubmitButton pendingText="它竖起了耳朵，朝你走过来……" className="stamp-btn w-full">
-            就是它了 🐾
+            就是它了 <IconPaw size={15} />
           </SubmitButton>
           <p className="mt-2 text-xs text-ink-faint">登记完成后，它今天就住进小屋，晚上写下来岛第一天的日记。</p>
         </div>

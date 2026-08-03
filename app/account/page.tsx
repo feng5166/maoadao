@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CopyCode } from "@/components/CopyCode";
 import { SubmitButton } from "@/components/SubmitButton";
+import { IconMailbox, IconPaw } from "@/components/icons";
 import {
   ensureRecoveryCode,
   recoverByCode,
@@ -43,7 +44,7 @@ export default async function AccountPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-[#EADFCC] bg-white p-5 text-sm text-ink shadow-sm">
+        <div className="border-t border-line pt-4 text-sm text-ink">
           这台设备上还没有猫。如果你在别处养过，用下面的找回码或邮箱把它找回来；
           还没养过就去<Link href="/adopt" className="text-brick">领养一只</Link>。
         </div>
@@ -76,7 +77,7 @@ export default async function AccountPage() {
 
       {/* 找回码：零依赖，立即可用 */}
       <div className="border-t border-line pt-4">
-        <h2 className="font-title font-bold">🐾 找回码</h2>
+        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconPaw size={15} /> 找回码</h2>
         {recoveryCode ? (
           <>
             <p className="mt-1 text-xs text-ink-faint">抄下这串猫爪印，换设备时输入即可找回你的猫。别告诉别人——拿到码就等于拿到猫。</p>
@@ -97,13 +98,13 @@ export default async function AccountPage() {
 
       {/* 邮箱绑定 / 登录 */}
       <div className="border-t border-line pt-4">
-        <h2 className="font-title font-bold">📮 邮箱{user?.emailVerifiedAt ? "" : "绑定与找回"}</h2>
+        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconMailbox size={15} /> 邮箱{user?.emailVerifiedAt ? "" : "绑定与找回"}</h2>
         {user?.emailVerifiedAt ? (
           <div className="mt-2 space-y-3 text-sm text-ink">
             <p>已绑定：{user.email}</p>
             <form action={toggleNotify}>
               <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-xs text-ink-soft hover:border-sea-deep">
-                {user.notifyDaily ? "🔔 每日故事邮件：开（点击关闭）" : "🔕 每日故事邮件：关（点击开启）"}
+                {user.notifyDaily ? "每日故事邮件：开（点击关闭）" : "每日故事邮件：关（点击开启）"}
               </SubmitButton>
             </form>
           </div>

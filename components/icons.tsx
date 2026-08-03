@@ -1,0 +1,139 @@
+import type { SVGProps } from "react";
+
+// 手绘单色图标系（v0.7 视觉规范·容器与图标）：替代裸线性图标与 emoji。
+// 统一 24 视窗、圆头描边、轮廓带轻微不对称的手绘感；只用 currentColor 跟随文字色。
+// 规范八枚：鱼币/灯塔/小屋/邮箱/足迹/心情/关系/天气；另补体力、罗盘两枚同风格补足档案页。
+
+type IconProps = SVGProps<SVGSVGElement> & { size?: number };
+
+function Svg({ size = 16, style, children, ...props }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{ display: "inline-block", verticalAlign: "-0.125em", ...style }}
+      {...props}
+    >
+      {children}
+    </svg>
+  );
+}
+
+/** 鱼币：一枚歪歪的硬币，里面游着一条鱼 */
+export function IconFishCoin(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3.4c4.8-.2 8.6 3.7 8.5 8.5-.1 4.7-3.9 8.6-8.6 8.5-4.7-.1-8.4-3.9-8.3-8.6C3.7 7.2 7.4 3.6 12 3.4z" />
+      <path d="M7.4 12c1.3-1.8 3.2-2.8 5.3-2.6 1.7.2 3 1.1 3.9 2.6-.9 1.5-2.2 2.4-3.9 2.6-2.1.2-4-.8-5.3-2.6z" />
+      <path d="M16.6 12c.8-.7 1.5-1.1 2.3-1.3-.3.9-.3 1.8 0 2.7-.8-.2-1.5-.7-2.3-1.4z" />
+      <circle cx="13.9" cy="11.5" r="0.35" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+/** 灯塔：条纹塔身与两道光 */
+export function IconLighthouse(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9.7 20.2 10.5 9.8h3l.8 10.4" />
+      <path d="M10.2 13.5h3.6M9.9 16.7h4.2" />
+      <path d="M10.2 9.8V7.7h3.6v2.1" />
+      <path d="M9.7 7.7 12 5.6l2.3 2.1" />
+      <path d="M6 6.3l2.2 1.1M18 6.3l-2.2 1.1" />
+      <path d="M7.7 20.3c2.9-.4 5.7-.4 8.6 0" />
+    </Svg>
+  );
+}
+
+/** 小屋：歪屋顶、烟囱和一扇门 */
+export function IconHouse(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4.9 11.9C7.3 9.6 9.6 7.4 12 5.3c2.4 2.1 4.7 4.3 7.1 6.5" />
+      <path d="M6.7 10.6v9.2h10.6v-9.3" />
+      <path d="M10.4 19.8v-4.5c0-.9.7-1.7 1.6-1.7s1.6.8 1.6 1.7v4.5" />
+      <path d="M15.8 7V4.9h1.9v3.8" />
+    </Svg>
+  );
+}
+
+/** 邮箱：一封边角不齐的信 */
+export function IconMailbox(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3.9 7.2c5.4-.5 10.8-.5 16.2 0 .3 3.2.3 6.4 0 9.6-5.4.5-10.8.5-16.2 0-.3-3.2-.3-6.4 0-9.6z" />
+      <path d="M4.3 7.7 12 13.4l7.7-5.7" />
+    </Svg>
+  );
+}
+
+/** 足迹：一枚猫爪印 */
+export function IconPaw(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6.1 10.9c-.9-.2-1.4-1.2-1.1-2.2.3-1 1.2-1.6 2-1.3.9.3 1.3 1.3 1 2.2-.3 1-1.1 1.6-1.9 1.3z" />
+      <path d="M10.7 8.6c-.9-.1-1.5-1-1.4-2.1.1-1 .9-1.8 1.8-1.7.9.1 1.5 1 1.4 2.1-.1 1-.9 1.8-1.8 1.7z" />
+      <path d="M14.6 8.7c-.9.1-1.7-.7-1.8-1.7-.1-1 .5-2 1.4-2.1.9-.1 1.7.7 1.8 1.7.1 1-.5 2-1.4 2.1z" />
+      <path d="M18 10.9c-.8.3-1.6-.3-1.9-1.3-.3-1 .1-2 1-2.2.8-.3 1.7.3 2 1.3.3 1-.2 2-1.1 2.2z" />
+      <path d="M12 11.3c2.6 0 4.9 2 4.9 4.2 0 1.6-1.2 2.6-2.6 2.6-.9 0-1.6-.4-2.3-.4-.7 0-1.4.4-2.3.4-1.4 0-2.6-1-2.6-2.6 0-2.2 2.3-4.2 4.9-4.2z" />
+    </Svg>
+  );
+}
+
+/** 心情：眯眼笑的猫脸 */
+export function IconMood(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 5.8c3.6-.1 6.5 2.8 6.5 6.4 0 3.6-2.9 6.5-6.5 6.5-3.6 0-6.5-2.9-6.5-6.5 0-3.6 2.9-6.3 6.5-6.4z" />
+      <path d="M7.3 7.7 6.5 4.4l3.1 1.6M16.7 7.7l.8-3.3-3.1 1.6" />
+      <path d="M9.3 11.8c.5-.6 1.1-.6 1.6 0M13.1 11.8c.5-.6 1.1-.6 1.6 0" />
+      <path d="M10.6 14.4c.5.5.9.7 1.4.7.5 0 .9-.2 1.4-.7" />
+    </Svg>
+  );
+}
+
+/** 关系：一颗不太对称的心 */
+export function IconHeart(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 19.1c-3.1-2.2-5.4-4.2-6.6-6.2-1.2-2-.8-4.3.9-5.3 1.6-1 3.9-.4 5.7 1.9 1.8-2.3 4.1-2.9 5.7-1.9 1.7 1 2.1 3.3.9 5.3-1.2 2-3.5 4-6.6 6.2z" />
+    </Svg>
+  );
+}
+
+/** 天气：云朵后面探出半个太阳 */
+export function IconWeather(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M6.2 9.9c.3-1.9 1.9-3.3 3.8-3.2 1.5.1 2.7 1 3.3 2.3" />
+      <path d="M9.7 3.2v1.5M4.3 8.6l1.5.3M5.6 4.8l1.1 1.1M14 4.2l-1.1 1.1" />
+      <path d="M8 19c-2 0-3.6-1.4-3.6-3.2 0-1.6 1.2-2.9 2.8-3.1.5-1.9 2.2-3.2 4.3-3.2 2.3 0 4.2 1.6 4.5 3.7 1.7.1 3 1.4 3 3 0 1.7-1.4 2.9-3.2 2.9-2.6 0-5.2-.1-7.8-.1z" />
+    </Svg>
+  );
+}
+
+/** 体力：一道手画的小闪电 */
+export function IconSpark(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M13.2 3.9 7.6 12.7l3.7.4-1.5 6.9 6.1-9.1-3.8-.4 1.1-6.6z" />
+    </Svg>
+  );
+}
+
+/** 罗盘：探索用的歪指针 */
+export function IconCompass(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3.6c4.6-.2 8.3 3.5 8.2 8.2-.1 4.6-3.8 8.4-8.3 8.3-4.5-.1-8.1-3.8-8-8.4C4 7.3 7.6 3.8 12 3.6z" />
+      <path d="M14.9 9.1l-1.7 4.1-4.1 1.7 1.7-4.1 4.1-1.7z" />
+    </Svg>
+  );
+}
