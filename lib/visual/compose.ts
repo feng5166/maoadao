@@ -20,7 +20,10 @@ function tintLayer(time: SceneTime): Buffer | null {
 
 /** 姿势图去底(2026-08-04 拍板:猫要坐进场景,不要白框贴纸):
  *  立绘是纯米白平涂背景+粗描边——从四边泛洪填充清掉背景,深色描边天然拦住
- *  猫身上的浅色毛;蒙版轻羽化防浅色毛边 */
+ *  猫身上的浅色毛;蒙版轻羽化防浅色毛边。
+ *  白猫(毛色≈米白)靠双保险:泛洪不许穿过"梯度屏障"(描边/明暗变化处),
+ *  抠完做漏检(保留面积过小=泛洪漏进猫身)——漏了收紧参数重来,再漏就抛错,
+ *  上层回落纯场景(宁可没有猫,不要幽灵猫)。 */
 async function makeCutout(pose: Buffer, size = 400): Promise<Buffer> {
   const { data, info } = await sharp(pose)
     .resize(size, size, { fit: "cover" })
@@ -33,31 +36,65 @@ async function makeCutout(pose: Buffer, size = 400): Promise<Buffer> {
   // 背景参考色 = 四角均值(米白,但生成会有漂移,别写死)
   const corners = [px(2, 2), px(width - 3, 2), px(2, height - 3), px(width - 3, height - 3)];
   const bg = [0, 1, 2].map((c) => corners.reduce((s, o) => s + data[o + c], 0) / 4);
-  const isBg = (o: number) => {
-    const d = Math.abs(data[o] - bg[0]) + Math.abs(data[o + 1] - bg[1]) + Math.abs(data[o + 2] - bg[2]);
-    return d < 90;
-  };
+  const bgDist = (o: number) =>
+    Math.abs(data[o] - bg[0]) + Math.abs(data[o + 1] - bg[1]) + Math.abs(data[o + 2] - bg[2]);
 
-  // BFS 泛洪:从全部边缘像素出发,只清和背景连通的区域(猫肚子上的白毛是内部区域,动不到)
-  const mask = new Uint8Array(width * height).fill(255); // 255=保留
-  const queue: number[] = [];
-  for (let x = 0; x < width; x++) queue.push(x, x + (height - 1) * width);
-  for (let y = 0; y < height; y++) queue.push(y * width, y * width + width - 1);
-  for (const i of queue) if (isBg(i * channels)) mask[i] = 0;
-  while (queue.length > 0) {
-    const i = queue.pop()!;
-    if (mask[i] !== 0) continue;
-    const x = i % width;
-    const y = (i / width) | 0;
-    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
-      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-      const ni = ny * width + nx;
-      if (mask[ni] === 255 && isBg(ni * channels)) {
-        mask[ni] = 0;
-        queue.push(ni);
+  // 梯度图:与右/下邻居的三通道差之和的较大者——描边和明暗交界处梯度高
+  const grad = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const o = px(x, y);
+      let g = 0;
+      if (x < width - 1) {
+        const r = o + channels;
+        g = Math.abs(data[o] - data[r]) + Math.abs(data[o + 1] - data[r + 1]) + Math.abs(data[o + 2] - data[r + 2]);
       }
+      if (y < height - 1) {
+        const d = o + width * channels;
+        const gd = Math.abs(data[o] - data[d]) + Math.abs(data[o + 1] - data[d + 1]) + Math.abs(data[o + 2] - data[d + 2]);
+        if (gd > g) g = gd;
+      }
+      grad[y * width + x] = Math.min(255, g);
     }
   }
+
+  // 泛洪(参数化):bgTol=判背景的颜色距离;gradCap=屏障(梯度高于此不许进)
+  const flood = (bgTol: number, gradCap: number): Uint8Array => {
+    const isBg = (i: number) => bgDist(i * channels) < bgTol && grad[i] < gradCap;
+    const mask = new Uint8Array(width * height).fill(255); // 255=保留
+    const queue: number[] = [];
+    for (let x = 0; x < width; x++) queue.push(x, x + (height - 1) * width);
+    for (let y = 0; y < height; y++) queue.push(y * width, y * width + width - 1);
+    for (const i of queue) if (isBg(i)) mask[i] = 0;
+    while (queue.length > 0) {
+      const i = queue.pop()!;
+      if (mask[i] !== 0) continue;
+      const x = i % width;
+      const y = (i / width) | 0;
+      for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const) {
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const ni = ny * width + nx;
+        if (mask[ni] === 255 && isBg(ni)) {
+          mask[ni] = 0;
+          queue.push(ni);
+        }
+      }
+    }
+    return mask;
+  };
+
+  // 参数阶梯:先宽松(普通猫最干净),漏了逐级收紧;保留面积 <18% 判漏(幽灵猫≈只剩描边)
+  let mask: Uint8Array | null = null;
+  for (const [bgTol, gradCap] of [[90, 46], [55, 28], [36, 18]] as const) {
+    const m = flood(bgTol, gradCap);
+    let kept = 0;
+    for (let i = 0; i < m.length; i++) if (m[i] === 255) kept++;
+    if (kept / m.length >= 0.18) {
+      mask = m;
+      break;
+    }
+  }
+  if (!mask) throw new Error("抠图漏进猫身(白猫轮廓缺口),放弃该姿势");
 
   // 先 1px 收缩(紧贴 bg 的保留像素多半是混了米白的过渡边,吃掉它)再羽化——消浅色毛边
   const eroded = new Uint8Array(mask);
@@ -137,9 +174,19 @@ export async function composeMoment(
   const layers: sharp.OverlayOptions[] = [];
 
   if (poseImage) {
-    // 比例关系:按场景景别缩放(远景猫小、室内猫大),再做时段光照匹配
+    // 比例关系:按场景景别缩放(远景猫小、室内猫大),再做时段光照匹配。
+    // 抠图放弃(白猫漏检三连败)→ 回落纯场景:宁可这一张没有猫,不要幽灵猫
+    let raw: Buffer | null = null;
+    try {
+      raw = await makeCutout(poseImage);
+    } catch (err) {
+      console.error("[compose] 抠图回落纯场景:", err instanceof Error ? err.message : err);
+    }
+    if (!raw) {
+      const tintOnly = needsTint ? tintLayer(spec.time) : null;
+      return sharp(file).resize(W, H, { fit: "cover" }).composite(tintOnly ? [{ input: tintOnly }] : []).jpeg({ quality: 84 }).toBuffer();
+    }
     const targetH = Math.round(H * (opts?.scaleOverride ?? SCENE_CAT_SCALE[spec.scene] ?? 0.34));
-    const raw = await makeCutout(poseImage);
     const scaled = await sharp(raw).resize({ height: targetH }).png().toBuffer();
     const cutout = await lightMatch(scaled, spec.time);
     const meta = await sharp(cutout).metadata();
