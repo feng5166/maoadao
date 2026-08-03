@@ -10,6 +10,31 @@ import { voiceFor } from "../narrative/voice";
 
 const WECHAT_KIND = "wechat_openclaw";
 
+/** 立绘 → 圆形猫头小相:裁头(对齐 CatAvatar crop=head 的取景)、圆形蒙版、奶油纸底 + 砖红细环 */
+export async function roundHeadAvatar(portrait: Buffer, size = 640): Promise<Buffer> {
+  const meta = await sharp(portrait).metadata();
+  const W = meta.width ?? 0;
+  const H = meta.height ?? 0;
+  if (!W || !H) throw new Error("bad portrait");
+  // CatAvatar crop=head: scale(1.9) origin(50% 16%) → 取景框宽高 52.6%,左 23.7%,上 7.6%
+  const cw = Math.min(Math.round(W * 0.526), W);
+  const left = Math.max(0, Math.round(W * 0.237));
+  const top = Math.max(0, Math.round(H * 0.076));
+  const ch = Math.min(cw, H - top);
+  const r = size / 2 - 12;
+  const head = await sharp(portrait)
+    .extract({ left, top, width: Math.min(cw, W - left), height: ch })
+    .resize(size, size, { fit: "cover" })
+    .toBuffer();
+  const mask = Buffer.from(`<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="#fff"/></svg>`);
+  const circled = await sharp(head).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
+  const bg = Buffer.from(`<svg width="${size}" height="${size}"><rect width="${size}" height="${size}" fill="#faf6ee"/></svg>`);
+  const ring = Buffer.from(
+    `<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#b5543b" stroke-width="7"/></svg>`,
+  );
+  return sharp(bg).composite([{ input: circled }, { input: ring }]).jpeg({ quality: 88 }).toBuffer();
+}
+
 export async function sendWelcomeGifts(userId: string, openId: string): Promise<void> {
   const channel = await prisma.channel.findUnique({ where: { kind_externalId: { kind: WECHAT_KIND, externalId: openId } } });
   if (!channel || channel.userId !== userId || channel.giftSentAt) return;
@@ -19,22 +44,20 @@ export async function sendWelcomeGifts(userId: string, openId: string): Promise<
   // 先占坑再寄:两条消息耗时较长,防并发激活重复寄
   await prisma.channel.update({ where: { id: channel.id }, data: { giftSentAt: new Date() } });
 
-  // 1. 照片:相遇照片(第一天码头的拍立得)优先,没有就用定稿立绘
-  const arrival = await prisma.arrivalPhoto.findUnique({ where: { catId: cat.id } });
-  const photo = arrival ?? (await prisma.portrait.findUnique({ where: { catId: cat.id } }));
-  if (photo) {
-    const jpg = await sharp(Buffer.from(photo.data))
-      .resize({ width: 1080, withoutEnlargement: true })
-      .jpeg({ quality: 82 })
-      .toBuffer()
-      .catch(() => null);
-    if (jpg) {
-      const caption = arrival
-        ? "这张给你。第一天在码头拍的，我一直收着。"
-        : "给你一张我的画像——想我的时候看看。";
-      const r = await sendWechatImage(openId, jpg.toString("base64"), caption);
-      if (!r.ok) console.error("[wechat-gift] 寄照片失败:", r.detail);
-    }
+  // 1. 圆形头像小相:立绘裁猫头 + 圆形裁切 + 奶油纸底砖红环(和站内头像同一张脸)
+  const portrait = await prisma.portrait.findUnique({ where: { catId: cat.id } });
+  const arrival = portrait ? null : await prisma.arrivalPhoto.findUnique({ where: { catId: cat.id } });
+  const jpg = portrait
+    ? await roundHeadAvatar(Buffer.from(portrait.data)).catch(() => null)
+    : arrival
+      ? await sharp(Buffer.from(arrival.data)).resize({ width: 1080, withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer().catch(() => null)
+      : null;
+  if (jpg) {
+    const caption = portrait
+      ? "给你一张我的小相——想我的时候看看。"
+      : "这张给你。第一天在码头拍的，我一直收着。";
+    const r = await sendWechatImage(openId, jpg.toString("base64"), caption);
+    if (!r.ok) console.error("[wechat-gift] 寄照片失败:", r.detail);
   }
 
   // 2. 一句它的声音(按性格口吻;TTS 失败就当它今天不想说话)

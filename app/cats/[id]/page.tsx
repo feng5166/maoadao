@@ -99,7 +99,6 @@ export default async function CatPage({
         <p className="mt-3 text-sm leading-relaxed text-ink">{cat.bio}</p>
 
         {state && (
-          {/* 390px 下四列会把"心情/位置"截断成省略号——窄屏走 2×2 */}
           <div className="mt-4 grid grid-cols-2 gap-2 border-t border-line pt-4 text-center sm:grid-cols-4">
             <div>
               <p className="flex items-center justify-center gap-1 text-lg font-bold"><IconFishCoin size={16} className="text-lamp" /> {state.coins}</p>

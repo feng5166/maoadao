@@ -410,7 +410,7 @@ http.createServer(async (req, res) => {
     if (!c.contextToken) return json(res, 200, { ok: false, error: "no_context_token" });
     const buf = Buffer.from(String(audio ?? ""), "base64");
     if (buf.length < 50 || buf.length > 2 * 1024 * 1024) return json(res, 400, { ok: false, error: "bad_audio" });
-    const up = await uploadMediaToCdn(c.botToken, openId, buf, 3);
+    const up = await uploadMediaToCdn(c.botToken, openId, buf, 4); // UploadMediaType.VOICE=4(用 3=FILE 会被静默丢弃,2026-08-03 实测)
     if (up.error) { console.error(`[bridge] 寄语音上传失败 ${openId}: ${up.error}`); return json(res, 200, { ok: false, error: up.error }); }
     const r = await ilinkSendItem(c.botToken, openId, c.contextToken, {
       type: 3,
