@@ -107,10 +107,11 @@ export default async function HomePage() {
       {/* 第一屏:活的岛屿舞台——场景更大,猫是主角,夜里天会黑 */}
       <div className="text-center">
         <div className="relative mx-auto max-w-3xl overflow-hidden rounded-lg border border-line">
-          <Image src="/scenes/dock.jpg" alt="猫啊岛的码头" width={1099} height={628} priority className="w-full" />
+          {/* 夜里不压滤镜,直接换夜晚版码头图(月亮/渔火是画出来的,滤镜压暗效果差) */}
+          <Image src={night ? "/scenes/dock-night.jpg" : "/scenes/dock.jpg"} alt="猫啊岛的码头" width={1099} height={628} priority className="w-full" />
           {/* 环境微动效(第二轮):静态插画开始呼吸——云影横漂、水面波光、雨天雨丝 */}
-          <div className="fx-cloud" />
-          <div className="fx-cloud fx-cloud--far" />
+          {!night && <div className="fx-cloud" />}
+          {!night && <div className="fx-cloud fx-cloud--far" />}
           <div className="fx-shimmer" />
           {raining && <div className="fx-rain" />}
           {heroCat && (
