@@ -2,13 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
 import {
-  CatBond,
   CatCurrentMoment,
   CatHeroScene,
   CatLifeBook,
   CatMemoryBox,
   CatRelationship,
+  RelationshipStoryCard,
+  accentTape,
   type FriendCard,
+  type SharedStory,
 } from "@/components/cat-profile";
 import { THREAD_LABELS } from "@/lib/sim/threads";
 import { saveNudge } from "@/lib/actions";
@@ -16,13 +18,14 @@ import { recordMetNpc } from "@/lib/arrival";
 import { SubmitButton } from "@/components/SubmitButton";
 import { getViewerId } from "@/lib/identity";
 import { track } from "@vercel/analytics/server";
-import { LIFE_PHOTO_IDS } from "@/lib/cats-life";
-import { coinsLine, energyLine, threadStage } from "@/lib/handbook";
+import { LIFE_PHOTO_IDS, LIFE_PHOTO_PLACES } from "@/lib/cats-life";
+import { coinsLine, energyLine, sceneFor } from "@/lib/handbook";
 import { CAT_SECRETS, secretOfDay } from "@/lib/secrets";
 import { beijingHour, currentSegment, nowLine } from "@/lib/moments";
 import { catDayOf } from "@/lib/sim/lifecycle";
 import { factSummary } from "@/lib/sim/engine";
-import type { Fact } from "@/lib/sim/types";
+import { hashSeed, mulberry32, pick } from "@/lib/sim/rng";
+import { SEGMENT_CN, type Fact, type Segment } from "@/lib/sim/types";
 import { prisma } from "@/lib/db";
 import {
   describeAffinity,
@@ -37,19 +40,35 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// 居民主页(CatProfilePage 2.0):不是猫的资料页,是走进一位岛民的家门。
-// 同一套骨架,按访问关系渲染三种体验——
-//   我的猫(陪伴):小屋 + 它还记得你 + 留言;
-//   熟悉的猫(发现关系):它和你的猫的故事是入口;
-//   陌生猫(产生兴趣):身份一句话 + 它今天在干嘛 + 一个没揭开的秘密。
-// 数字(鱼币/体力/好感)全站不外露,只说生活语言;细账仅主人可翻。
+// 居民主页(小屋版):偶然走进一位岛民的家门,看见它最近的生活。
+// 空间感的顺序——进门(生活照+此刻) → 看见你们的交情 → 它留下的东西 →
+// 它认识的朋友 → 最近的日子 → 它心里挂着的一件小事 → 翻它的生活册。
+// 三种访问关系:我的猫(陪伴)/熟猫(发现关系)/陌生猫(产生兴趣,只给钩子)。
 
 const GOAL_LINES: Record<string, string> = {
-  chill: "它想要的日子:晒着太阳打盹",
-  earn: "它想要的日子:攒鱼币开一家小店",
-  friends: "它想要的日子:认识岛上所有邻居",
-  explore: "它想要的日子:把岛走个遍",
+  chill: "它想要的日子,是晒着太阳打盹。",
+  earn: "它想要的日子,是攒够鱼币开一家小店。",
+  friends: "它想要的日子,是认识岛上所有邻居。",
+  explore: "它想要的日子,是把岛走个遍。",
 };
+
+// 照片下那句闲话:不陈述事实,只给一点"刚发生过"的余温
+const HERO_FLAVORS = [
+  "今天它在这里待了很久。",
+  "路过的猫说,刚才还看见它在这儿。",
+  "风从海上过来,它的耳朵动了动。",
+  "它挑了个晒得到太阳的位置。",
+  "这是它常来的地方。",
+];
+
+// 事件线阶段 → 心事语气(不出现任务/线/进度)
+function threadFlavor(step: number, total?: number): string {
+  if (!total) return step <= 1 ? "才刚开了个头,还没跟谁细说" : "断断续续地,还在惦记";
+  const ratio = step / total;
+  if (ratio <= 0.3) return "才刚开了个头,还没跟谁细说";
+  if (ratio <= 0.7) return "眼看着有点眉目了";
+  return "好像就快有结果了";
+}
 
 export default async function CatPage({
   params,
@@ -71,7 +90,7 @@ export default async function CatPage({
 
   const [state, diariesAll, friendsAll, storylines, catIndex, todayEvents, myRel] = await Promise.all([
     getCatState(id),
-    getCatDiaries(id),
+    getCatDiaries(id, 12),
     getFriends(id),
     prisma.storyline.findMany({ where: { catId: id, status: "active" } }),
     getCatNameIndex(),
@@ -93,6 +112,7 @@ export default async function CatPage({
   const viewerState: "owner" | "friend" | "stranger" = isOwner ? "owner" : myRel ? "friend" : "stranger";
   const friends = friendsAll.filter((f) => f.affinity > 0).slice(0, 6);
   const nameOf = new Map(catIndex.map((c) => [c.id, { name: c.name }]));
+  const diaries = viewerState === "stranger" ? diariesAll.slice(0, 3) : diariesAll.slice(0, 10);
 
   // ---- 此刻:它现在在哪里、在干嘛(和首页同一套事实) ----
   const hour = beijingHour();
@@ -108,8 +128,12 @@ export default async function CatPage({
     hour,
     state?.location,
   );
+  // 照片说明跟照片场景走(生活照是固定资产),不用实时位置——否则画面是礁石、文字写集市就穿帮
+  const photoPlace = LIFE_PHOTO_PLACES[cat.id];
+  const heroCaption = `猫啊岛第 ${world.day} 天${photoPlace ? ` · ${photoPlace}` : ""}`;
+  const heroFlavor = pick(mulberry32(hashSeed(world.day, "hero", cat.id)), HERO_FLAVORS);
 
-  // ---- 关系故事:它和朋友们(以及和你的猫)最近一起经历的事,从事实回放派生 ----
+  // ---- 关系是经历:第一次见面 + 最近一次,从事实回放派生 ----
   const friendIds = friends.map((f) => f.otherId);
   const storyPairIds = myCat && myRel && !friendIds.includes(myCat.id) ? [...friendIds, myCat.id] : friendIds;
   const sharedEvents = storyPairIds.length
@@ -124,16 +148,38 @@ export default async function CatPage({
         select: { catId: true, targetId: true, day: true, type: true, outcome: true, data: true },
       })
     : [];
-  const firstMetWith = new Map<string, number>();
-  const latestWith = new Map<string, { day: number; text: string }>();
+  const firstWith = new Map<string, SharedStory>();
+  const latestWith = new Map<string, SharedStory>();
   for (const e of sharedEvents) {
     const otherId = e.catId === id ? e.targetId! : e.catId;
-    if (!firstMetWith.has(otherId)) firstMetWith.set(otherId, e.day);
-    latestWith.set(otherId, {
+    const story = {
       day: e.day,
       text: factSummary({ type: e.type, outcome: e.outcome, data: e.data as Record<string, unknown>, targetId: e.targetId ?? undefined } as Fact, nameOf),
-    });
+    };
+    if (!firstWith.has(otherId)) firstWith.set(otherId, story);
+    latestWith.set(otherId, story);
   }
+
+  // ---- 生活册每页的照片:当天主事件的地点 → 场景图 ----
+  const diaryDays = diaries.map((d) => d.day);
+  const dayMains = diaryDays.length
+    ? await prisma.event.findMany({
+        where: { catId: id, day: { in: diaryDays }, isMain: true },
+        select: { day: true, data: true },
+      })
+    : [];
+  const sceneByDay = new Map<number, string>();
+  for (const e of dayMains) {
+    const loc = (e.data as Record<string, unknown>)?.location;
+    if (typeof loc === "string" && !sceneByDay.has(e.day)) sceneByDay.set(e.day, sceneFor(loc));
+  }
+  const lifePages = diaries.map((d) => ({
+    id: d.id,
+    day: d.day,
+    mood: d.mood,
+    content: d.content,
+    sceneImg: sceneByDay.get(d.day) ?? null,
+  }));
 
   const keepsakes =
     viewerState === "stranger"
@@ -149,7 +195,7 @@ export default async function CatPage({
   const bioFirstLine = (cat.bio ?? "").split(/(?<=[。!！?？])/)[0] || cat.bio || "";
   const secret = secretOfDay(cat.id, world.day);
   const hasSecrets = Boolean(CAT_SECRETS[cat.id]?.length);
-  const diaries = viewerState === "stranger" ? diariesAll.slice(0, 3) : diariesAll;
+  const tape = accentTape(cat.id);
 
   const friendCards: FriendCard[] = friends.map((f) => ({
     relId: f.id,
@@ -157,29 +203,32 @@ export default async function CatPage({
     otherName: f.otherName,
     otherPortraitUrl: f.otherPortraitUrl,
     affinityText: describeAffinity(f.affinity),
-    story: latestWith.get(f.otherId) ?? null,
+    firstStory: firstWith.get(f.otherId) ?? null,
+    latestStory: latestWith.get(f.otherId) ?? null,
   }));
 
   return (
     <div className="mx-auto max-w-3xl">
-      {/* ============ 首屏:生活照 + 它是谁、现在怎么样(60/40) ============ */}
+      {/* ============ 进门:生活照 + 它是谁、此刻在干嘛 ============ */}
       <div className="gap-6 md:grid md:grid-cols-5">
         <div className="md:col-span-3">
           <CatHeroScene
             name={cat.name}
+            catId={cat.id}
             lifePhoto={lifePhoto}
             arrivalPhoto={isOwner ? cat.arrivalPhotoUrl : null}
-            catId={cat.id}
             portraitUrl={cat.portraitUrl}
+            captionMeta={heroCaption}
+            flavorLine={heroFlavor}
           />
         </div>
 
-        <div className="mt-5 md:col-span-2 md:mt-0">
+        <div className="mt-6 md:col-span-2 md:mt-0">
           <p className="text-xs tracking-widest text-ink-faint">
-            {viewerState === "owner" ? "它在岛上的小屋" : viewerState === "friend" ? `${myCat!.name}的朋友` : "岛上的居民"}
+            {viewerState === "owner" ? "你常来串门的地方" : viewerState === "friend" ? `${myCat!.name}朋友的家` : "岛上的一间小屋"}
           </p>
-          <h1 className="font-title mt-1 text-2xl font-bold">{cat.name}</h1>
-          <p className="mt-1 text-sm text-ink-soft">{cat.appearance}</p>
+          <h1 className="font-title mt-1 text-2xl font-bold">{cat.name}的小屋</h1>
+          <p className="mt-1.5 text-sm text-ink-soft">{cat.appearance}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {cat.personaTags.map((tag) => (
               <span key={tag} className="border border-line px-2 py-0.5 text-xs text-ink-soft">
@@ -199,10 +248,10 @@ export default async function CatPage({
             </a>
           )}
           {viewerState === "stranger" && (
-            <p className="mt-3 text-xs text-ink-faint">
+            <p className="mt-3 text-xs leading-relaxed text-ink-faint">
               {hasSecrets && <>有猫说,它藏着一个秘密。</>}
               <a href="#lifebook" className="text-sea-deep hover:text-brick">
-                去看看它的生活册 ↓
+                去翻翻它的生活册 ↓
               </a>
             </p>
           )}
@@ -212,51 +261,28 @@ export default async function CatPage({
         </div>
       </div>
 
-      {/* ============ 它和你的猫(熟猫的关系入口) ============ */}
+      {/* ============ 你们的交情(熟猫的入口) ============ */}
       {viewerState === "friend" && myCat && myRel && (
-        <CatBond
+        <RelationshipStoryCard
+          catName={cat.name}
           myCatName={myCat.name}
           affinityText={describeAffinity(myRel.affinity)}
-          firstMetDay={firstMetWith.get(myCat.id) ?? null}
+          firstStory={firstWith.get(myCat.id) ?? null}
           latestStory={latestWith.get(myCat.id) ?? null}
+          tape={tape}
         />
       )}
 
-      {/* ============ 近况(散文体,熟人以上可见;细账仅主人) ============ */}
+      {/* ============ 它留下的东西(记忆优先于名单) ============ */}
       {viewerState !== "stranger" && (
-        <div className="margin-note mt-6 border-t border-line pt-4">
-          <p className="text-xs tracking-widest text-ink-faint">
-            {daysOnIsland ? `来岛第 ${daysOnIsland} 天` : `猫啊岛历 第 ${world.day} 天`}
-            {cat.goal && GOAL_LINES[cat.goal] ? ` · ${GOAL_LINES[cat.goal]}` : ""}
-          </p>
-          {cat.bio && <p className="mt-2">{cat.bio}</p>}
-          {state && (
-            <>
-              <p className="mt-1">{coinsLine(state.coins)}</p>
-              <p>{energyLine(state.energy)}</p>
-              {isOwner && (
-                <details className="mt-1 text-xs text-ink-faint">
-                  <summary className="cursor-pointer">翻开细账</summary>
-                  <p className="mt-1">鱼币 {state.coins} 枚 · 体力 {state.energy} · 此刻在{state.location}</p>
-                </details>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ============ 还没讲完的故事 ============ */}
-      {viewerState !== "stranger" && storylines.length > 0 && (
-        <div className="mt-6 border-t border-line pt-4">
-          <p className="text-xs tracking-widest text-ink-faint">还没讲完的故事</p>
-          {storylines.map((s) => (
-            <p key={s.id} className="font-diary mt-1.5 text-[15px] text-ink">
-              {s.kind === "shop"
-                ? `它正在经营「${String((s.data as Record<string, unknown> | null)?.name ?? "小店")}」,第 ${s.startDay} 天开张的。`
-                : `「${THREAD_LABELS[s.kind] ?? s.kind}」${threadStage(s.step, s.kind === "lighthouse" ? 7 : undefined)}。`}
-            </p>
-          ))}
-        </div>
+        <CatMemoryBox
+          firstWordsLine={
+            isOwner && cat.firstWords ? `你第一次对它说:「${cat.firstWords}」——它一直留着这句话。` : null
+          }
+          keepsakes={keepsakes}
+          secret={secret}
+          tape={tape}
+        />
       )}
 
       {/* ============ 它认识的朋友 ============ */}
@@ -278,19 +304,45 @@ export default async function CatPage({
         <CatRelationship friends={friendCards} />
       )}
 
-      {/* ============ 它还记得 + 一个小秘密 ============ */}
+      {/* ============ 最近的日子(生活轨迹,不是属性总结) ============ */}
       {viewerState !== "stranger" && (
-        <CatMemoryBox
-          firstWordsLine={
-            isOwner && cat.firstWords ? `你第一次对它说:「${cat.firstWords}」——它一直留着这句话。` : null
-          }
-          keepsakes={keepsakes}
-          secret={secret}
-        />
+        <div className="margin-note mt-6 border-t border-line pt-4">
+          <p className="text-xs tracking-widest text-ink-faint">最近的日子</p>
+          {cat.bio && <p className="mt-2">{cat.bio}</p>}
+          {cat.goal && GOAL_LINES[cat.goal] && <p>{GOAL_LINES[cat.goal]}</p>}
+          {state && (
+            <>
+              <p>{coinsLine(state.coins)}</p>
+              <p>{energyLine(state.energy)}</p>
+              {isOwner && (
+                <details className="mt-1 text-xs text-ink-faint">
+                  <summary className="cursor-pointer">翻开细账</summary>
+                  <p className="mt-1">
+                    {daysOnIsland ? `来岛第 ${daysOnIsland} 天 · ` : ""}鱼币 {state.coins} 枚 · 体力 {state.energy} · 此刻在{state.location}
+                  </p>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ============ 它心里挂着的一件小事 ============ */}
+      {viewerState !== "stranger" && storylines.length > 0 && (
+        <div className="mt-6 border-t border-line pt-4">
+          <p className="text-xs tracking-widest text-ink-faint">岛上的一件小事</p>
+          {storylines.map((s) => (
+            <p key={s.id} className="font-diary mt-1.5 text-[15px] leading-relaxed text-ink">
+              {s.kind === "shop"
+                ? `它正在打理自己的小店「${String((s.data as Record<string, unknown> | null)?.name ?? "小店")}」——第 ${s.startDay} 天开张的,每天都有点新章程。`
+                : `它最近心里挂着一件事,和${THREAD_LABELS[s.kind] ?? s.kind}有关——${threadFlavor(s.step, s.kind === "lighthouse" ? 7 : undefined)}。`}
+            </p>
+          ))}
+        </div>
       )}
 
       {/* ============ 生活册 ============ */}
-      <CatLifeBook name={cat.name} catId={cat.id} pages={diaries} catIndex={catIndex} />
+      <CatLifeBook name={cat.name} catId={cat.id} pages={lifePages} catIndex={catIndex} />
       {viewerState === "stranger" && diariesAll.length > diaries.length && (
         <p className="mt-3 text-center text-xs text-ink-faint">
           更早的日子,等{myCat ? `${myCat.name}和它熟起来` : "你也在岛上住下"}再翻。

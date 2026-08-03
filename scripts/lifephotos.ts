@@ -66,11 +66,19 @@ async function main() {
     await sharp(raw).resize(1200, 900, { fit: "cover" }).jpeg({ quality: 82 }).toFile(out);
     console.log("✓");
   }
-  // 静态清单:页面 build 时 import,避免 serverless 运行时摸 public/ 文件系统
-  const have = fs.readdirSync(OUT_DIR).filter((f) => f.endsWith(".jpg")).map((f) => f.replace(/\.jpg$/, ""));
+  // 静态清单:页面 build 时 import,避免 serverless 运行时摸 public/ 文件系统。
+  // 带上照片的拍摄地(中文):照片说明必须跟照片场景走,不能用猫的实时位置(会跟画面矛盾)
+  const SCENE_PLACE: Record<string, string> = {
+    dock: "码头", reef: "海边礁石", pines: "松林小径", market: "集市广场",
+    lighthouse: "灯塔坡", home: "自家小屋", boat: "废弃渔船", farewell: "码头尽头", sailed: "码头尽头",
+  };
+  const have = fs.readdirSync(OUT_DIR).filter((f) => f.endsWith(".jpg")).map((f) => f.replace(/\.jpg$/, "")).sort();
+  const places = Object.fromEntries(have.map((id) => [id, SCENE_PLACE[MOMENTS[id]?.scene] ?? ""]));
   fs.writeFileSync(
     "lib/cats-life.ts",
-    `// 由 scripts/lifephotos.ts 生成,手改无效\nexport const LIFE_PHOTO_IDS = new Set<string>(${JSON.stringify(have.sort(), null, 2)});\n`,
+    `// 由 scripts/lifephotos.ts 生成,手改无效\n` +
+      `export const LIFE_PHOTO_PLACES: Record<string, string> = ${JSON.stringify(places, null, 2)};\n` +
+      `export const LIFE_PHOTO_IDS = new Set<string>(Object.keys(LIFE_PHOTO_PLACES));\n`,
   );
   console.log(`清单已写入 lib/cats-life.ts(${have.length} 张)`);
 }

@@ -2,80 +2,118 @@ import Link from "next/link";
 import Image from "next/image";
 import { CatAvatar } from "./CatAvatar";
 import { LinkedText } from "./LinkedText";
+import { IconPaw } from "./icons";
 
-// 居民主页组件族(CatProfilePage 2.0):同一套骨架,按访问关系(我的猫/熟猫/陌生猫)组装。
-// 全部展示"生活语言",数字不在这里出现。
+// 居民主页组件族(小屋版):不是资料页,是走进一位岛民的家。
+// 情绪密度来自:生活照上的胶带、手写体的日期、关系里的具体经历、翻得动的生活册。
+// 全部生活语言,数字不在这里出现。
 
-/** 首屏生活照:有环境、有动作、有故事——不是证件照 */
+// 每只猫一点轻微的主题色:只用在胶带/小装饰,不换皮肤
+const ACCENT_TAPES = [
+  "rgba(138, 155, 124, 0.32)", // 鼠尾草
+  "rgba(126, 147, 163, 0.30)", // 灰蓝
+  "rgba(217, 164, 65, 0.26)", // 暖黄
+  "rgba(181, 84, 59, 0.18)", // 砖红(最淡)
+];
+export function accentTape(catId: string): string {
+  let h = 0;
+  for (const ch of catId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return ACCENT_TAPES[h % ACCENT_TAPES.length];
+}
+
+/** 首屏生活照:猫 + 环境 + 一个生活动作;照片底下是手写的日期和一句闲话 */
 export function CatHeroScene({
   name,
+  catId,
   lifePhoto,
   arrivalPhoto,
-  catId,
   portraitUrl,
+  captionMeta,
+  flavorLine,
 }: {
   name: string;
+  catId: string;
   lifePhoto: string | null;
   arrivalPhoto: string | null;
-  catId: string;
   portraitUrl?: string | null;
+  captionMeta: string;
+  flavorLine: string | null;
 }) {
-  if (lifePhoto) {
-    return (
-      <div className="overflow-hidden rounded-lg border border-line">
-        <Image src={lifePhoto} alt={`${name}在岛上生活的样子`} width={1200} height={900} priority className="w-full" />
-      </div>
-    );
-  }
-  if (arrivalPhoto) {
-    return (
-      <div className="overflow-hidden rounded-lg border border-line">
-        {/* eslint-disable-next-line @next/next/no-img-element -- 相遇照片走自有 API,长缓存 */}
-        <img src={`${arrivalPhoto}${arrivalPhoto.includes("?") ? "&" : "?"}s=720`} alt={`${name}来岛第一天`} className="w-full" />
-      </div>
-    );
-  }
+  const photo = lifePhoto ? (
+    <Image src={lifePhoto} alt={`${name}在岛上生活的样子`} width={1200} height={900} priority className="w-full" />
+  ) : arrivalPhoto ? (
+    // eslint-disable-next-line @next/next/no-img-element -- 相遇照片走自有 API,长缓存
+    <img src={`${arrivalPhoto}${arrivalPhoto.includes("?") ? "&" : "?"}s=720`} alt={`${name}来岛第一天`} className="w-full" />
+  ) : null;
+
   return (
-    <div className="flex items-center justify-center rounded-lg border border-line bg-paper-deep/40 py-10">
-      <CatAvatar id={catId} size={160} portraitUrl={portraitUrl} />
+    <div>
+      <div className="relative">
+        {/* 一截胶带把照片贴在纸上(每只猫的胶带颜色不太一样) */}
+        <div
+          className="absolute -top-2 left-1/2 z-10 h-[18px] w-[86px] -translate-x-1/2 rotate-[-2deg]"
+          style={{ background: accentTape(catId) }}
+        />
+        {photo ? (
+          <div className="overflow-hidden rounded-sm border border-line bg-[#fffdf6] p-1.5 pb-1">
+            {photo}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center rounded-sm border border-line bg-paper-deep/40 py-10">
+            <CatAvatar id={catId} size={160} portraitUrl={portraitUrl} />
+          </div>
+        )}
+      </div>
+      <p className="font-diary mt-2 text-center text-[13px] text-ink-soft">{captionMeta}</p>
+      {flavorLine && <p className="font-diary mt-0.5 text-center text-[13px] text-ink-faint">{flavorLine}</p>}
     </div>
   );
 }
 
-/** 此刻:第一眼要知道"它现在在哪里、在干嘛" */
+/** 此刻:第一眼要知道它现在在哪里、在干嘛 */
 export function CatCurrentMoment({ nowText, mood }: { nowText: string; mood: string | null | undefined }) {
   return (
     <div className="mt-4 border-t border-line pt-3">
-      <p className="font-diary text-[15px] leading-relaxed text-ink">{nowText}</p>
+      <p className="text-xs tracking-widest text-ink-faint">此刻</p>
+      <p className="font-diary mt-1 text-[15px] leading-relaxed text-ink">{nowText}</p>
       <p className="mt-1 text-xs text-ink-soft">看起来{mood ? `心情${mood}` : "心情不错"}。</p>
     </div>
   );
 }
 
-/** 它和你的猫:熟猫主页的关系入口——为什么认识、最近一起经历了什么 */
-export function CatBond({
+export type SharedStory = { day: number; text: string } | null;
+
+/** 关系故事卡:关系不是状态,是经历——第一次见面、最近一次、现在 */
+export function RelationshipStoryCard({
+  catName,
   myCatName,
   affinityText,
-  firstMetDay,
+  firstStory,
   latestStory,
+  tape,
 }: {
+  catName: string;
   myCatName: string;
   affinityText: string;
-  firstMetDay: number | null;
-  latestStory: { day: number; text: string } | null;
+  firstStory: SharedStory;
+  latestStory: SharedStory;
+  tape: string;
 }) {
   return (
-    <div className="note-slip mt-6 p-4" style={{ transform: "rotate(0.4deg)" }}>
-      <p className="text-xs tracking-widest text-ink-faint">它和{myCatName}</p>
-      <p className="font-diary mt-1.5 text-[15px] leading-relaxed text-ink">
-        {firstMetDay ? `第 ${firstMetDay} 天第一次打交道,` : ""}现在是{affinityText}。
-        {latestStory && (
-          <>
-            <br />
-            最近一次:{latestStory.text}(第 {latestStory.day} 天)
-          </>
+    <div className="note-slip relative mt-6 p-4" style={{ transform: "rotate(0.4deg)" }}>
+      <div className="absolute -top-2 right-8 h-[16px] w-[64px] rotate-[3deg]" style={{ background: tape }} />
+      <p className="text-xs tracking-widest text-ink-faint">{catName}和{myCatName}</p>
+      <div className="font-diary mt-1.5 space-y-1 text-[15px] leading-relaxed text-ink">
+        {firstStory && (
+          <p>
+            第一次见面是猫啊岛第 {firstStory.day} 天——那天{firstStory.text}
+          </p>
         )}
-      </p>
+        {latestStory && latestStory.day !== firstStory?.day && (
+          <p>最近一次:{latestStory.text}(第 {latestStory.day} 天)</p>
+        )}
+        <p>现在,它们是{affinityText}。</p>
+      </div>
     </div>
   );
 }
@@ -86,10 +124,11 @@ export type FriendCard = {
   otherName: string;
   otherPortraitUrl: string | null;
   affinityText: string;
-  story: { day: number; text: string } | null;
+  firstStory: SharedStory;
+  latestStory: SharedStory;
 };
 
-/** 它认识的朋友:关系故事,不是好友列表 */
+/** 它认识的朋友:每张卡带"为什么认识"的一句故事 */
 export function CatRelationship({ friends }: { friends: FriendCard[] }) {
   if (friends.length === 0) return null;
   return (
@@ -109,8 +148,15 @@ export function CatRelationship({ friends }: { friends: FriendCard[] }) {
                 <span className="text-[11px] text-sage">{f.affinityText}</span>
               </span>
               <span className="font-diary mt-0.5 block text-[13px] leading-snug text-ink-soft">
-                {f.story ? `第 ${f.story.day} 天:${f.story.text}` : "还没一起经历过什么,不过快了。"}
+                {f.firstStory
+                  ? `第 ${f.firstStory.day} 天认识——那天${f.firstStory.text}`
+                  : "还没一起经历过什么,不过快了。"}
               </span>
+              {f.latestStory && f.latestStory.day !== f.firstStory?.day && (
+                <span className="font-diary mt-0.5 block text-[13px] leading-snug text-ink-faint">
+                  最近:{f.latestStory.text}
+                </span>
+              )}
             </span>
           </Link>
         ))}
@@ -119,72 +165,84 @@ export function CatRelationship({ friends }: { friends: FriendCard[] }) {
   );
 }
 
-export type LifePage = { id: string; day: number; mood: string; content: string };
+export type LifePage = { id: string; day: number; mood: string; content: string; sceneImg: string | null };
 
-/** 生活册:它最近留下的几页——每一天是过去真实发生的事 */
+/** 生活册:每一天是一张照片卡——日期手写、照片贴上、一句话,想读全文再翻开 */
 export function CatLifeBook({
   name,
   catId,
   pages,
   catIndex,
-  firstOpen = true,
 }: {
   name: string;
   catId: string;
   pages: LifePage[];
   catIndex: { id: string; name: string }[];
-  firstOpen?: boolean;
 }) {
   return (
     <section id="lifebook" className="mt-8 border-t-4 border-double border-line pt-5">
-      <h2 className="font-title mb-3 font-bold">{name}最近留下的几页</h2>
+      <h2 className="font-title mb-3 flex items-center gap-1.5 font-bold">
+        <IconPaw size={15} className="text-ink-faint" />
+        {name}的生活册
+      </h2>
       {pages.length === 0 && (
         <p className="py-8 text-center text-sm text-ink-faint">第一页还空着——等岛上的下一天开始吧。</p>
       )}
-      <div className="space-y-4">
-        {pages.map((d, i) => (
-          <article key={d.id} className="note-slip p-4" style={{ transform: `rotate(${i % 2 === 0 ? "-0.3" : "0.3"}deg)` }}>
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-ink-faint">猫啊岛第 {d.day} 天 · {d.mood}</p>
-              <Link href={`/share/${catId}/${d.day}`} className="text-xs text-ink-faint hover:text-brick">
-                分享卡
-              </Link>
-            </div>
-            {i === 0 && firstOpen ? (
-              <p className="font-diary mt-2 whitespace-pre-wrap text-[15px] leading-[1.9]">
-                <LinkedText text={d.content} cats={catIndex} excludeId={catId} />
-              </p>
-            ) : (
-              <details className="mt-2">
-                <summary className="font-diary cursor-pointer list-none text-[15px] leading-relaxed text-ink-soft">
-                  {d.content.slice(0, 40)}……<span className="text-xs text-ink-faint">(翻开这一页)</span>
-                </summary>
+      <div className="space-y-5">
+        {pages.map((d, i) => {
+          const short = d.content.length <= 110;
+          return (
+            <article key={d.id} className="note-slip p-4" style={{ transform: `rotate(${i % 2 === 0 ? "-0.3" : "0.3"}deg)` }}>
+              <div className="flex items-baseline justify-between">
+                <p className="font-diary text-[13px] text-ink-soft">猫啊岛 第 {d.day} 天 · {d.mood}</p>
+                <Link href={`/share/${catId}/${d.day}`} className="text-xs text-ink-faint hover:text-brick">
+                  分享卡
+                </Link>
+              </div>
+              {d.sceneImg && (
+                <div className="mt-2 overflow-hidden rounded-sm border border-line">
+                  <Image src={d.sceneImg} alt="" width={1200} height={686} loading="lazy" className="w-full" />
+                </div>
+              )}
+              {short ? (
                 <p className="font-diary mt-2 whitespace-pre-wrap text-[15px] leading-[1.9]">
                   <LinkedText text={d.content} cats={catIndex} excludeId={catId} />
                 </p>
-              </details>
-            )}
-          </article>
-        ))}
+              ) : (
+                <details className="mt-2">
+                  <summary className="font-diary cursor-pointer list-none text-[15px] leading-[1.9] text-ink">
+                    {d.content.slice(0, 100)}……<span className="text-xs text-ink-faint">(翻开这一页)</span>
+                  </summary>
+                  <p className="font-diary mt-2 whitespace-pre-wrap text-[15px] leading-[1.9]">
+                    <LinkedText text={d.content} cats={catIndex} excludeId={catId} />
+                  </p>
+                </details>
+              )}
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-/** 珍藏的小东西:它还记得的 + 今天露出的一个小秘密——像收藏物,不是数据库 */
+/** 它留下的东西:主人的第一句话、重要的事、收藏物、一个小秘密 */
 export function CatMemoryBox({
   firstWordsLine,
   keepsakes,
   secret,
+  tape,
 }: {
   firstWordsLine: string | null;
   keepsakes: { id: string; content: string; day: number }[];
   secret: string | null;
+  tape: string;
 }) {
   if (!firstWordsLine && keepsakes.length === 0 && !secret) return null;
   return (
-    <div className="note-slip mt-6 p-4" style={{ transform: "rotate(-0.4deg)" }}>
-      <p className="font-title text-sm font-bold">它还记得</p>
+    <div className="note-slip relative mt-6 p-4" style={{ transform: "rotate(-0.4deg)" }}>
+      <div className="absolute -top-2 left-8 h-[16px] w-[64px] rotate-[-3deg]" style={{ background: tape }} />
+      <p className="font-title text-sm font-bold">它留下的东西</p>
       <ul className="mt-2 space-y-2">
         {firstWordsLine && (
           <li className="font-diary text-[15px] leading-relaxed text-ink">{firstWordsLine}</li>
