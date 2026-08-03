@@ -55,6 +55,49 @@ curl -s http://127.0.0.1:8788/health   # {"ok":true,...}
 - `POST /api/wechat/inbound {from, text}` → `{replyText}`(此后每条消息)
 - `POST /api/wechat/unbind {openId}`(连续 3 次硬失败判失效)
 
+## 外部依赖与协议参考(对照 `@tencent-weixin/openclaw-weixin` 官方文档,2026-08-03 核对)
+
+桥本身**零 npm 依赖**(纯 Node 内置 http/fs/crypto)——真正的外部依赖是腾讯 iLink 的 HTTP 协议。
+官方文档在 npm 包 readme 里(`npm view @tencent-weixin/openclaw-weixin readme`),以下是与桥有关的全部要点。
+
+**版本线**:1.0.x 已进 `legacy` 维护线(活跃线 2.x,当前 2.4.6)。核对过 1.0.2 与 2.4.6 的
+「后端 API 协议」章节逐字一致——协议未漂移,桥暂不用动;但协议若将来升级只会发在 2.x,升级前先 diff 两版 readme。
+
+**通用请求头**(官方规范,桥已按此实现于 `ihdr()`):
+
+| Header | 值 |
+| --- | --- |
+| `AuthorizationType` | 固定 `ilink_bot_token` |
+| `Authorization` | `Bearer <bot_token>` |
+| `X-WECHAT-UIN` | 随机 uint32 的 base64(防重放) |
+
+**端点对照**(官方文档只写了前五个;二维码两个端点**不在官方文档里**,来自 `wechat-ilink-demo`/stocktell 实测——协议升级时最容易碎的就是这两个):
+
+| 端点 | 桥的用法 | 文档背书 |
+| --- | --- | --- |
+| `ilink/bot/getupdates` | 单用户长轮询 worker,写死 40s 超时 | ✅ 官方 |
+| `ilink/bot/sendmessage` | 只发文本(type 1),`message_state=2`(FINISH) | ✅ 官方 |
+| `ilink/bot/getconfig` | 拿 `typing_ticket`(缓存) | ✅ 官方 |
+| `ilink/bot/sendtyping` | 只发 `status=1`(正在输入),从不发 2(取消) | ✅ 官方 |
+| `ilink/bot/getuploadurl` | **未使用**(桥不支持媒体) | ✅ 官方 |
+| `ilink/bot/get_bot_qrcode?bot_type=3` | 出绑定二维码 | ⚠️ 仅实测 |
+| `ilink/bot/get_qrcode_status?qrcode=` | 轮询扫码,拿 `bot_token`/`ilink_user_id` | ⚠️ 仅实测 |
+
+**关键枚举**(官方定义,桥代码里是魔法数字):
+`message_type` 1=USER 2=BOT(worker 靠它过滤自己的消息);`message_state` 0=NEW 1=GENERATING 2=FINISH;
+`item_list[].type` 1=TEXT 2=IMAGE 3=VOICE 4=FILE 5=VIDEO;`sendtyping.status` 1=正在输入 2=取消。
+
+**官方文档里有、桥未采用的**(改造前先读官方 readme 对应章节):
+
+- `getupdates` 响应带 `longpolling_timeout_ms`(服务端建议的下次长轮询超时)——桥忽略它,写死 40s;
+- 媒体消息:图片/语音/文件/视频全走 CDN + AES-128-ECB,发送需先 `getuploadurl` 拿预签名参数。
+  **桥目前只做文本:收到媒体消息会被静默忽略**(`item_list` 只取 type 1),用户发图给猫是没有回应的;
+- `bot_agent` 出站自声明字段(UA 风格,ASCII ≤256 字节,仅腾讯侧日志归因,不参与鉴权,默认 `OpenClaw`)——
+  桥未声明;若想在腾讯后台日志里认出自己的流量可以加。
+
+**官方文档没写、纯靠实测的**(即下面"已知坑"的性质——这些没有任何官方背书,风控/协议调整可能说变就变):
+24h 窗口、`sendmessage` 静默丢弃、隔夜 `context_token`、`-14` 暂停 60 分钟策略、二维码绑定流程。
+
 ## 已知坑(前人验尸报告)
 
 - `sendmessage` 成功与**静默丢弃**都返回空对象——不能靠响应判断窗口是否有效,业务侧自估 24h 窗口;
