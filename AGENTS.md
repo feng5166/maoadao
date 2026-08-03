@@ -10,6 +10,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 2. **禁卡片堆栈样式**：用户侧不用 `shadow-*`、渐变、`rounded-xl/2xl` 白底卡；分区用纸张分割线（`border-t border-line`），唯一明显容器留给操作区（`note-slip`/`stamp-btn`）。
 3. **字体栈别动顺序**：标题/报纸体 = 系统宋体优先、自托管 Noto Serif SC 兜底；日记体 = Apple 系统楷体优先、自托管 LXGW 文楷 Lite 兜底（都在 `app/globals.css`，webfont 在 `app/layout.tsx` 引入，unicode-range 分片按需下载）。新增文字样式先复用 `.font-title/.font-diary/.font-press`。
 4. **用户侧禁系统词**：AI/Agent/建议/采纳/事件线/参数名与裸数值——术语产品化口径见 doc/05「系统术语产品化」。
+5. **声音也不出戏（2026-08-03 拍板）**：发给用户的音频**一律不用人声**——猫的留声用喵叫，其余用岛上的环境声（海浪/风/雨/鸥鸣）。音源由音效模型生成（`lib/tts.ts` 的 `synthCatSound`，modelverse `/v1/audio/sound-generation`）；人声 TTS（`synthCatVoice`）仅限内部实验，不进任何用户触点。
 
 # 协作与环境
 

@@ -1,9 +1,8 @@
 import sharp from "sharp";
 import { prisma } from "../db";
-import { synthCatVoice } from "../tts";
+import { synthCatSound } from "../tts";
 import { sendWechat, sendWechatImage } from "./bridge";
 import { shortEntryLink } from "./entry";
-import { voiceFor } from "../narrative/voice";
 
 // 绑定激活的见面礼(里程碑寄送,doc/11 生命连接层的延伸):
 // 握手文字之后,猫寄来第一天在码头的合影 + 一句它自己的声音。
@@ -57,21 +56,31 @@ export async function sendWelcomeGifts(userId: string, openId: string): Promise<
     if (!r.ok) console.error("[wechat-gift] 寄照片失败:", r.detail);
   }
 
-  // 2. 一句它的声音——海螺留声:iLink 不给 Bot 下发语音消息(2026-08-03 三种字段变体实测
-  // 全部静默丢弃),声音存进岛上,微信寄一句带门的话;TTS 失败就当它今天不想说话
-  const v = voiceFor(cat);
-  const line = `${v.selfRef === "我" ? "是我" : `是${v.selfRef}`}。以后想我了，就对着海螺说话——我听得见。`;
-  const audio = await synthCatVoice(line);
+  // 2. 它的声音——海螺留声。声音约束(AGENTS.md):不用人声,猫用喵叫配岛上的环境声。
+  // iLink 不给 Bot 下发语音消息(2026-08-03 实测),声音存站内,微信寄一句带门的话
+  const audio = await synthCatSound(meowPrompt(cat.boldness), 6);
   if (audio) {
     const now = new Date();
-    const wavBytes = new Uint8Array(audio.wav);
+    const bytes = new Uint8Array(audio.mp3);
+    const desc = "它对着海螺喵了两声，背后有海浪的声音。";
     await prisma.catVoiceNote.upsert({
       where: { catId: cat.id },
-      update: { data: wavBytes, text: line, durationMs: audio.durationMs, createdAt: now },
-      create: { catId: cat.id, data: wavBytes, mime: "audio/wav", text: line, durationMs: audio.durationMs, createdAt: now },
+      update: { data: bytes, mime: "audio/mpeg", text: desc, durationMs: audio.durationMs, createdAt: now },
+      create: { catId: cat.id, data: bytes, mime: "audio/mpeg", text: desc, durationMs: audio.durationMs, createdAt: now },
     });
     const link = await shortEntryLink(userId);
-    const r = await sendWechat(openId, `${cat.name}对着海螺说了一句话，声音存在岛上了。贴耳朵听：\n${link}`);
+    const r = await sendWechat(openId, `${cat.name}对着海螺喵了两声，声音存在岛上了。贴耳朵听：\n${link}`);
     if (!r.ok) console.error("[wechat-gift] 留声通知失败:", r.detail);
   }
+}
+
+/** 按胆量定喵法(参数不露出,只影响声音气质);环境声固定海边清晨 */
+function meowPrompt(boldness: number): string {
+  const meow =
+    boldness >= 70
+      ? "a confident young cat meows twice, bright and clear"
+      : boldness <= 35
+        ? "a shy small kitten gives one soft, tentative meow, then a tiny quiet one"
+        : "a small cat meows softly twice, gentle and curious";
+  return `${meow}, with faint ocean waves and distant seagulls in the background, calm seaside morning, no human voice`;
 }

@@ -32,7 +32,37 @@ export interface CatVoice {
   sampleRate: number;
 }
 
-/** 文本 → 猫声 SILK。音色可用 TTS_VOICE 调(qwen3-tts 音色名,默认 Cherry) */
+/** 猫的留声(AGENTS.md 声音约束):不用人声——喵叫 + 岛上环境声,音效模型生成 mp3。
+ *  发给用户的音频一律走这里;prompt 用英文(ElevenLabs 引擎对英文最稳) */
+export async function synthCatSound(prompt: string, durationSec = 6): Promise<{ mp3: Buffer; durationMs: number } | null> {
+  const base = process.env.IMAGE_API_BASE ?? "https://api.modelverse.cn";
+  const key = process.env.IMAGE_API_KEY;
+  if (!key || !prompt.trim()) return null;
+  try {
+    const r = await fetch(`${base}/v1/audio/sound-generation`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: process.env.SFX_MODEL ?? "text-to-sound-v2",
+        text: prompt.slice(0, 400),
+        duration_seconds: durationSec,
+      }),
+      signal: AbortSignal.timeout(TTS_TIMEOUT_MS * 2),
+    });
+    if (!r.ok) {
+      console.error(`[sfx] 生成失败 ${r.status}:`, (await r.text()).slice(0, 200));
+      return null;
+    }
+    const mp3 = Buffer.from(await r.arrayBuffer());
+    if (mp3.length < 1000) return null;
+    return { mp3, durationMs: durationSec * 1000 };
+  } catch (err) {
+    console.error("[sfx] 异常:", err instanceof Error ? err.message.slice(0, 200) : err);
+    return null;
+  }
+}
+
+/** 文本 → 人声 TTS。⚠️ 仅限内部实验(AGENTS.md 声音约束:人声出戏,不进用户触点) */
 export async function synthCatVoice(text: string): Promise<CatVoice | null> {
   const base = process.env.IMAGE_API_BASE ?? "https://api.modelverse.cn";
   const key = process.env.IMAGE_API_KEY;

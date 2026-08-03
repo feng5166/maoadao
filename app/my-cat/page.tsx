@@ -218,7 +218,7 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
       {/* 海螺留声：它存在海螺里的一句话（绑定见面礼） */}
       {voiceNote && (
         <div className="mt-2 text-center">
-          <p className="text-xs text-ink-faint">海螺里存着它说的一句话</p>
+          <p className="text-xs text-ink-faint">海螺里存着它的声音</p>
           <audio controls preload="none" src={`/api/voice/${cat.id}`} className="mx-auto mt-1.5 h-9 w-full max-w-[280px]" />
         </div>
       )}
