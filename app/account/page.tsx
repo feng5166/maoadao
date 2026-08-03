@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CopyCode } from "@/components/CopyCode";
 import { SubmitButton } from "@/components/SubmitButton";
-import { IconMailbox, IconPaw } from "@/components/icons";
+import { IconBoat, IconMailbox, IconPaw, IconTicket } from "@/components/icons";
 import {
   ensureRecoveryCode,
   recoverByCode,
@@ -53,7 +53,7 @@ export default async function AccountPage() {
       {/* 船票：岛靠邀请上，每位岛民手里有五张可转赠的票 */}
       {tickets.length > 0 && (
         <div id="tickets" className="border-t border-line pt-4">
-          <h2 className="font-title font-bold">🎫 我的船票</h2>
+          <h2 className="font-title flex items-center gap-1.5 font-bold"><IconTicket size={15} /> 我的船票</h2>
           <p className="mt-1 text-xs text-ink-faint">
             猫啊岛只能坐船来。你手里有 {tickets.length} 张船票——送出一张，朋友就能到码头领养自己的猫。
             每张只能用一次，送给谁由你决定。
@@ -154,7 +154,7 @@ export default async function AccountPage() {
         <div className="border-t border-line pt-4">
           <details>
             <summary className="cursor-pointer text-sm text-ink-faint hover:text-ink-soft">
-              🚢 想重新领养一只？
+              <IconBoat size={15} /> 想重新领养一只？
             </summary>
             <div className="mt-3 border-l-2 border-brick/60 pl-3">
               <p className="text-sm leading-relaxed text-ink">

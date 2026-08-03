@@ -128,6 +128,29 @@ export function IconSpark(props: IconProps) {
   );
 }
 
+/** 船票：带撕口和打孔线的票根 */
+export function IconTicket(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4.1 7.3c5.3-.4 10.5-.4 15.8 0l.2 2.9c-1.1.2-1.9 1-1.9 1.8 0 .8.8 1.6 1.9 1.8l-.2 2.9c-5.3.4-10.5.4-15.8 0l-.2-2.9c1.1-.2 1.9-1 1.9-1.8 0-.8-.8-1.6-1.9-1.8l.2-2.9z" />
+      <path d="M14.6 8.2v1.2M14.6 11.4v1.2M14.6 14.6v1.2" />
+    </Svg>
+  );
+}
+
+/** 小船：一叶帆船 */
+export function IconBoat(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5.1 15.4c4.6.5 9.2.5 13.8 0l-1.7 3.2c-3.5.4-7 .4-10.4 0l-1.7-3.2z" />
+      <path d="M12.1 3.9v11.3" />
+      <path d="M12.1 4.6c2.6 1.9 4.1 4.4 4.6 7.4-1.5.4-3 .6-4.6.6V4.6z" />
+      <path d="M10.9 8.2c-1.3 1.3-2.1 2.8-2.5 4.5.8.2 1.6.4 2.5.4V8.2z" />
+      <path d="M3.2 19.9c.9.6 1.7.6 2.6 0 .9-.6 1.7-.6 2.6 0 .9.6 1.7.6 2.6 0" />
+    </Svg>
+  );
+}
+
 /** 罗盘：探索用的歪指针 */
 export function IconCompass(props: IconProps) {
   return (

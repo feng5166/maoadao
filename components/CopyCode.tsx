@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconPaw } from "@/components/icons";
 
 // 找回码 + 一键复制。世界观口径：找回码是"猫爪印"，复制成功即"已抄下"。
 export function CopyCode({ code }: { code: string }) {
@@ -36,7 +37,7 @@ export function CopyCode({ code }: { code: string }) {
         className="shrink-0 border border-line px-4 text-sm text-sea-deep transition-colors hover:border-sea-deep"
         aria-label="复制找回码"
       >
-        {copied ? "已抄下 🐾" : "复制"}
+        {copied ? <>已抄下 <IconPaw size={14} /></> : "复制"}
       </button>
     </div>
   );
