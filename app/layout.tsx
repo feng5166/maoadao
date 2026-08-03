@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getViewerId } from "@/lib/identity";
 import { getViewerCat } from "@/lib/queries";
+import { HeaderCta } from "@/components/HeaderCta";
 // 自托管中文 webfont（unicode-range 分片，按需下载）：Apple 设备命中系统宋体/楷体
 // 不会下载；Android/Windows 缺字库时兜底，避免手账感退化成默认黑体。
 import "@fontsource/noto-serif-sc/400.css";
@@ -17,17 +18,10 @@ export const metadata: Metadata = {
 };
 
 // 导航按钮单独成组件挂 Suspense：查询不阻塞页面外壳的首字节（跨洋链路下体感差异明显）
+// 渲染交给 HeaderCta（客户端）：在 /adopt 流程里不再显示「去码头接它」
 async function NavCatButton() {
   const myCat = await getViewerCat(await getViewerId()).catch(() => null);
-  return myCat ? (
-    <Link href="/my-cat" className="stamp-btn px-4 py-1.5 text-sm">
-      我的猫
-    </Link>
-  ) : (
-    <Link href="/adopt" className="stamp-btn px-4 py-1.5 text-sm">
-      去码头接它
-    </Link>
-  );
+  return <HeaderCta hasCat={Boolean(myCat)} />;
 }
 
 export default function RootLayout({
