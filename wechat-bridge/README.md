@@ -50,6 +50,11 @@ curl -s http://127.0.0.1:8788/health   # {"ok":true,...}
 | `WECHAT_BRIDGE_URL` | 桥的公网地址(nginx 反代后) |
 | `WECHAT_BRIDGE_SECRET` | 与桥 `BRIDGE_SECRET` 同值(双向:Vercel 调桥、桥回调 Vercel 都用它) |
 
+猫啊岛 → 桥(头 `x-bridge-secret`,媒体走 CDN 上传给 40s 超时):
+- `POST /send {openId, text, typing?}` 发文本
+- `POST /send-image {openId, image: b64, caption?}` 寄图(caption 单独一条文本先发;桥内 AES 加密→getuploadurl→CDN POST)
+- `POST /send-voice {openId, audio: b64, encodeType?, sampleRate?, durationMs?}` 寄语音(默认 encode_type 6=SILK,站侧用 silk-wasm 转;7=mp3 备用)
+
 桥 → 猫啊岛的回调(头 `x-bridge-secret`):
 - `POST /api/wechat/bind {userId, openId, text}` → `{replyText}`(首条消息激活;text=用户对猫说的第一句话)
 - `POST /api/wechat/inbound {from, text}` → `{replyText}`(此后每条消息)
@@ -79,7 +84,7 @@ curl -s http://127.0.0.1:8788/health   # {"ok":true,...}
 | `ilink/bot/sendmessage` | 只发文本(type 1),`message_state=2`(FINISH) | ✅ 官方 |
 | `ilink/bot/getconfig` | 拿 `typing_ticket`(缓存) | ✅ 官方 |
 | `ilink/bot/sendtyping` | 只发 `status=1`(正在输入),从不发 2(取消) | ✅ 官方 |
-| `ilink/bot/getuploadurl` | **未使用**(桥不支持媒体) | ✅ 官方 |
+| `ilink/bot/getuploadurl` | 寄图/寄语音的 CDN 上传(2026-08-03 起,/send-image /send-voice) | ✅ 官方 |
 | `ilink/bot/get_bot_qrcode?bot_type=3` | 出绑定二维码 | ⚠️ 仅实测 |
 | `ilink/bot/get_qrcode_status?qrcode=` | 轮询扫码,拿 `bot_token`/`ilink_user_id` | ⚠️ 仅实测 |
 

@@ -14,10 +14,10 @@ export function wechatEnabled(): boolean {
   return Boolean(process.env.WECHAT_BRIDGE_URL && process.env.WECHAT_BRIDGE_SECRET);
 }
 
-async function bridgeCall<T>(path: string, body?: unknown): Promise<T | null> {
+async function bridgeCall<T>(path: string, body?: unknown, timeoutMs = TIMEOUT_MS): Promise<T | null> {
   if (!wechatEnabled()) return null;
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const r = await fetch(`${process.env.WECHAT_BRIDGE_URL!.replace(/\/$/, "")}${path}`, {
       method: "POST",
@@ -45,6 +45,33 @@ export async function sendWechat(openId: string, text: string, typing = false): 
   const r = await bridgeCall<{ ok?: boolean; ret?: number; http?: number }>("/send", { openId, text, typing });
   if (!r) return { ok: false, detail: "bridge_unreachable" };
   return { ok: !!r.ok, detail: r.ok ? undefined : `ret=${r.ret} http=${r.http}` };
+}
+
+/** 寄一张图(base64 jpeg;caption 会作为单独一条文本先发)。桥侧要走 CDN 上传,给 40s */
+export async function sendWechatImage(openId: string, imageB64: string, caption?: string): Promise<SendResult> {
+  const r = await bridgeCall<{ ok?: boolean; ret?: number; error?: string }>(
+    "/send-image",
+    { openId, image: imageB64, caption },
+    40_000,
+  );
+  if (!r) return { ok: false, detail: "bridge_unreachable" };
+  return { ok: !!r.ok, detail: r.ok ? undefined : (r.error ?? `ret=${r.ret}`) };
+}
+
+/** 寄一段猫声(SILK base64,微信原生语音编码) */
+export async function sendWechatVoice(
+  openId: string,
+  silkB64: string,
+  durationMs: number,
+  sampleRate: number,
+): Promise<SendResult> {
+  const r = await bridgeCall<{ ok?: boolean; ret?: number; error?: string }>(
+    "/send-voice",
+    { openId, audio: silkB64, encodeType: 6, sampleRate, durationMs },
+    40_000,
+  );
+  if (!r) return { ok: false, detail: "bridge_unreachable" };
+  return { ok: !!r.ok, detail: r.ok ? undefined : (r.error ?? `ret=${r.ret}`) };
 }
 
 /** 给用户出专属绑定二维码(iLink 模型:扫码者即会话对话方,不需要口令) */

@@ -81,7 +81,7 @@ async function ilinkPost(endpoint, payload, botToken, timeoutMs = 15_000) {
   }
 }
 
-async function ilinkSend(botToken, toUserId, contextToken, text) {
+async function ilinkSendItem(botToken, toUserId, contextToken, item) {
   const r = await ilinkPost("ilink/bot/sendmessage", {
     msg: {
       from_user_id: "",
@@ -90,11 +90,65 @@ async function ilinkSend(botToken, toUserId, contextToken, text) {
       message_type: 2,
       message_state: 2,
       context_token: contextToken || "",
-      item_list: [{ type: 1, text_item: { text } }],
+      item_list: [item], // 对齐 openclaw-weixin:每条消息只放一个 item
     },
   }, botToken);
   if (!r.ok) console.error(`[bridge] 发送失败 to=${toUserId} http=${r.http} ret=${r.data?.ret} ${r.raw || r.error || ""}`);
   return r;
+}
+
+async function ilinkSend(botToken, toUserId, contextToken, text) {
+  return ilinkSendItem(botToken, toUserId, contextToken, { type: 1, text_item: { text } });
+}
+
+// ============ CDN 媒体上传(对齐 openclaw-weixin src/cdn/*) ============
+// 流程:AES-128-ECB 整体加密 → getuploadurl 拿 upload_param(带 aeskey hex,no_need_thumb)
+// → POST 密文到 CDN /upload → 响应头 x-encrypted-param 即下载参数。
+const CDN_BASE = "https://novac2c.cdn.weixin.qq.com/c2c";
+
+async function uploadMediaToCdn(botToken, toUserId, plaintext, mediaType) {
+  const rawsize = plaintext.length;
+  const rawfilemd5 = crypto.createHash("md5").update(plaintext).digest("hex");
+  const filesize = Math.ceil((rawsize + 1) / 16) * 16; // PKCS7 补齐后的密文大小
+  const filekey = crypto.randomBytes(16).toString("hex");
+  const aeskey = crypto.randomBytes(16);
+
+  const up = await ilinkPost("ilink/bot/getuploadurl", {
+    filekey, media_type: mediaType, to_user_id: toUserId,
+    rawsize, rawfilemd5, filesize, no_need_thumb: true, aeskey: aeskey.toString("hex"),
+  }, botToken, 20_000);
+  if (!up.ok || !up.data?.upload_param) return { error: `getuploadurl 失败 http=${up.http} ret=${up.data?.ret}` };
+
+  const cipher = crypto.createCipheriv("aes-128-ecb", aeskey, null);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const url = `${CDN_BASE}/upload?encrypted_query_param=${encodeURIComponent(up.data.upload_param)}&filekey=${encodeURIComponent(filekey)}`;
+
+  let lastErr = "";
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: ciphertext,
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (res.status >= 400 && res.status < 500) {
+        return { error: `CDN 4xx ${res.status} ${res.headers.get("x-error-message") ?? ""}` };
+      }
+      const param = res.headers.get("x-encrypted-param");
+      if (res.status === 200 && param) {
+        return {
+          // aes_key 编码怪癖对齐插件实现:hex 字符串按 utf8 转 base64,不是原始 16 字节
+          media: { encrypt_query_param: param, aes_key: Buffer.from(aeskey.toString("hex")).toString("base64"), encrypt_type: 1 },
+          filesize,
+        };
+      }
+      lastErr = `CDN ${res.status} ${res.headers.get("x-error-message") ?? ""}`;
+    } catch (e) {
+      lastErr = String(e?.message ?? e);
+    }
+  }
+  return { error: `CDN 上传 3 次失败: ${lastErr}` };
 }
 
 // typing 先行(猫在想):getconfig 拿 ticket(缓存),失败静默
@@ -282,13 +336,16 @@ for (const openId of Object.keys(creds)) startWorker(openId);
 bindWatcher();
 
 // ============ HTTP 服务 ============
-function readBody(req) {
+function readBody(req, maxLen = 65536) {
   return new Promise((resolve) => {
     let b = "";
-    req.on("data", (c) => { b += c; if (b.length > 65536) req.destroy(); });
+    req.on("data", (c) => { b += c; if (b.length > maxLen) req.destroy(); });
     req.on("end", () => { try { resolve(JSON.parse(b || "{}")); } catch { resolve({}); } });
   });
 }
+
+// 媒体 body 上限:base64 后约 8MB(照片压到 1080 宽后远小于此;语音 silk 更小)
+const MEDIA_BODY_MAX = 8 * 1024 * 1024;
 const json = (res, code, obj) => { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); };
 
 http.createServer(async (req, res) => {
@@ -321,6 +378,50 @@ http.createServer(async (req, res) => {
     if (!c.contextToken) return json(res, 200, { ok: false, error: "no_context_token" });
     if (typing) await tryTyping(c.botToken, openId, c.contextToken);
     const r = await ilinkSend(c.botToken, openId, c.contextToken, String(text ?? "").slice(0, 4000));
+    recordSendResult(openId, r);
+    return json(res, 200, { ok: r.ok, ret: r.data?.ret, http: r.http });
+  }
+  // 寄图:image=base64;caption 作为单独一条文本先发(对齐插件的 caption 行为)
+  if (req.method === "POST" && url.pathname === "/send-image") {
+    const { openId, image, caption } = await readBody(req, MEDIA_BODY_MAX);
+    const c = creds[openId];
+    if (!c) return json(res, 404, { ok: false, error: "not_bound" });
+    if (!c.contextToken) return json(res, 200, { ok: false, error: "no_context_token" });
+    const buf = Buffer.from(String(image ?? ""), "base64");
+    if (buf.length < 100 || buf.length > 5 * 1024 * 1024) return json(res, 400, { ok: false, error: "bad_image" });
+    const up = await uploadMediaToCdn(c.botToken, openId, buf, 1);
+    if (up.error) { console.error(`[bridge] 寄图上传失败 ${openId}: ${up.error}`); return json(res, 200, { ok: false, error: up.error }); }
+    if (caption) {
+      await tryTyping(c.botToken, openId, c.contextToken);
+      recordSendResult(openId, await ilinkSend(c.botToken, openId, c.contextToken, String(caption).slice(0, 500)));
+    }
+    const r = await ilinkSendItem(c.botToken, openId, c.contextToken, {
+      type: 2,
+      image_item: { media: up.media, mid_size: up.filesize },
+    });
+    recordSendResult(openId, r);
+    return json(res, 200, { ok: r.ok, ret: r.data?.ret, http: r.http });
+  }
+  // 寄语音:audio=base64(默认 SILK,encodeType 6;7=mp3 备用),durationMs/sampleRate 为播放元数据
+  if (req.method === "POST" && url.pathname === "/send-voice") {
+    const { openId, audio, encodeType, sampleRate, durationMs } = await readBody(req, MEDIA_BODY_MAX);
+    const c = creds[openId];
+    if (!c) return json(res, 404, { ok: false, error: "not_bound" });
+    if (!c.contextToken) return json(res, 200, { ok: false, error: "no_context_token" });
+    const buf = Buffer.from(String(audio ?? ""), "base64");
+    if (buf.length < 50 || buf.length > 2 * 1024 * 1024) return json(res, 400, { ok: false, error: "bad_audio" });
+    const up = await uploadMediaToCdn(c.botToken, openId, buf, 3);
+    if (up.error) { console.error(`[bridge] 寄语音上传失败 ${openId}: ${up.error}`); return json(res, 200, { ok: false, error: up.error }); }
+    const r = await ilinkSendItem(c.botToken, openId, c.contextToken, {
+      type: 3,
+      voice_item: {
+        media: up.media,
+        encode_type: Number(encodeType) || 6,
+        sample_rate: Number(sampleRate) || 24000,
+        bits_per_sample: 16,
+        playtime: Number(durationMs) || 0,
+      },
+    });
     recordSendResult(openId, r);
     return json(res, 200, { ok: r.ok, ret: r.data?.ret, http: r.http });
   }

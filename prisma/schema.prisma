@@ -171,6 +171,7 @@ model Channel {
   windowOpenUntil DateTime? // 24h 硬窗口：用户任何一次入站消息刷新（doc/11 §六）
   boundAt         DateTime
   mutedAt         DateTime? // 用户说"别再捎信"
+  giftSentAt      DateTime? // 绑定见面礼（合影+一句猫声）已寄，防重复
   // 一来一回节流（doc/11 修订·门铃规则）：同一北京日,猫对入站最多一条实质回复+一条收束
   replyDay        Int       @default(0) // yyyymmdd
   repliesInDay    Int       @default(0)
