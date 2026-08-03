@@ -31,11 +31,15 @@ async function headRegion(img: Buffer): Promise<{ left: number; size: number }> 
       const gy = Math.abs(data[(y + 1) * W + x] - data[(y - 1) * W + x]);
       if (gx + gy > 40) colEdge[x]++;
     }
-  // 平滑半径 ±10 列（≈图宽 10%），峰值列即脸的水平中心
+  // 平滑半径 ±10 列（≈图宽 10%），峰值列即脸的水平中心。
+  // 峰值只在中央 64% 找：45° 站姿的脸必然偏中部，而竖起的蓬松尾巴贴着画面边缘,
+  // 毛发纹理的边缘密度会压过脸（cat-f92c7c1c 实测裁到尾巴）——排除两侧 18% 即可避开
   const R = 10;
-  let peak = 0;
+  const lo = Math.round(W * 0.18);
+  const hi = Math.round(W * 0.82);
+  let peak = Math.round(W / 2);
   let peakV = -1;
-  for (let x = 0; x < W; x++) {
+  for (let x = lo; x <= hi; x++) {
     let sum = 0;
     let n = 0;
     for (let d = -R; d <= R; d++) {
