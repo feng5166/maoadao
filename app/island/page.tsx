@@ -168,7 +168,7 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
         <h1 className="font-title text-xl font-bold">{isToday ? "猫啊岛 · 今日" : `猫啊岛 · 第 ${day} 天`}</h1>
         <p className="mt-1.5 flex items-center justify-center gap-1.5 text-xs text-sea-deep">
           <IconWeather size={14} />
-          第 {day} 天 · {world.weather}
+          第 {day} 天 · {world.season}天 · {world.weather}
         </p>
         <p className="font-diary mt-2 text-[14px] leading-relaxed text-ink-soft">
           {sceneLine}
@@ -179,6 +179,13 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
             </>
           )}
         </p>
+        {/* 今天的期待:不透露内容,只让人想往下翻 */}
+        {headline && (
+          <p className="font-diary mt-2 text-[14px] text-ink">
+            {isToday ? "今天" : "那天"}
+            {SEGMENT_CN[headline.segment as Segment]},{locOf(headline) ?? "岛上"}那边有点动静。
+          </p>
+        )}
         <p className="mt-2 text-xs text-ink-faint">
           {day > 1 && (
             <Link href={`/island?day=${day - 1}`} className="hover:text-brick">← 前一天</Link>
@@ -237,15 +244,15 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
                   {nameOf.get(headline.catId)?.name ?? "岛民"}
                   {summaryOf(headline)}
                 </span>
-                <span className="mt-1.5 block text-[11px] text-ink-faint">
-                  {[
-                    metaOf(headline),
-                    headline.targetId && nameOf.get(headline.targetId)
-                      ? `${nameOf.get(headline.catId)?.name} 和 ${nameOf.get(headline.targetId)!.name}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                <span className="mt-1.5 block text-[11px] leading-relaxed text-ink-faint">
+                  {locOf(headline) && <>地点 {locOf(headline)}　</>}
+                  时段 {SEGMENT_CN[headline.segment as Segment]}
+                  {headline.targetId && nameOf.get(headline.targetId) && (
+                    <>
+                      <br />
+                      在场 {nameOf.get(headline.catId)?.name}、{nameOf.get(headline.targetId)!.name}
+                    </>
+                  )}
                 </span>
                 {headline.threadKey && (
                   <span className="font-diary mt-1.5 block text-[13px] text-ink-soft">这件事,好像还没完。</span>
@@ -341,7 +348,7 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
       {/* ============ 岛上的小事:走过街角看见的(五条,不刷信息流) ============ */}
       {smallFirst.length > 0 && (
         <div className="mt-6 border-t border-line pt-4">
-          <p className="text-center text-xs tracking-widest text-ink-faint">岛上的小事</p>
+          <p className="text-center text-xs tracking-widest text-ink-faint">{isToday ? "今天路过的小事" : "那天路过的小事"}</p>
           <ul className="font-diary mt-2.5 space-y-1.5 text-[14px] leading-relaxed text-ink-soft">
             {smallFirst.map((s) => (
               <li key={s.id}>
@@ -356,7 +363,7 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
           {smallMore.length > 0 && (
             <details className="mt-2">
               <summary className="cursor-pointer text-center text-xs text-ink-faint hover:text-brick">
-                更多岛上的小事({smallMore.length})
+                ……还有一些,散在岛上({smallMore.length})
               </summary>
               <ul className="font-diary mt-2 space-y-1.5 text-[14px] leading-relaxed text-ink-soft">
                 {smallMore.map((s) => (
