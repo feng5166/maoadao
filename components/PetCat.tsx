@@ -12,7 +12,7 @@ export function PetCat({ id, portraitUrl, line }: { id: string; portraitUrl?: st
       <button
         type="button"
         aria-label="摸摸它"
-        className="block rounded-full border-2 border-paper transition-transform hover:scale-105 active:scale-95"
+        className="flex rounded-full border-2 border-paper transition-transform hover:scale-105 active:scale-95"
         onClick={() => {
           if (!petted) {
             setPetted(true);

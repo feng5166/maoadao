@@ -31,7 +31,7 @@ export default async function FarewellPage() {
           width={1200} height={686} priority className="w-full"
         />
         {/* 它坐在码头这头，和你一起看着那艘船 */}
-        <div className="absolute bottom-2 left-2 rounded-full border-2 border-paper">
+        <div className="absolute bottom-2 left-2 flex rounded-full border-2 border-paper">
           <CatAvatar id={cat.id} size={64} portraitUrl={cat.portraitUrl} />
         </div>
       </div>
