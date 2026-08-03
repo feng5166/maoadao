@@ -124,8 +124,13 @@ async function lightMatch(cutout: Buffer, time: SceneTime): Promise<Buffer> {
   return cutout;
 }
 
-/** 组合谱 + 姿势图字节 → 成图(jpg)。姿势缺失时可传 null,输出纯场景(时段) */
-export async function composeMoment(spec: CompositionSpec, poseImage: Buffer | null): Promise<Buffer> {
+/** 组合谱 + 姿势图字节 → 成图(jpg)。姿势缺失时可传 null,输出纯场景(时段)。
+ *  opts.scaleOverride:比例调试/特殊镜头用,常规路径走 SCENE_CAT_SCALE 表 */
+export async function composeMoment(
+  spec: CompositionSpec,
+  poseImage: Buffer | null,
+  opts?: { scaleOverride?: number },
+): Promise<Buffer> {
   const { file, needsTint } = sceneFile(spec.scene, spec.time);
   if (!fs.existsSync(file)) throw new Error(`场景资产缺失: ${spec.scene}`);
 
@@ -133,7 +138,7 @@ export async function composeMoment(spec: CompositionSpec, poseImage: Buffer | n
 
   if (poseImage) {
     // 比例关系:按场景景别缩放(远景猫小、室内猫大),再做时段光照匹配
-    const targetH = Math.round(H * (SCENE_CAT_SCALE[spec.scene] ?? 0.34));
+    const targetH = Math.round(H * (opts?.scaleOverride ?? SCENE_CAT_SCALE[spec.scene] ?? 0.34));
     const raw = await makeCutout(poseImage);
     const scaled = await sharp(raw).resize({ height: targetH }).png().toBuffer();
     const cutout = await lightMatch(scaled, spec.time);

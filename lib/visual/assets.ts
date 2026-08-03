@@ -37,15 +37,17 @@ export function sceneFile(name: string, time: SceneTime): { file: string; needsT
 /** 猫在各场景里的画面高度占比(2026-08-04:比例关系要对——远景里猫不能和房子一样高)。
  *  远景(灯塔/码头/告别海面)猫小;中景(集市/松林/渔船)适中;室内(小屋)猫大 */
 export const SCENE_CAT_SCALE: Record<string, number> = {
-  lighthouse: 0.26,
-  dock: 0.3,
-  reef: 0.32,
-  farewell: 0.24,
-  sailed: 0.24,
-  boat: 0.34,
-  pines: 0.36,
-  market: 0.34,
-  home: 0.5,
+  // 2026-08-04 三档对比实调(tmp-assets/scale-*.jpg):基准=小屋 0.24/灯塔 0.16/码头 0.17,
+  // 其余按景别内插。参照物:草丛/毛线球/木箱/长凳——猫别比窗户大,也别比线团小
+  lighthouse: 0.16,
+  dock: 0.17,
+  reef: 0.22,
+  farewell: 0.15,
+  sailed: 0.14,
+  boat: 0.22,
+  pines: 0.24,
+  market: 0.2,
+  home: 0.24,
 };
 
 /** 场景前景锚点:底边不是处处可站——远景场景右下往往是远处屋顶/海面,猫要落在前景侧。
