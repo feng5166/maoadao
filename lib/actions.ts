@@ -36,7 +36,25 @@ const FIRST_SIGHT: Record<string, string> = {
   messy: "总是乱糟糟的毛",
 };
 
-export async function createCat(formData: FormData) {
+// 登记册回显字段：出错时把用户填的原样带回去，登记册不清空（谁也不想重填一遍）
+const REGISTER_FIELDS = [
+  "ticket", "name", "firstSight", "appearance", "bio", "tags",
+  "impBold", "impSocial", "impDiligent", "goal", "ownerNick", "firstWords",
+] as const;
+
+export type CreateCatState = {
+  err: string;
+  n: number; // 第几次失败：客户端用作 key，强制表单以回填值重挂
+  v: Record<string, string>;
+} | null;
+
+export async function createCat(prevState: CreateCatState, formData: FormData): Promise<CreateCatState> {
+  const fail = (err: string): CreateCatState => ({
+    err,
+    n: (prevState?.n ?? 0) + 1,
+    v: Object.fromEntries(REGISTER_FIELDS.map((k) => [k, String(formData.get(k) ?? "")])),
+  });
+
   const sight = FIRST_SIGHT[String(formData.get("firstSight") ?? "")] ?? "";
   const extra = String(formData.get("appearance") ?? "").trim().slice(0, 60);
   const input = {
@@ -52,12 +70,12 @@ export async function createCat(formData: FormData) {
     ticket: String(formData.get("ticket") ?? "").trim().toUpperCase(),
     firstWords: String(formData.get("firstWords") ?? "").trim().slice(0, 60),
   };
-  if (!input.name) throw new Error("猫得有个名字");
-  if (!input.ticket) throw new Error("需要一张船票（邀请码）才能上岛");
+  if (!input.name) return fail("猫得有个名字");
+  if (!input.ticket) return fail("需要一张船票（邀请码）才能上岛");
 
   const uid = await ensureViewerId();
-  // 预期错误（无效船票/审核不通过）不再裸抛：生产环境裸抛会变成整页"服务器错误"，
-  // 这里转成回注册页 + 世界观口径的错误条
+  // 预期错误（无效船票/审核不通过）不再裸抛：返回错误状态就地显示，
+  // 页面不刷新、登记册不清空（useActionState）
   const t0 = Date.now();
   let result: Awaited<ReturnType<typeof adoptCat>>;
   try {
@@ -65,7 +83,7 @@ export async function createCat(formData: FormData) {
   } catch (err) {
     const msg = err instanceof AdoptError ? err.message : "码头这会儿有点忙，稍等片刻再试一次";
     if (!(err instanceof AdoptError)) console.error("[adopt] 未预期错误:", err);
-    redirect(`/adopt/register?err=${encodeURIComponent(msg)}`);
+    return fail(msg);
   }
   console.log(`[adopt] adoptCat 耗时 ${Date.now() - t0}ms`);
   if (!result.ok) redirect(`/my-cat`);
