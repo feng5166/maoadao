@@ -79,7 +79,7 @@ export default async function CatPage({
             <h1 className="font-title text-2xl font-bold">{cat.name}</h1>
             <p className="mt-0.5 text-sm text-ink-soft">{cat.appearance}</p>
             {!cat.isNpc && !cat.portraitUrl && (
-              <p className="mt-0.5 text-xs text-[#C4A24C]">专属立绘绘制中，稍后刷新查看</p>
+              <p className="mt-0.5 text-xs text-ink-faint">专属立绘绘制中，稍后刷新查看</p>
             )}
             <div className="mt-2 flex flex-wrap gap-1.5">
               {cat.goal && (
@@ -170,7 +170,7 @@ export default async function CatPage({
                 { v: "social", label: "找朋友" },
                 { v: "rest", label: "好好休息" },
               ].map((o, i) => (
-                <label key={o.v} className="flex cursor-pointer items-center gap-1 rounded-full border border-[#E0D5C0] px-2.5 py-1 has-[:checked]:border-[#F5A623] has-[:checked]:bg-[#FFF9EE]">
+                <label key={o.v} className="flex cursor-pointer items-center gap-1 border border-line px-2.5 py-1 has-[:checked]:border-sea-deep has-[:checked]:bg-paper-deep">
                   <input type="radio" name="suggestion" value={o.v} defaultChecked={i === 0} className="hidden" />
                   {o.label}
                 </label>

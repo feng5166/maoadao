@@ -73,7 +73,11 @@ export async function generatePortrait(
       update: { data: jpeg, mime: "image/jpeg", createdAt: new Date() },
       create: { catId, data: jpeg, mime: "image/jpeg", createdAt: new Date() },
     });
-    await prisma.cat.update({ where: { id: catId }, data: { portraitUrl: `/api/portrait/${catId}` } });
+    // ?v= 版本参数:路由是 immutable 长缓存,重绘后必须换 URL 才能把 CDN/浏览器的旧图顶掉
+    await prisma.cat.update({
+      where: { id: catId },
+      data: { portraitUrl: `/api/portrait/${catId}?v=${Date.now().toString(36)}` },
+    });
     return true;
   } catch (err) {
     console.error("[portrait] 生成异常:", err instanceof Error ? err.message.slice(0, 200) : err);
@@ -147,7 +151,10 @@ export async function generateArrivalPhoto(catId: string, options: { force?: boo
       update: { data: bytes, mime: "image/jpeg", createdAt: new Date() },
       create: { catId, data: bytes, mime: "image/jpeg", createdAt: new Date() },
     });
-    await prisma.cat.update({ where: { id: catId }, data: { arrivalPhotoUrl: `/api/arrival-photo/${catId}` } });
+    await prisma.cat.update({
+      where: { id: catId },
+      data: { arrivalPhotoUrl: `/api/arrival-photo/${catId}?v=${Date.now().toString(36)}` },
+    });
     return true;
   } catch (err) {
     console.error("[arrival-photo] 合成异常:", err instanceof Error ? err.message.slice(0, 200) : err);

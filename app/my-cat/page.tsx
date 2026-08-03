@@ -250,7 +250,7 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
           <div className="note-slip mx-auto max-w-sm p-3" style={{ transform: "rotate(-0.8deg)" }}>
             {/* eslint-disable-next-line @next/next/no-img-element -- 动态合成图走自有 API，长缓存 */}
             <img
-              src={`${cat.arrivalPhotoUrl}?s=720`}
+              src={`${cat.arrivalPhotoUrl}${cat.arrivalPhotoUrl.includes("?") ? "&" : "?"}s=720`}
               alt={`${cat.name}来岛第一天的照片`}
               width={1000}
               height={687}
