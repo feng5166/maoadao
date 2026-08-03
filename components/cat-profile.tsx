@@ -40,7 +40,7 @@ export function CatHeroScene({
   flavorLine: string | null;
 }) {
   const photo = lifePhoto ? (
-    <Image src={lifePhoto} alt={`${name}在岛上生活的样子`} width={1200} height={900} priority className="w-full" />
+    <Image src={lifePhoto} alt={`${name}在岛上生活的样子`} width={1200} height={900} priority className="fx-breathe w-full" />
   ) : arrivalPhoto ? (
     // eslint-disable-next-line @next/next/no-img-element -- 相遇照片走自有 API,长缓存
     <img src={`${arrivalPhoto}${arrivalPhoto.includes("?") ? "&" : "?"}s=720`} alt={`${name}来岛第一天`} className="w-full" />
@@ -94,16 +94,19 @@ export function CatCurrentMoment({
 
 export type SharedStory = { day: number; text: string } | null;
 
-/** 小屋里的东西:生活痕迹,不是背包——看见这些才觉得"这是它的家" */
-export function CatHutItems({ items, tape }: { items: string[]; tape: string }) {
+/** 小屋里的东西:物品 = 记忆,不是装饰——每件带一句来历 */
+export function CatHutItems({ items, tape }: { items: { thing: string; note: string }[]; tape: string }) {
   if (items.length === 0) return null;
   return (
     <div className="note-slip relative mt-6 p-4" style={{ transform: "rotate(0.3deg)" }}>
       <div className="absolute -top-2 left-10 h-[16px] w-[56px] rotate-[-2deg]" style={{ background: tape }} />
       <p className="text-xs tracking-widest text-ink-faint">它的小屋里</p>
-      <ul className="font-diary mt-1.5 space-y-1 text-[14px] leading-relaxed text-ink">
+      <ul className="mt-1.5 space-y-2">
         {items.map((it) => (
-          <li key={it}>· {it}</li>
+          <li key={it.thing}>
+            <p className="font-diary text-[14px] leading-relaxed text-ink">· {it.thing}</p>
+            <p className="pl-3 text-xs leading-relaxed text-ink-faint">{it.note}</p>
+          </li>
         ))}
       </ul>
     </div>

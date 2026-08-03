@@ -8,7 +8,14 @@ import { voiceLine } from "./voice";
 const client = new Anthropic();
 const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-4-8";
 // 叙事溯源（doc/14 §五）：提示词改动时 bump；与 DiaryEntry.promptVersion/modelId 对应
-export const PROMPT_VERSION = "2026-08-02.1";
+export const PROMPT_VERSION = "2026-08-04.1";
+
+// 旁白风格铁律(doc/15):小动物观察日志,不是散文诗。拼进所有生成日记体内容的提示词。
+const STYLE_RULES = `文风铁律(观察日志,不是散文诗):
+- 只写发生了什么、你做了什么;情绪让读的人自己看出来,不要替他总结。
+- 小动作胜过形容词:"把鱼竿放在门边,自己趴了一会儿"好过"享受宁静的午后"。
+- 比喻和"漂亮句子"一篇至多一处,可以完全没有;不要每篇都有金句。
+- 禁用这些词:治愈、温暖、孤独、命运、奇迹、宁静、岁月、时光、心灵、美好、凝望、守望、沉浸、享受、诉说、见证、小确幸、平凡而幸福。`;
 export const NARRATOR_MODEL = MODEL;
 // 拒答兜底（fallbacks）是官方 Claude API 上 Fable 5 的特性；走中转或其他模型时用普通调用
 const useFallbacks = MODEL === "claude-fable-5" && !process.env.ANTHROPIC_BASE_URL;
@@ -69,7 +76,8 @@ export async function narrateDiary(
 4. 「你记得的事」可以产生连续感，但不能当成今天发生的事写。
 5. 像真的日记，不像文章：允许半句话、没解释的细节、突然停住的想法；不必起承转合，不要每篇都有工整的结尾和感悟。大多数日子就是普通日子，把普通写得具体就好。
 6. 禁止出现"系统""建议""事件""进度"这类词。
-7. 直接输出日记正文，不要标题、日期或任何额外说明。`;
+7. 直接输出日记正文，不要标题、日期或任何额外说明。
+${STYLE_RULES}`;
 
   const user = `你的资料：
 名字：${input.cat.name}
@@ -114,7 +122,7 @@ export async function narrateIslandNews(input: NewsInput): Promise<string[]> {
 /** 关键节点反思：把近期记忆浓缩成一句长期认知（语义记忆） */
 export async function reflect(cat: SimCat, recentMemories: string[]): Promise<string | null> {
   if (recentMemories.length === 0) return null;
-  const system = `你是猫啊岛上的一只猫，性格：${cat.personaTags.join("、")}。${voiceLine(cat)}根据你最近的经历，总结一条你对生活/朋友/自己的新认识。要求：第一人称、30 字以内、像猫会有的朴素感悟、必须基于经历不能编造。直接输出这一句话。`;
+  const system = `你是猫啊岛上的一只猫，性格：${cat.personaTags.join("、")}。${voiceLine(cat)}根据你最近的经历，总结一条你对生活/朋友/自己的新认识。要求：第一人称、30 字以内、像猫会有的朴素念头而不是人生金句（"斗斗嘴硬,但借伞很快"好过"友谊是最珍贵的宝物"）、必须基于经历不能编造。直接输出这一句话。`;
   return callLLM(system, `你最近的经历：\n${recentMemories.map((m) => `- ${m}`).join("\n")}`, 100);
 }
 
@@ -170,6 +178,7 @@ export async function narrateOwnerDay(
   "tomorrowHook": "给${nick}留的一句念想：基于还没完的事（没讲完的故事/今天留下的疑问），像随口说的，不要刻意钩子腔。实在没有就写一句对明天的小盼头"
 }
 全程禁止出现：系统、建议、事件线、进度、根据你的、由于它的性格。
+${STYLE_RULES}
 ${input.weekTheme && THEME_NARRATION_RULES[input.weekTheme] ? `今天的写法要求：${THEME_NARRATION_RULES[input.weekTheme]}` : ""}
 ${input.form && FORM_RULES[input.form] ? FORM_RULES[input.form] : ""}
 ${input.bondLine ? `你和${nick}现在的关系：${input.bondLine}用相称的语气。` : ""}`;
@@ -230,7 +239,8 @@ export async function narrateWeekBook(input: WeekBookInput): Promise<{ content: 
   "catLine": "对${nick}说的一句总结：个性化、有性格，能体现你们这一周的相处（比如'你总让我小心一点。虽然我不一定都听，但我知道你不是觉得我胆小'）",
   "nextWeekWish": "下周想做的一件事：基于没做完的事，一句话"
 }
-禁止：系统词、空泛抒情。`;
+禁止：系统词、空泛抒情。
+${STYLE_RULES}`;
   const user = `这一周${nick}来看过你 ${input.visitDays} 次，给你留过 ${input.messageCount} 句话。
 ${input.suggestionStory ? `关于${nick}的建议：${input.suggestionStory}` : ""}
 ${input.bestFriendName ? `这周你和${input.bestFriendName}走得最近。` : ""}

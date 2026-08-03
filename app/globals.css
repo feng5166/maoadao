@@ -252,11 +252,22 @@ body {
   flex: 0 0 132px;
 }
 
+/* 照片呼吸(微生命规范 doc/16):极缓的缩放往复,幅度小到"注意不到,但画面是活的" */
+.fx-breathe {
+  animation: fx-breathe 16s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes fx-breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.015); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fx-cloud,
   .fx-cloud--far,
   .fx-shimmer,
-  .fx-rain {
+  .fx-rain,
+  .fx-breathe {
     animation: none;
   }
 }
