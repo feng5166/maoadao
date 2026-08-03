@@ -95,6 +95,20 @@ export function petLine(catId: string, day: number, mood?: string | null): strin
   return pick(rng, pool);
 }
 
+/** 鱼币/体力 → 生活语言(猫主页 P1:数值感降权,精确数字收进"细账") */
+export function coinsLine(coins: number): string {
+  if (coins <= 0) return "口袋空空,正琢磨去哪儿赚点鱼币。";
+  if (coins < 20) return "兜里揣着几枚鱼币,省着花。";
+  if (coins < 60) return "攒了一小罐鱼币,心里有底。";
+  return "私房钱攒得厚厚的,最近手头很宽裕。";
+}
+export function energyLine(energy: number): string {
+  if (energy >= 80) return "精神头很足,走路带风。";
+  if (energy >= 50) return "还算有劲,慢悠悠地过日子。";
+  if (energy >= 25) return "有点乏了,想找个地方眯一会儿。";
+  return "累得不轻,今天多半要早睡。";
+}
+
 /** 事件线进度 → 阶段语（精确数字进档案页） */
 export function threadStage(step: number, total?: number): string {
   if (!total) return step <= 1 ? "才刚起头" : "还在继续";

@@ -46,3 +46,4 @@ next-env.d.ts
 # 生图 API 原图归档（母版备份，体积大不进库；线上用的是压缩版）
 /assets/portraits-raw/
 /assets/scenes-raw/
+/assets/lifephotos-raw/
