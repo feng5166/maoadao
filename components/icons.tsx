@@ -160,3 +160,17 @@ export function IconCompass(props: IconProps) {
     </Svg>
   );
 }
+
+/** 提灯：夜里页头的灯——歪提手、玻璃罩和一粒火苗 */
+export function IconLamp(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9.3 7.1V6.2c1.7-2 3.8-2 5.5.1v.8" />
+      <path d="M8.7 7.2h6.7" />
+      <path d="M9.4 7.4 8.7 15.8h6.8l-.8-8.4" />
+      <path d="M8.4 15.9l-.4 2.8M15.7 15.9l.3 2.7" />
+      <path d="M7.2 18.9c3.2-.4 6.4-.4 9.7 0" />
+      <path d="M12 10.3c.9 1 .9 2.2 0 3-.9-.8-.9-2 0-3z" />
+    </Svg>
+  );
+}

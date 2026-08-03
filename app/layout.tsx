@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { getViewerId } from "@/lib/identity";
 import { getViewerCat } from "@/lib/queries";
+import { beijingHour } from "@/lib/moments";
 import { HeaderCta } from "@/components/HeaderCta";
+import { NightLamp } from "@/components/NightLamp";
 // 自托管中文 webfont（unicode-range 分片，按需下载）：Apple 设备命中系统宋体/楷体
 // 不会下载；Android/Windows 缺字库时兜底，避免手账感退化成默认黑体。
 import "@fontsource/noto-serif-sc/400.css";
@@ -24,13 +27,18 @@ async function NavCatButton() {
   return <HeaderCta hasCat={Boolean(myCat)} />;
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // 夜里的岛:夜间时段全站换夜色纸(data-theme 服务端就位,无闪白);页头提灯可点灯切回,cookie 记偏好
+  const hour = beijingHour();
+  const night = hour >= 19 || hour < 6;
+  const lampOn = (await cookies()).get("lamp")?.value === "on";
+  const dark = night && !lampOn;
   return (
-    <html lang="zh-CN" className="h-full antialiased">
+    <html lang="zh-CN" className="h-full antialiased" data-theme={dark ? "night" : undefined}>
       <body className="flex min-h-full flex-col">
         <header className="border-b border-line bg-paper">
           <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
@@ -38,6 +46,7 @@ export default function RootLayout({
               猫啊岛
             </Link>
             <nav className="flex items-center gap-4 text-sm">
+              {night && <NightLamp initialLit={!dark} />}
               <Link href="/island" className="text-sea-deep hover:text-brick">
                 岛上
               </Link>

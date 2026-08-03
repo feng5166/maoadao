@@ -17,6 +17,28 @@
   --sage: #8a9b7c; /* 鼠尾草绿：植物/温和肯定 */
   --lamp: #d9a441; /* 暖黄：灯光/鱼币，仅小面积 */
   --line: #e2d9c6; /* 纸张分割线 */
+  --paper-note: #fffdf6; /* 便签/日记页纸面 */
+  --paper-press: #fbf8f0; /* 报纸纸面 */
+}
+
+/* 夜里的岛（data-theme="night"）：夜间 19:00–6:00 服务端自动打开，页头提灯可关。
+   同一套变量整体换色——纸张变夜海蓝黑，墨色变暖纸白；砖红/灰蓝在暗底上提亮一档保持可读。 */
+:root[data-theme="night"] {
+  --paper: #252c38;
+  --paper-deep: #1e242e;
+  --ink: #e6ddc9;
+  --ink-soft: #a99e88;
+  --ink-faint: #766f5e;
+  --sea: #7e93a3;
+  --sea-deep: #9db1c1;
+  --brick: #c9705a;
+  --brick-deep: #d88068; /* 夜里 hover 变亮（白天是变深） */
+  --sage: #93a583;
+  --lamp: #d9a441;
+  --line: #39414f;
+  --paper-note: #2b3340;
+  --paper-press: #28303c;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -86,14 +108,14 @@ body {
 
 /* 便签：岛屿公告栏的猫日记载体 */
 .note-slip {
-  background: #fffdf6;
+  background: var(--paper-note);
   border: 1px solid var(--line);
   border-radius: 2px;
 }
 
 /* 报纸：爆米花日报载体 */
 .newspaper {
-  background: #fbf8f0;
+  background: var(--paper-press);
   border-top: 3px double var(--line);
   border-bottom: 3px double var(--line);
 }
@@ -109,7 +131,7 @@ body {
 /* 样张日记页：一页贴在墙上的手账，顶部一截鼠尾草色胶带 */
 .diary-page {
   position: relative;
-  background: #fffdf6;
+  background: var(--paper-note);
   border: 1px solid var(--line);
   border-radius: 2px;
 }
