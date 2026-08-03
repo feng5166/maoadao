@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { BoatArriving } from "@/components/BoatArriving";
 import { PetCat } from "@/components/PetCat";
+import { SeaVoice } from "@/components/SeaVoice";
 import { StayTrack } from "@/components/StayTrack";
 import { WechatConnect } from "@/components/WechatConnect";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -179,6 +180,10 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
 
   // 第三波（仅白天读昨日日记时多一跳）：展示那篇日记的形态
   const displayed = showTodayStory ? summary : prevSummary;
+  // 兜底日记是"第 N 天,天气X。今天:清单"——和上面"三件小事"完全重复(P2 合并),
+  // 只在展示当天且时间轴齐全时压掉正文,批注/回应/悬念照留;昨日日记不压(时间轴是今天的)
+  const isFallbackDiary =
+    showTodayStory && dayComplete && displayed != null && /^第 \d+ 天，天气/.test(displayed.narrative);
   const displayedDiary = displayed
     ? await prisma.diaryEntry.findUnique({ where: { catId_day: { catId: cat.id, day: displayed.day } }, select: { form: true } })
     : null;
@@ -195,14 +200,37 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
   const impressionMemo =
     daysOnIsland <= 2 ? await prisma.memoryEntry.findFirst({ where: { catId: cat.id, kind: "first_impression" } }) : null;
 
+  // 相遇档案(P1):第一张照片不是普通卡片,是宝宝出生照——D1-2 在亮相区,之后永远留在页面下方。
+  const meetArchive = cat.arrivalPhotoUrl ? (
+    <div>
+      <p className="text-center">
+        <span className="seal">相遇档案</span>
+      </p>
+      <div className="note-slip mx-auto mt-3 max-w-sm p-3" style={{ transform: "rotate(-0.8deg)" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- 动态合成图走自有 API，长缓存 */}
+        <img
+          src={`${cat.arrivalPhotoUrl}${cat.arrivalPhotoUrl.includes("?") ? "&" : "?"}s=720`}
+          alt={`${cat.name}来岛第一天的照片`}
+          width={1000}
+          height={687}
+          className="h-auto w-full"
+        />
+        <p className="font-diary mt-2 text-center text-[14px] text-ink-soft">猫啊岛历 第 1 天 · 码头</p>
+      </div>
+      <p className="mt-2 text-center text-xs text-ink-faint">
+        这是它第一次看到你的地方。这一页会一直在这里。
+      </p>
+    </div>
+  ) : null;
+
   return (
     <div className="mx-auto max-w-lg">
       <Track events={funnelEvents} />
       <StayTrack page="my-cat" />
 
-      {/* 页眉：日期与天气（手账体例） */}
+      {/* 页眉：日期与天气（手账体例;来岛天数移进名牌——它是猫的信息,不是日历的） */}
       <p className="text-center text-xs tracking-widest text-ink-faint">
-        {todayLabel()} · 来岛第 {daysOnIsland} 天 · {world.weather}
+        {todayLabel()} · {world.weather}
       </p>
 
       {/* D2 双向履约:先确认"你回来了",再看它怎么说(doc/12 §八.3,一次性) */}
@@ -210,7 +238,8 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         <p className="font-diary mt-4 text-center text-[17px] text-ink">你真的来了。</p>
       )}
 
-      {/* 首屏 = 它现在怎么样（doc/10 §5）：场景、此刻、心情——先看见它在生活，再读故事 */}
+      {/* 首屏 = 我的猫此刻(P0 拥有感):画面右下压一张名牌——它是谁、来岛第几天、此刻在哪。
+          先出现猫,再出现世界;3 秒内回答"这是我的猫,它现在在哪里,在做什么" */}
       <div className="relative mt-3 overflow-hidden rounded-lg border border-line">
         {poseCount > 0 ? (
           <>
@@ -228,17 +257,18 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
             <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
           </>
         )}
+        <div className="note-slip absolute bottom-2 right-2 px-2.5 py-1.5 text-right" style={{ transform: "rotate(0.8deg)" }}>
+          <p className="font-title text-[15px] font-bold leading-tight text-ink">{cat.name}</p>
+          <p className="mt-0.5 text-[11px] text-ink-soft">
+            来岛第 {daysOnIsland} 天 · {state?.location ?? "岛上"}
+          </p>
+        </div>
       </div>
 
       {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}
-      <p className="font-diary mt-4 text-center text-[15px] text-ink">{nowText}</p>
-      {/* 海螺留声：它存在海螺里的一句话（绑定见面礼） */}
-      {voiceNote && (
-        <div className="mt-2 text-center">
-          <p className="text-xs text-ink-faint">海螺里存着它的声音</p>
-          <audio controls preload="none" src={`/api/voice/${cat.id}`} className="mx-auto mt-1.5 h-9 w-full max-w-[280px]" />
-        </div>
-      )}
+      <p className="font-diary mt-4 text-center text-[16px] leading-relaxed text-ink">{nowText}</p>
+      {/* 海螺留声(P3):声音是生活痕迹,不摆播放器 */}
+      {voiceNote && <SeaVoice src={`/api/voice/${cat.id}`} />}
       {/* 微信来的路(doc/11 修订 §五):确认刚才那句话已收进——只说"收到",不说"照做" */}
       {from === "wechat" && pendingNudge?.message && (
         <p className="mt-1.5 text-center text-xs text-ink-soft">
@@ -269,22 +299,11 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      {/* 相遇照片：第一天你和它的第一张照片（立绘定稿后合成，D1 的小高潮） */}
-      {cat.arrivalPhotoUrl && daysOnIsland <= 2 && (
-        <div className="mt-5">
+      {/* 相遇档案（P1）：D1-2 是亮相的小高潮,放在首屏下方 */}
+      {daysOnIsland <= 2 && meetArchive && (
+        <div className="mt-6">
           <Track events={[{ name: "arrival_photo_view" }]} />
-          <div className="note-slip mx-auto max-w-sm p-3" style={{ transform: "rotate(-0.8deg)" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- 动态合成图走自有 API，长缓存 */}
-            <img
-              src={`${cat.arrivalPhotoUrl}${cat.arrivalPhotoUrl.includes("?") ? "&" : "?"}s=720`}
-              alt={`${cat.name}来岛第一天的照片`}
-              width={1000}
-              height={687}
-              className="h-auto w-full"
-            />
-            <p className="font-diary mt-2 text-center text-[14px] text-ink-soft">猫啊岛历 第 1 天 · 码头</p>
-          </div>
-          <p className="mt-1.5 text-center text-xs text-ink-faint">你们的第一张照片，它会一直收着。</p>
+          {meetArchive}
         </div>
       )}
 
@@ -368,22 +387,24 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      {/* 微瞬间时间轴：当日事实按现实时段解锁（下午的事，要到下午才知道） */}
+      {/* 猫的一天(P2):不是日志,是几件小事——时段靠左像手账页边,正文用日记体(按现实时段解锁) */}
       {timeline.length > 0 && (
         <div className="mt-5 border-t border-line pt-4">
           <p className="text-center text-xs tracking-widest text-ink-faint">
-            {dayComplete ? "它今天的一天" : "今天到现在"}
+            {dayComplete
+              ? `今天，它做了${["", "一", "两", "三", "四", "五", "六", "七", "八", "九"][timeline.length] ?? timeline.length}件小事`
+              : "今天到现在"}
           </p>
-          <ul className="mt-2 space-y-1.5">
+          <ul className="mx-auto mt-3 max-w-md space-y-2.5">
             {timeline.map((t) => (
-              <li key={t.id} className="font-diary text-[14px] leading-relaxed text-ink-soft">
-                <span className="mr-1.5 text-xs text-ink-faint">{t.seg}</span>
-                {t.text}
+              <li key={t.id} className="flex items-baseline gap-3">
+                <span className="font-title w-9 shrink-0 text-right text-xs text-ink-faint">{t.seg}</span>
+                <span className="font-diary text-[15px] leading-relaxed text-ink">{t.text}</span>
               </li>
             ))}
           </ul>
           {!dayComplete && (
-            <p className="mt-2 text-center text-xs text-ink-faint">
+            <p className="mt-2.5 text-center text-xs text-ink-faint">
               {hour < 13 ? "下午的事，要到下午才知道。" : "晚上的事，要到晚上才知道。"}
             </p>
           )}
@@ -413,8 +434,8 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
       )}
       {displayed ? (
         <article className="mt-6">
-          <h1 className="font-title text-center text-xl font-bold">{displayed.headline}</h1>
-          {displayedDiary?.form === "note" ? (
+          {!isFallbackDiary && <h1 className="font-title text-center text-xl font-bold">{displayed.headline}</h1>}
+          {isFallbackDiary ? null : displayedDiary?.form === "note" ? (
             <div className="note-slip mx-auto mt-4 max-w-sm p-4" style={{ transform: "rotate(-0.6deg)" }}>
               <p className="mb-1 text-xs text-ink-faint">它贴在门上的便条</p>
               <p className="font-diary whitespace-pre-wrap text-[15px] leading-[1.9] text-ink">{displayed.narrative}</p>
@@ -501,9 +522,17 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      {/* 今晚给它留句话（唯一的明显容器） */}
-      <div id="nudge" className="mt-8 border border-line bg-paper-deep/40 p-4">
-        <h2 className="font-title font-bold">今晚给它留句话</h2>
+      {/* 相遇档案（P1）：D3 起沉到页面下方,但永远都在——D30 回来,这个地方还在这里 */}
+      {daysOnIsland > 2 && meetArchive && (
+        <div className="mt-8 border-t border-line pt-6">{meetArchive}</div>
+      )}
+
+      {/* 今晚给它留句话(P3 便签化):不是功能表单,是桌上的一张空白便签 */}
+      <div id="nudge" className="note-slip mt-8 p-4" style={{ transform: "rotate(0.3deg)" }}>
+        <p className="text-xs text-ink-faint">{pendingNudge ? "桌上的便签" : "桌上放着一张空白便签"}</p>
+        <h2 className="font-diary mt-1 text-[16px] text-ink">
+          {pendingNudge ? `写好的话，${cat.name}收走了` : "今晚，想对它说一句什么？"}
+        </h2>
         {pendingNudge ? (
           <p className="font-diary mt-2 text-sm leading-relaxed text-ink">
             {cat.name}把你的话记下了。听不听，要看它自己的决定——
