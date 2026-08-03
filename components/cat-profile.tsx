@@ -70,13 +70,24 @@ export function CatHeroScene({
   );
 }
 
-/** 此刻:第一眼要知道它现在在哪里、在干嘛 */
-export function CatCurrentMoment({ nowText, mood }: { nowText: string; mood: string | null | undefined }) {
+/** 此刻:推开窗第一眼——现在几时、它在哪、在干嘛、门口有什么生活痕迹 */
+export function CatCurrentMoment({
+  dateLine,
+  nowText,
+  mood,
+  traceLine,
+}: {
+  dateLine: string;
+  nowText: string;
+  mood: string | null | undefined;
+  traceLine: string | null;
+}) {
   return (
-    <div className="mt-4 border-t border-line pt-3">
-      <p className="text-xs tracking-widest text-ink-faint">此刻</p>
-      <p className="font-diary mt-1 text-[15px] leading-relaxed text-ink">{nowText}</p>
+    <div className="mt-3">
+      <p className="text-xs tracking-widest text-ink-soft">{dateLine}</p>
+      <p className="font-diary mt-2 text-[16px] leading-relaxed text-ink">{nowText}</p>
       <p className="mt-1 text-xs text-ink-soft">看起来{mood ? `心情${mood}` : "心情不错"}。</p>
+      {traceLine && <p className="font-diary mt-1.5 text-[13px] leading-relaxed text-ink-faint">{traceLine}</p>}
     </div>
   );
 }
@@ -124,7 +135,6 @@ export type FriendCard = {
   otherName: string;
   otherPortraitUrl: string | null;
   affinityText: string;
-  firstStory: SharedStory;
   latestStory: SharedStory;
 };
 
@@ -148,15 +158,10 @@ export function CatRelationship({ friends }: { friends: FriendCard[] }) {
                 <span className="text-[11px] text-sage">{f.affinityText}</span>
               </span>
               <span className="font-diary mt-0.5 block text-[13px] leading-snug text-ink-soft">
-                {f.firstStory
-                  ? `第 ${f.firstStory.day} 天认识——那天${f.firstStory.text}`
+                {f.latestStory
+                  ? `第 ${f.latestStory.day} 天,${f.latestStory.text}`
                   : "还没一起经历过什么,不过快了。"}
               </span>
-              {f.latestStory && f.latestStory.day !== f.firstStory?.day && (
-                <span className="font-diary mt-0.5 block text-[13px] leading-snug text-ink-faint">
-                  最近:{f.latestStory.text}
-                </span>
-              )}
             </span>
           </Link>
         ))}
@@ -165,7 +170,15 @@ export function CatRelationship({ friends }: { friends: FriendCard[] }) {
   );
 }
 
-export type LifePage = { id: string; day: number; mood: string; content: string; sceneImg: string | null };
+export type LifePage = {
+  id: string;
+  day: number;
+  mood: string;
+  content: string;
+  sceneImg: string | null;
+  /** 观察窗口的三要素:时段 · 地点 · 状态(缺哪项就省哪项) */
+  metaLine: string | null;
+};
 
 /** 生活册:每一天是一张照片卡——日期手写、照片贴上、一句话,想读全文再翻开 */
 export function CatLifeBook({
@@ -194,11 +207,12 @@ export function CatLifeBook({
           return (
             <article key={d.id} className="note-slip p-4" style={{ transform: `rotate(${i % 2 === 0 ? "-0.3" : "0.3"}deg)` }}>
               <div className="flex items-baseline justify-between">
-                <p className="font-diary text-[13px] text-ink-soft">猫啊岛 第 {d.day} 天 · {d.mood}</p>
+                <p className="font-diary text-[13px] text-ink-soft">猫啊岛 第 {d.day} 天</p>
                 <Link href={`/share/${catId}/${d.day}`} className="text-xs text-ink-faint hover:text-brick">
                   分享卡
                 </Link>
               </div>
+              {d.metaLine && <p className="text-[11px] text-ink-faint">{d.metaLine}</p>}
               {d.sceneImg && (
                 <div className="mt-2 overflow-hidden rounded-sm border border-line">
                   <Image src={d.sceneImg} alt="" width={1200} height={686} loading="lazy" className="w-full" />
