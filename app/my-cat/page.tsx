@@ -14,6 +14,7 @@ import { getViewerId } from "@/lib/identity";
 import { getCatState, getLatestSummary, getPendingNudge, getUnsentLetter, getViewerCat, getWorld } from "@/lib/queries";
 import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay, unlockedSegments } from "@/lib/moments";
+import { timeBucket } from "@/lib/visual/director";
 import { wechatEnabled } from "@/lib/wechat/bridge";
 import { bondStage } from "@/lib/sim/firstweek";
 import { catDayOf, inArrival } from "@/lib/sim/lifecycle";
@@ -110,6 +111,8 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
   const scene = sceneFor(state?.location);
   // 海螺留声:绑定见面礼时存的猫声(有才渲染,一次轻查询)
   const voiceNote = await prisma.catVoiceNote.findUnique({ where: { catId: cat.id }, select: { durationMs: true } });
+  // 姿势集就绪才走导演系统拼贴,否则保持旧路径(圆头像叠场景)
+  const poseCount = await prisma.catPose.count({ where: { catId: cat.id } });
 
   // ============ "它现在怎么样"（doc/09 §5）：时段门的推导，全部内存计算 ============
   const segOrder: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
@@ -209,8 +212,22 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
 
       {/* 首屏 = 它现在怎么样（doc/10 §5）：场景、此刻、心情——先看见它在生活，再读故事 */}
       <div className="relative mt-3 overflow-hidden rounded-lg border border-line">
-        <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
-        <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
+        {poseCount > 0 ? (
+          <>
+            {/* 导演系统(doc/15):场景时段变体 + 猫姿势贴纸,零生成拼贴;?v 按天-时段桶缓存 */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- 内部合成路由,不走优化管线 */}
+            <img
+              src={`/api/moment/${cat.id}?v=${world.day}-${timeBucket(hour)}`}
+              alt="" width={1200} height={686} className="w-full"
+            />
+            <PetCat chip id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
+          </>
+        ) : (
+          <>
+            <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
+            <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
+          </>
+        )}
       </div>
 
       {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}

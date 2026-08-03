@@ -24,6 +24,11 @@ export interface CompositionSpec {
   rotateDeg: number;
 }
 
+/** 北京时 → 时段桶(页面拼缓存参数用,与 direct 内部同一套) */
+export function timeBucket(hour: number | undefined): SceneTime {
+  return timeOf(hour);
+}
+
 function timeOf(hour: number | undefined): SceneTime {
   if (hour == null) return "day";
   if (hour >= 5 && hour < 10) return "morning";
