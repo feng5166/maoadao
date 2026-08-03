@@ -356,7 +356,7 @@ export const THREAD_SYSTEMS: Record<string, ThreadSystem> = {
               outcome: "success",
               data: {
                 location: "溪流浅滩",
-                scene: "「溪畔咖菲」正式开业，全岛的猫都来捧场。小梅的日报头版：《溪流边真的开出了咖啡馆》。土豆捧着他的第一杯梅子水，坐在自己修的窗边",
+                scene: "「溪畔咖菲」正式开业，全岛的猫都来捧场。爆米花的日报头版：《溪流边真的开出了咖啡馆》。土豆捧着他的第一杯梅子水，坐在自己修的窗边",
               },
               deltas: { coins: 30, energy: -20 },
               affinityChanges: [
@@ -637,7 +637,7 @@ export const THREAD_SYSTEMS: Record<string, ThreadSystem> = {
                   outcome: "success",
                   data: {
                     choice: "publish",
-                    scene: "把灯塔的故事讲给了小梅，《猫啊岛日报》头版：《灯塔三十年，一盏为归途留的灯》。盐汽水气了一天，晚上却默默在门口放了条烤鱼",
+                    scene: "把灯塔的故事讲给了爆米花，《猫啊岛日报》头版：《灯塔三十年，一盏为归途留的灯》。盐汽水气了一天，晚上却默默在门口放了条烤鱼",
                   },
                   deltas: { energy: -10 },
                   affinityChanges: [

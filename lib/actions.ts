@@ -184,14 +184,14 @@ export async function submitNewsTip(formData: FormData) {
   if (!content) return;
   const uid = await getViewerId();
   const cat = await prisma.cat.findFirst({ where: { ownerId: uid ?? "__none__" }, select: { id: true } });
-  if (!cat) throw new Error("要先有一只猫，才能给小梅递线索");
+  if (!cat) throw new Error("要先有一只猫，才能给爆米花递线索");
 
   // 一次只压一条待发线索：防刷版面
   const pending = await prisma.newsTip.count({ where: { catId: cat.id, publishedAt: null } });
-  if (pending > 0) throw new Error("小梅手上还压着你的一条线索，等见了报再递下一条");
+  if (pending > 0) throw new Error("爆米花手上还压着你的一条线索，等见了报再递下一条");
 
   const mod = await moderateTexts([content]);
-  if (!mod.ok) throw new Error(mod.reason ?? "这条线索没通过小梅的审稿");
+  if (!mod.ok) throw new Error(mod.reason ?? "这条线索没通过爆米花的审稿");
 
   await prisma.newsTip.create({ data: { id: randomUUID(), catId: cat.id, content, createdAt: new Date() } });
   await track("news_tip_submit", {});

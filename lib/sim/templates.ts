@@ -253,7 +253,7 @@ const GOSSIPS = [
   "土豆修屋顶时在瓦片下发现一窝麻雀，愣是等雏鸟飞走才继续干活",
   "老怪收藏的贝壳摆满了一整面墙，据说每一颗都有名字",
   "乌鸦昨晚巡逻时对着月亮发了很久的呆，被路过的猫看了个正着",
-  "小梅在为日报找新选题，见谁都问「你最近有没有什么大新闻」",
+  "爆米花在为日报找新选题，见谁都问「你最近有没有什么大新闻」",
   "棉花答应帮三只猫带话，结果三句话全记串了，闹了一天乌龙",
   "将军把码头的缆绳重新盘了一遍，说是台风季前的老规矩",
   "冰粉给自己梳了个新造型，在溪流边照了一下午水面",
@@ -395,7 +395,7 @@ export const TEMPLATES: EventTemplate[] = [
         { boss: "球球", what: "帮杂货铺理货" },
         { boss: "将军", what: "帮码头清点渔获" },
         { boss: "馒头", what: "帮早点摊看火蒸鱼糕" },
-        { boss: "小梅", what: "帮日报挨家挨户送报" },
+        { boss: "爆米花", what: "帮日报挨家挨户送报" },
         { boss: "土豆", what: "帮忙给新栅栏刷漆" },
         { boss: "球球", what: "帮忙盘点仓库里的毛线" },
         { boss: "将军", what: "帮忙给缆绳上油" },
@@ -530,7 +530,7 @@ export const TEMPLATES: EventTemplate[] = [
     minEnergy: 10,
     personalityFit: (c) => 0.4 + c.sociability / 90,
     propose: (ctx) => {
-      // 八卦源：小梅（岛报主编）和棉花（谁都跟她聊）
+      // 八卦源：爆米花（岛报主编）和棉花（谁都跟她聊）
       const sources = ["npc-xiaomei", "npc-mianhua"].filter((id) => id !== ctx.cat.id && ctx.catById.has(id));
       if (sources.length === 0) return null;
       return { targetId: pick(ctx.rng, sources) };

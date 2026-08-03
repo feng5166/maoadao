@@ -68,11 +68,11 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
         </p>
       </div>
 
-      {/* 小梅日报（报纸） */}
+      {/* 爆米花日报（报纸） */}
       {news.length > 0 && (
         <div className="newspaper mt-6 px-4 py-3">
           <p className="font-press text-center text-sm font-bold">猫啊岛日报</p>
-          <p className="text-center text-[10px] tracking-widest text-ink-faint">主编 小梅 · 第 {day} 期</p>
+          <p className="text-center text-[10px] tracking-widest text-ink-faint">主编 爆米花 · 第 {day} 期</p>
           <hr className="paper-rule my-2" />
           <ul className="space-y-1.5">
             {news.map((n) => (
@@ -84,26 +84,26 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {/* 给小梅递线索：岛民也能上日报。小梅是谁得先交代——不是谁都读过报头那行小字 */}
+      {/* 给爆米花递线索：岛民也能上日报。爆米花是谁得先交代——不是谁都读过报头那行小字 */}
       {myCat && (
         <div className="mt-5 border border-line bg-paper-deep/40 p-4">
           <div className="flex items-start gap-2.5">
             {xiaomei && (
-              <Link href={`/cats/${xiaomei.id}`} className="mt-0.5 flex shrink-0" aria-label="小梅的档案">
+              <Link href={`/cats/${xiaomei.id}`} className="mt-0.5 flex shrink-0" aria-label="爆米花的档案">
                 <CatAvatar id={xiaomei.id} size={38} portraitUrl={xiaomei.portraitUrl} crop="head" />
               </Link>
             )}
             <div className="min-w-0">
-              <h2 className="font-title text-sm font-bold">给小梅递一条线索</h2>
+              <h2 className="font-title text-sm font-bold">给爆米花递一条线索</h2>
               <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
-                <Link href="/cats/npc-xiaomei" className="text-sea-deep hover:text-brick">小梅</Link>
+                <Link href="/cats/npc-xiaomei" className="text-sea-deep hover:text-brick">爆米花</Link>
                 是《猫啊岛日报》的主编，一只爱八卦的三花猫——她见谁都问：「最近有没有大新闻？」
               </p>
             </div>
           </div>
           {myTip && !myTip.publishedAt ? (
             <p className="font-diary mt-3 border-t border-line pt-3 text-sm leading-relaxed text-ink">
-              小梅把你的线索夹进了采访本：「{myTip.content}」
+              爆米花把你的线索夹进了采访本：「{myTip.content}」
               <br />
               <span className="text-xs text-ink-faint">明天的日报上见。</span>
             </p>
@@ -118,7 +118,7 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
                   name="content" maxLength={60} placeholder="60 字以内，写给全岛看"
                   className="min-w-0 flex-1 border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none"
                 />
-                <SubmitButton pendingText="递给小梅…" className="stamp-btn shrink-0 px-4 py-2 text-sm">
+                <SubmitButton pendingText="递给爆米花…" className="stamp-btn shrink-0 px-4 py-2 text-sm">
                   递过去
                 </SubmitButton>
               </form>

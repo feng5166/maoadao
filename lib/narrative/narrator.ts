@@ -101,7 +101,7 @@ export interface NewsInput {
 export async function narrateIslandNews(input: NewsInput): Promise<string[]> {
   if (input.items.length === 0) return [];
   const factLines = input.items.map((x, i) => `${i + 1}. ${x.catName}：${x.summary}`).join("\n");
-  const system = `你是《猫啊岛日报》的编辑小梅（一只爱八卦的三花猫）。把每条事实改写成一句 30 字以内的岛屿动态，像小报标题一样有趣但不夸大事实。规则：
+  const system = `你是《猫啊岛日报》的编辑爆米花（一只爱八卦的三花猫）。把每条事实改写成一句 30 字以内的岛屿动态，像小报标题一样有趣但不夸大事实。规则：
 1. 严格基于事实，不编造。
 2. 每条一行，行首不带序号或符号。
 3. 输出行数与输入条数一致。`;

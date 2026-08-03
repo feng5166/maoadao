@@ -16,7 +16,7 @@ export const NPC_CATS: NpcSeed[] = [
   { id: "npc-yantai", role: "story", name: "盐汽水", boldness: 40, sociability: 25, diligence: 90, personaTags: ["沉默", "手巧", "夜猫子"], appearance: "瘦高的黑猫，左耳有个缺口", bio: "灯塔管理员，修得好一切会转的东西。" },
   { id: "npc-mantou", role: "function", name: "馒头", boldness: 20, sociability: 60, diligence: 70, personaTags: ["胆小", "温柔", "会做饭"], appearance: "雪白的长毛猫，总是眯着眼", bio: "在集市摆早点摊，蒸的鱼糕全岛闻名。" },
   { id: "npc-doudou", role: "story", name: "斗斗", boldness: 95, sociability: 50, diligence: 40, personaTags: ["莽", "讲义气", "怕水却爱出海"], appearance: "虎斑猫，尾巴短了一截", bio: "自称探险家，废弃渔船是他的秘密基地。" },
-  { id: "npc-xiaomei", role: "social", name: "小梅", boldness: 55, sociability: 90, diligence: 55, personaTags: ["八卦", "热心", "嗓门大"], appearance: "三花猫，脖子上系着红铃铛", bio: "岛上小报《猫啊岛日报》的主编。" },
+  { id: "npc-xiaomei", role: "social", name: "爆米花", boldness: 55, sociability: 90, diligence: 55, personaTags: ["八卦", "热心", "嗓门大"], appearance: "三花猫，脖子上系着红铃铛", bio: "岛上小报《猫啊岛日报》的主编。" },
   { id: "npc-laoguai", role: "story", name: "老怪", boldness: 60, sociability: 10, diligence: 60, personaTags: ["古怪", "博学", "收藏癖"], appearance: "灰色缅因猫，胡子特别长", bio: "住在松林深处，据说见过岛的第一天。" },
   { id: "npc-tangyuan", role: "background", name: "汤圆", boldness: 35, sociability: 75, diligence: 20, personaTags: ["懒", "撒娇", "运气好"], appearance: "黑白奶牛猫，圆脸", bio: "从没干过活但从没饿过肚子，岛上未解之谜。" },
   { id: "npc-qiuqiu", role: "function", name: "球球", boldness: 70, sociability: 65, diligence: 80, personaTags: ["要强", "精打细算", "刀子嘴"], appearance: "橘白相间，额头有个M形花纹", bio: "杂货铺老板娘，全岛的鱼币有一半从她店里过。" },
