@@ -269,6 +269,18 @@ model Portrait {
   createdAt DateTime
 }
 
+// L1 姿势集（doc/15 图片导演系统）：立绘之外的复用姿势，领养时生成一次，
+// 日常生活图全靠这些贴纸拼贴——绝不按天生成
+model CatPose {
+  catId     String
+  pose      String // sit | sleep | walk | play | lookout
+  data      Bytes
+  mime      String   @default("image/jpeg")
+  createdAt DateTime
+
+  @@id([catId, pose])
+}
+
 // 猫的留声（海螺）：TTS 生成的猫声。iLink 不给 Bot 下发语音消息（2026-08-03 实测），
 // 声音存站内播放，微信只寄带短链的一句话
 model CatVoiceNote {
