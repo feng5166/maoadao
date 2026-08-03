@@ -34,6 +34,31 @@ export function sceneFile(name: string, time: SceneTime): { file: string; needsT
   return { file: path.join(dir, `${name}.jpg`), needsTint: time !== "day" };
 }
 
+/** 猫在各场景里的画面高度占比(2026-08-04:比例关系要对——远景里猫不能和房子一样高)。
+ *  远景(灯塔/码头/告别海面)猫小;中景(集市/松林/渔船)适中;室内(小屋)猫大 */
+export const SCENE_CAT_SCALE: Record<string, number> = {
+  lighthouse: 0.26,
+  dock: 0.3,
+  reef: 0.32,
+  farewell: 0.24,
+  sailed: 0.24,
+  boat: 0.34,
+  pines: 0.36,
+  market: 0.34,
+  home: 0.5,
+};
+
+/** 场景前景锚点:底边不是处处可站——远景场景右下往往是远处屋顶/海面,猫要落在前景侧。
+ *  未列出的场景两侧皆可,交给导演的确定性随机 */
+export const SCENE_CAT_ANCHOR: Record<string, "left" | "right" | "center"> = {
+  lighthouse: "left", // 右下是山坡下的村子屋顶
+  dock: "center", // 栈桥在画面中下,两侧都是水
+  farewell: "left",
+  sailed: "left",
+  boat: "left", // 右侧是水
+  home: "left", // 左侧是窗边坐垫,右侧桌面偏高
+};
+
 /** L1 姿势枚举(CatPose 表;立绘 = 另存的定稿资产,不在此列) */
 export const POSES = ["sit", "sleep", "walk", "play", "lookout"] as const;
 export type Pose = (typeof POSES)[number];
