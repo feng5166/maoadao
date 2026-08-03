@@ -5,7 +5,7 @@ import { StayTrack } from "@/components/StayTrack";
 import { SubmitButton } from "@/components/SubmitButton";
 import { submitNewsTip } from "@/lib/actions";
 import { getViewerId } from "@/lib/identity";
-import { describeAffinity, getCatNameIndex, getIslandNews, getViewerCat, getWorld } from "@/lib/queries";
+import { describeAffinity, getCat, getCatNameIndex, getIslandNews, getViewerCat, getWorld } from "@/lib/queries";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
 
   const viewerId = await getViewerId();
   // 两波并行（doc/11 P1-3）：myCat 与公共内容互不依赖；tip/关系依赖 myCat 进第二波
-  const [myCat, news, diariesRaw, catIndex] = await Promise.all([
+  const [myCat, news, diariesRaw, catIndex, xiaomei] = await Promise.all([
     getViewerCat(viewerId),
     getIslandNews(6).then((all) => all.filter((n) => n.day === day)),
     prisma.diaryEntry.findMany({
@@ -29,6 +29,7 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
       include: { cat: { select: { id: true, name: true, isNpc: true, portraitUrl: true } } },
     }),
     getCatNameIndex(),
+    getCat("npc-xiaomei"),
   ]);
   const [myTip, rels] = myCat
     ? await Promise.all([
@@ -83,19 +84,32 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {/* 给小梅递线索：岛民也能上日报 */}
+      {/* 给小梅递线索：岛民也能上日报。小梅是谁得先交代——不是谁都读过报头那行小字 */}
       {myCat && (
         <div className="mt-5 border border-line bg-paper-deep/40 p-4">
-          <h2 className="font-title text-sm font-bold">给小梅递一条线索</h2>
+          <div className="flex items-start gap-2.5">
+            {xiaomei && (
+              <Link href={`/cats/${xiaomei.id}`} className="mt-0.5 flex shrink-0" aria-label="小梅的档案">
+                <CatAvatar id={xiaomei.id} size={38} portraitUrl={xiaomei.portraitUrl} crop="head" />
+              </Link>
+            )}
+            <div className="min-w-0">
+              <h2 className="font-title text-sm font-bold">给小梅递一条线索</h2>
+              <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">
+                <Link href="/cats/npc-xiaomei" className="text-sea-deep hover:text-brick">小梅</Link>
+                是《猫啊岛日报》的主编，一只爱八卦的三花猫——她见谁都问：「最近有没有大新闻？」
+              </p>
+            </div>
+          </div>
           {myTip && !myTip.publishedAt ? (
-            <p className="font-diary mt-1.5 text-sm leading-relaxed text-ink">
+            <p className="font-diary mt-3 border-t border-line pt-3 text-sm leading-relaxed text-ink">
               小梅把你的线索夹进了采访本：「{myTip.content}」
               <br />
               <span className="text-xs text-ink-faint">明天的日报上见。</span>
             </p>
           ) : (
             <>
-              <p className="mt-1 text-xs text-ink-faint">
+              <p className="mt-3 border-t border-line pt-3 text-xs text-ink-faint">
                 你看见的、听说的、想让全岛知道的——原话登在明天的日报上，署{myCat.name}的名。
                 {myTip?.publishedAt && `（上一条登在第 ${myTip.publishDay} 期）`}
               </p>
