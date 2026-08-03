@@ -180,5 +180,6 @@ export async function releaseCat(formData: FormData) {
 
   await track("release_cat", {});
   revalidatePath("/");
-  redirect("/adopt");
+  // 不直接落领养表单——先经过「船开走了」的过场，给告别一个收尾
+  redirect("/account/farewell/sailed");
 }
