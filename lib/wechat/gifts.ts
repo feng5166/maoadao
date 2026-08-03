@@ -10,29 +10,25 @@ import { voiceFor } from "../narrative/voice";
 
 const WECHAT_KIND = "wechat_openclaw";
 
-/** 立绘 → 圆形猫头小相:裁头(对齐 CatAvatar crop=head 的取景)、圆形蒙版、奶油纸底 + 砖红细环 */
+/** 立绘 → 圆形小相:整猫缩进圆环(徽章式)。不裁头——各猫构图不一,固定裁切会切歪;
+ *  立绘本身是米白纯背景,缩进奶油纸底圆环里天然融合 */
 export async function roundHeadAvatar(portrait: Buffer, size = 640): Promise<Buffer> {
-  const meta = await sharp(portrait).metadata();
-  const W = meta.width ?? 0;
-  const H = meta.height ?? 0;
-  if (!W || !H) throw new Error("bad portrait");
-  // CatAvatar crop=head: scale(1.9) origin(50% 16%) → 取景框宽高 52.6%,左 23.7%,上 7.6%
-  const cw = Math.min(Math.round(W * 0.526), W);
-  const left = Math.max(0, Math.round(W * 0.237));
-  const top = Math.max(0, Math.round(H * 0.076));
-  const ch = Math.min(cw, H - top);
   const r = size / 2 - 12;
-  const head = await sharp(portrait)
-    .extract({ left, top, width: Math.min(cw, W - left), height: ch })
-    .resize(size, size, { fit: "cover" })
-    .toBuffer();
+  // 立绘整幅圆形蒙版(立绘是米白纯底、猫居中留边,圆裁不会切到猫),再落奶油纸底加砖红环
   const mask = Buffer.from(`<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="#fff"/></svg>`);
-  const circled = await sharp(head).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
+  const circled = await sharp(portrait)
+    .resize(size, size, { fit: "cover" })
+    .composite([{ input: mask, blend: "dest-in" }])
+    .png()
+    .toBuffer();
   const bg = Buffer.from(`<svg width="${size}" height="${size}"><rect width="${size}" height="${size}" fill="#faf6ee"/></svg>`);
   const ring = Buffer.from(
     `<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#b5543b" stroke-width="7"/></svg>`,
   );
-  return sharp(bg).composite([{ input: circled }, { input: ring }]).jpeg({ quality: 88 }).toBuffer();
+  return sharp(bg)
+    .composite([{ input: circled }, { input: ring }])
+    .jpeg({ quality: 88 })
+    .toBuffer();
 }
 
 export async function sendWelcomeGifts(userId: string, openId: string): Promise<void> {
