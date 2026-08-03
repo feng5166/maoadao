@@ -82,12 +82,13 @@ export function CatAvatar({
   crop?: "full" | "head";
 }) {
   if (portraitUrl) {
-    // 站内立绘按显示尺寸取缩略图（2x 屏 + head 裁切的放大量都算进去了），别为 24px 头像下 768px 全图
-    // URL 可能已带 ?v= 版本参数（重绘后顶掉 CDN 旧缓存），拼 s 时选对分隔符
-    const thumb = size <= 40 ? 96 : size <= 80 ? 128 : size <= 128 ? 256 : 0;
+    // 站内立绘按显示尺寸取缩略图（2x 屏算进去了），别为 24px 头像下 768px 全图
+    // URL 可能已带 ?v= 版本参数（重绘后顶掉 CDN 旧缓存），拼参数时选对分隔符
+    // head 裁切在服务端做（?c=head，按每张立绘找脸）：构图朝向不定，前端写死 transform 会裁到背景
+    const thumb = size <= 40 ? 96 : size <= 80 ? 128 : size <= 128 || crop === "head" ? 256 : 0;
     const src =
       portraitUrl.startsWith("/api/portrait/") && thumb
-        ? `${portraitUrl}${portraitUrl.includes("?") ? "&" : "?"}s=${thumb}`
+        ? `${portraitUrl}${portraitUrl.includes("?") ? "&" : "?"}s=${thumb}${crop === "head" ? "&c=head" : ""}`
         : portraitUrl;
     return (
       <span
@@ -101,12 +102,7 @@ export function CatAvatar({
           alt=""
           loading="lazy"
           decoding="async"
-          style={{
-            width: size,
-            height: size,
-            objectFit: "cover",
-            ...(crop === "head" ? { transform: "scale(1.9)", transformOrigin: "50% 16%" } : {}),
-          }}
+          style={{ width: size, height: size, objectFit: "cover" }}
         />
       </span>
     );
