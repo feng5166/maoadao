@@ -6,28 +6,29 @@ import fs from "node:fs";
 import sharp from "sharp";
 import { generateImage } from "../lib/imagegen";
 
-// 每只猫的场景与动作:从 bio/人设里挑一个最像"它的日常"的瞬间
+// 每只猫的场景与动作瞬间(小屋 2.0):不是角色展示,是"我刚好路过,看见它"——
+// 猫不看镜头,背影/侧身/低头做事,像被偶然拍到的生活抓拍
 const MOMENTS: Record<string, { scene: string; action: string }> = {
-  "npc-juzi": { scene: "market", action: "它在集市的摊位之间踱步张望,一副什么都想掺一脚的样子" },
-  "npc-yantai": { scene: "lighthouse", action: "它安静地蹲在灯塔坡的草地上,望着远处的海" },
-  "npc-mantou": { scene: "market", action: "它眯着眼守在集市一角的小摊边,像刚蒸完一笼鱼糕在歇气" },
-  "npc-doudou": { scene: "boat", action: "它神气地站在搁浅旧渔船的船头,尾巴翘着,像在宣布这是它的秘密基地" },
-  "npc-xiaomei": { scene: "dock", action: "它站在木码头上,好奇地看着停泊的小船,脖子上的红铃铛清晰可见" },
-  "npc-laoguai": { scene: "pines", action: "它走在松林小径深处,微微回头,神情像知道很多旧事" },
-  "npc-tangyuan": { scene: "home", action: "它四脚朝天摊在窗边的软垫上睡得正香" },
-  "npc-qiuqiu": { scene: "market", action: "它站在集市摊位后面,神情认真,像在清点自己的货" },
-  "npc-wuya": { scene: "lighthouse", action: "它站在灯塔坡的高处眺望全岛,姿态挺拔警觉" },
-  "npc-nuomi": { scene: "reef", action: "它安静地蹲在浅滩边的礁石上,低头看水里的倒影出神" },
-  "npc-jiangjun": { scene: "dock", action: "它端端正正地坐在码头入口,像在值班,目光笔直" },
-  "npc-bingfen": { scene: "market", action: "它从集市的灯串下昂首走过,毛梳得一丝不苟" },
-  "npc-tudou": { scene: "market", action: "它在集市边上帮着搬一只木箱,埋头出力不吭声" },
-  "npc-lingdang": { scene: "farewell", action: "黄昏里它坐在码头尽头望着海,像正在轻轻唱歌" },
-  "npc-heidou": { scene: "market", action: "它站在集市一间小铺面门口来回打量,像在盘算第八家店开在哪" },
-  "npc-mianhua": { scene: "reef", action: "它蓬松的白毛被海风轻轻吹起,惬意地眯着眼蹲在礁石滩上" },
-  "npc-maoadao": { scene: "dock", action: "上了年纪的它安静地坐在码头边望海,背影有点驼,很安稳" },
-  "cat-meiqiu": { scene: "home", action: "它蜷在小屋窗边的软垫上,尾巴搭在鼻尖,睡得很沉" },
-  "cat-d3d8bbdd": { scene: "home", action: "它趴在小屋桌边的灯下,眼睛亮亮地盯着毛线球" },
-  "cat-f92c7c1c": { scene: "reef", action: "它在浅滩边小心地伸出爪子碰了碰潮水" },
+  "npc-juzi": { scene: "market", action: "它侧着身子从两个摊位之间挤过去,鼻子朝烤鱼摊的方向使劲嗅" },
+  "npc-yantai": { scene: "lighthouse", action: "它背对镜头蹲在灯塔坡的草地上,专注望着海面,尾巴安静地收在脚边" },
+  "npc-mantou": { scene: "market", action: "它低着头把摊子上的蒸笼布叼正,笼屉冒着热气,完全没注意有谁路过" },
+  "npc-doudou": { scene: "boat", action: "它正忙着把一小卷绳子往船头拖,屁股撅着使劲,背对镜头" },
+  "npc-xiaomei": { scene: "dock", action: "它侧身踮起前爪扒着木箱边沿,偷看船上正卸下来的货" },
+  "npc-laoguai": { scene: "pines", action: "只看得到它的背影,正慢慢走进小径深处,尾巴扫过路边的松针" },
+  "npc-tangyuan": { scene: "home", action: "它四脚朝天摊在窗边的软垫上睡得正香,完全没察觉有谁在看" },
+  "npc-qiuqiu": { scene: "market", action: "它低头认真拨着摊位上的货物,一样一样地清点,只露出侧脸" },
+  "npc-wuya": { scene: "lighthouse", action: "它的背影立在坡顶的高处,望着暮色里层层叠叠的屋顶" },
+  "npc-nuomi": { scene: "reef", action: "它低头盯着水洼里自己的倒影出神,一只爪子悬在水面上方" },
+  "npc-jiangjun": { scene: "dock", action: "它端坐在码头入口的侧面,目光追着一艘正在进港的小船" },
+  "npc-bingfen": { scene: "market", action: "它侧身从灯串下走过,回头望了一眼摊位上摆着的白瓷杯子" },
+  "npc-tudou": { scene: "market", action: "它背对镜头,正把一只木箱往摊位底下推,肩背绷得紧紧的" },
+  "npc-lingdang": { scene: "farewell", action: "它的背影坐在码头尽头,面向落日的海,喉咙里像正含着一段歌" },
+  "npc-heidou": { scene: "market", action: "它蹲在小店门口,低着头数面前摆着的几枚鱼币,数得很专心" },
+  "npc-mianhua": { scene: "reef", action: "它侧身蹲在礁石上眯眼吹风,蓬松的白毛被海风掀起一绺" },
+  "npc-maoadao": { scene: "dock", action: "它的背影坐在码头边,面前摊着一册翻开的簿子,背有点驼,很安稳" },
+  "cat-meiqiu": { scene: "home", action: "它蜷在小屋窗边的软垫上睡熟了,尾巴搭在鼻尖,呼吸把毛吹得一起一伏" },
+  "cat-d3d8bbdd": { scene: "home", action: "它背对镜头趴在桌边的灯下,前爪正拨弄一团滚远的毛线" },
+  "cat-f92c7c1c": { scene: "reef", action: "它侧身低着头,小心翼翼伸出一只爪子碰浅滩的潮水" },
 };
 
 const OUT_DIR = "public/cats-life";
@@ -51,9 +52,9 @@ async function main() {
     const raw = await generateImage({
       prompt:
         `把参考图1里的这只猫,自然地画进参考图2的场景里:${action}。` +
-        "这是它日常生活里的一个安静瞬间,像绘本里的一页。" +
+        "这是被偶然拍到的一个生活瞬间:猫不看镜头,正专注做自己的事,像小动物观察日志里的抓拍,不是摆拍海报。" +
         "猫的花色、五官、体型必须和参考图1完全一致;场景的配色、水彩纸纹必须和参考图2完全一致;" +
-        "猫是画面的绝对主角,离镜头较近,占画面高度约一半,神态清晰生动;环境作为背景衬托,光线与场景统一。" +
+        "猫是画面的绝对主角,离镜头较近,占画面高度约一半;环境作为背景衬托,光线与场景统一。" +
         "画面里只有这一只猫,无其他动物无人物无文字无水印,不要出现飞鸟和凭空漂浮的元素",
       size: "2304x1728",
       referenceImages: [

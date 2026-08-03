@@ -94,6 +94,22 @@ export function CatCurrentMoment({
 
 export type SharedStory = { day: number; text: string } | null;
 
+/** 小屋里的东西:生活痕迹,不是背包——看见这些才觉得"这是它的家" */
+export function CatHutItems({ items, tape }: { items: string[]; tape: string }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="note-slip relative mt-6 p-4" style={{ transform: "rotate(0.3deg)" }}>
+      <div className="absolute -top-2 left-10 h-[16px] w-[56px] rotate-[-2deg]" style={{ background: tape }} />
+      <p className="text-xs tracking-widest text-ink-faint">它的小屋里</p>
+      <ul className="font-diary mt-1.5 space-y-1 text-[14px] leading-relaxed text-ink">
+        {items.map((it) => (
+          <li key={it}>· {it}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** 关系故事卡:关系不是状态,是经历——第一次见面、最近一次、现在 */
 export function RelationshipStoryCard({
   catName,
@@ -178,6 +194,8 @@ export type LifePage = {
   sceneImg: string | null;
   /** 观察窗口的三要素:时段 · 地点 · 状态(缺哪项就省哪项) */
   metaLine: string | null;
+  /** 这个瞬间留下了什么(小物件,按地点派生) */
+  leftBehind: string | null;
 };
 
 /** 生活册:每一天是一张照片卡——日期手写、照片贴上、一句话,想读全文再翻开 */
@@ -232,6 +250,12 @@ export function CatLifeBook({
                   </p>
                 </details>
               )}
+              {d.leftBehind && (
+                <p className="mt-2.5 text-[11px] text-ink-faint">
+                  <span className="mr-1.5 inline-block -rotate-2 border border-line px-1.5 py-0.5">留下</span>
+                  {d.leftBehind}
+                </p>
+              )}
             </article>
           );
         })}
@@ -270,7 +294,7 @@ export function CatMemoryBox({
       </ul>
       {secret && (
         <div className="mt-3 border-t border-line pt-2.5">
-          <p className="text-xs tracking-widest text-ink-faint">一个小秘密</p>
+          <p className="text-xs tracking-widest text-ink-faint">有些事情,它还没告诉别人</p>
           <p className="font-diary mt-1 text-[15px] leading-relaxed text-ink">{secret}</p>
         </div>
       )}
