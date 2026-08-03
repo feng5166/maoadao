@@ -20,6 +20,8 @@ import crypto from "crypto";
 
 const ILINK = "https://ilinkai.weixin.qq.com";
 const CHANNEL_VERSION = "1.0.2";
+// 出站自声明(官方 bot_agent 规范:UA 风格、ASCII ≤256,仅腾讯侧日志归因,不参与鉴权)
+const BOT_AGENT = "maoadao-bridge/0.1";
 const SECRET = process.env.BRIDGE_SECRET || "";
 if (!SECRET) {
   console.error("[bridge] 致命:未配置 BRIDGE_SECRET,拒绝启动(与 Vercel WECHAT_BRIDGE_SECRET 同值)");
@@ -65,7 +67,7 @@ async function ilinkPost(endpoint, payload, botToken, timeoutMs = 15_000) {
     const r = await fetch(`${ILINK}/${endpoint}`, {
       method: "POST",
       headers: ihdr(botToken),
-      body: JSON.stringify({ ...payload, base_info: { channel_version: CHANNEL_VERSION } }),
+      body: JSON.stringify({ ...payload, base_info: { channel_version: CHANNEL_VERSION, bot_agent: BOT_AGENT } }),
       signal: ctrl.signal,
     });
     const raw = await r.text();
@@ -149,6 +151,9 @@ async function maoadao(path, payload) {
   }
 }
 
+// iLink item type → 媒体标注(猫只看得懂字:媒体不下载,只告诉业务侧"来了个什么")
+const MEDIA_KIND = { 2: "image", 3: "voice", 4: "file", 5: "video" };
+
 // 单用户 getupdates 循环:刷 context_token(=24h 窗口的真身)+ 全量转发文本给猫啊岛
 function startWorker(openId) {
   const existing = workers.get(openId);
@@ -156,10 +161,12 @@ function startWorker(openId) {
   const w = { stop: false };
   workers.set(openId, w);
   let buf = "";
+  // 长轮询超时跟随服务端建议(longpolling_timeout_ms + 5s 余量,15~90s 夹逼);拿到建议前用 40s
+  let pollMs = 40_000;
   console.log(`[bridge] worker 启动 ${openId}`);
   (async () => {
     while (!w.stop && creds[openId]) {
-      const r = await ilinkPost("ilink/bot/getupdates", { get_updates_buf: buf }, creds[openId].botToken, 40_000);
+      const r = await ilinkPost("ilink/bot/getupdates", { get_updates_buf: buf }, creds[openId].botToken, pollMs);
       if (!r.ok) {
         // -14 = 会话过期:暂停 60 分钟防风控(openclaw-weixin 同款策略),用户需重新扫码
         if (r.data?.errcode === -14 || r.data?.ret === -14) {
@@ -171,6 +178,8 @@ function startWorker(openId) {
         continue;
       }
       if (r.data.get_updates_buf) buf = r.data.get_updates_buf;
+      const hint = Number(r.data.longpolling_timeout_ms);
+      if (hint > 0) pollMs = Math.min(90_000, Math.max(15_000, hint + 5_000));
       for (const m of r.data.msgs || []) {
         if (m.message_type === 2) continue; // bot 自己的消息
         if (m.from_user_id?.endsWith?.("@im.bot")) continue;
@@ -184,6 +193,8 @@ function startWorker(openId) {
           saveCreds();
         }
         const text = (m.item_list || []).filter((i) => i.type === 1 && i.text_item).map((i) => i.text_item.text).join("").trim();
+        // 媒体消息(无文本时):标注类型转发,业务侧回「它只看得懂字」旁白——不再已读不回
+        const media = text ? null : (m.item_list || []).map((i) => MEDIA_KIND[i.type]).find(Boolean) || null;
 
         // 首条消息 = 激活:回调猫啊岛建绑定,拿人格化握手文案回给用户(桥不写一句台词)。
         // 回调成功才置 activated——失败重试一次,再失败留给用户下一条消息自动重试(2026-08-02 超时踩坑后加固)
@@ -207,9 +218,9 @@ function startWorker(openId) {
           }
           continue;
         }
-        if (!text) continue;
-        // 全量转发:留言/退订全部由猫啊岛决定,桥只送话
-        const res = await maoadao("/api/wechat/inbound", { from: openId, text });
+        if (!text && !media) continue;
+        // 全量转发:留言/退订/媒体旁白全部由猫啊岛决定,桥只送话
+        const res = await maoadao("/api/wechat/inbound", { from: openId, text, media });
         if (res?.replyText) {
           await tryTyping(c.botToken, openId, c.contextToken);
           recordSendResult(openId, await ilinkSend(c.botToken, openId, c.contextToken, res.replyText));

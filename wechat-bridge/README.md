@@ -75,7 +75,7 @@ curl -s http://127.0.0.1:8788/health   # {"ok":true,...}
 
 | 端点 | 桥的用法 | 文档背书 |
 | --- | --- | --- |
-| `ilink/bot/getupdates` | 单用户长轮询 worker,写死 40s 超时 | ✅ 官方 |
+| `ilink/bot/getupdates` | 单用户长轮询 worker,超时跟随服务端 `longpolling_timeout_ms` 建议(+5s 余量,15~90s 夹逼,默认 40s) | ✅ 官方 |
 | `ilink/bot/sendmessage` | 只发文本(type 1),`message_state=2`(FINISH) | ✅ 官方 |
 | `ilink/bot/getconfig` | 拿 `typing_ticket`(缓存) | ✅ 官方 |
 | `ilink/bot/sendtyping` | 只发 `status=1`(正在输入),从不发 2(取消) | ✅ 官方 |
@@ -87,13 +87,14 @@ curl -s http://127.0.0.1:8788/health   # {"ok":true,...}
 `message_type` 1=USER 2=BOT(worker 靠它过滤自己的消息);`message_state` 0=NEW 1=GENERATING 2=FINISH;
 `item_list[].type` 1=TEXT 2=IMAGE 3=VOICE 4=FILE 5=VIDEO;`sendtyping.status` 1=正在输入 2=取消。
 
-**官方文档里有、桥未采用的**(改造前先读官方 readme 对应章节):
+**已按官方文档采用的**(2026-08-03 落地):
 
-- `getupdates` 响应带 `longpolling_timeout_ms`(服务端建议的下次长轮询超时)——桥忽略它,写死 40s;
-- 媒体消息:图片/语音/文件/视频全走 CDN + AES-128-ECB,发送需先 `getuploadurl` 拿预签名参数。
-  **桥目前只做文本:收到媒体消息会被静默忽略**(`item_list` 只取 type 1),用户发图给猫是没有回应的;
-- `bot_agent` 出站自声明字段(UA 风格,ASCII ≤256 字节,仅腾讯侧日志归因,不参与鉴权,默认 `OpenClaw`)——
-  桥未声明;若想在腾讯后台日志里认出自己的流量可以加。
+- `longpolling_timeout_ms`:worker 的长轮询超时跟随服务端建议(+5s 余量,15~90s 夹逼);
+- `bot_agent`:出站请求 `base_info` 里声明 `maoadao-bridge/0.1`(官方仅说"每条出站请求携带",未写字段位置,
+  与 channel_version 同放 base_info;该字段仅观测不参与鉴权,放错位置也只是被忽略);
+- 媒体消息(图片/语音/文件/视频):桥不下载媒体,标注 kind 转发给 `/api/wechat/inbound {media}`,
+  业务侧回「它只看得懂字」旁白体轻响应(不占一来一回、不落留言)——不再已读不回。
+  **真正收发媒体**(CDN + AES-128-ECB + `getuploadurl`)仍未做,要做时读官方 readme「CDN 上传流程」。
 
 **官方文档没写、纯靠实测的**(即下面"已知坑"的性质——这些没有任何官方背书,风控/协议调整可能说变就变):
 24h 窗口、`sendmessage` 静默丢弃、隔夜 `context_token`、`-14` 暂停 60 分钟策略、二维码绑定流程。

@@ -120,6 +120,33 @@ export function presenceReply(cat: MsgCat, hourBJ: number, n: number, dayKey: nu
   return `${pick(rng, pool)}\n${link}`;
 }
 
+// ============ 媒体消息(图片/语音/文件/视频):猫只看得懂字 ============
+// 轻响应,括号旁白体:告诉用户"东西到了,但它读不懂"——否则就是已读不回。
+// 不占一来一回额度、不落留言;永不假装看懂了内容(桥不下载媒体,也下载不了)。
+const MEDIA_POOLS: Record<string, string[]> = {
+  image: [
+    "（画片送到了。它用爪子摁住研究了半天，歪着头——它只看得懂字）",
+    "（它凑近你寄来的画片闻了闻，又抬头看你。写字给它吧，它认字）",
+  ],
+  voice: [
+    "（声音渡海的时候被风吹散了，它竖着耳朵也没听清。写字给它吧，它认字）",
+    "（它对着会出声的小盒子拍了两爪子，没拍出你来。还是写字吧）",
+  ],
+  video: [
+    "（会动的画片把它吓了一跳，尾巴都炸了。写字给它吧，它认字）",
+  ],
+  file: [
+    "（一个方方正正的包裹送到了。它闻了闻，没敢拆。写字给它吧，它认字）",
+  ],
+};
+
+/** kind 来自桥侧标注(image|voice|video|file)。同一天同猫文案确定——连发媒体不会花样翻新变成陪聊 */
+export function mediaReply(cat: MsgCat, kind: string, dayKey: number, link: string): string {
+  const pool = MEDIA_POOLS[kind] ?? MEDIA_POOLS.image;
+  const rng = mulberry32(hashSeed(dayKey, "media", cat.id, 0));
+  return `${pick(rng, pool)}\n${link}`;
+}
+
 export const UNSUBSCRIBE_WORDS = ["别再捎信", "取消", "退订", "别发了"];
 export function unsubscribeAck(catName: string, link: string): string {
   return `${header(catName)}好。我就不捎信了——你想我的时候，岛上见：\n${link}`;

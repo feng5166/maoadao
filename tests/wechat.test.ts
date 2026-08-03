@@ -117,6 +117,12 @@ describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言�
     const stranger = await handleInbound("wxid-nobody", "你好");
     expect(stranger.matched).toBe("unknown");
 
+    // 媒体消息(桥标注 kind):回「它只看得懂字」旁白,不占一来一回额度、不落留言
+    const pic = await handleInbound(WXID, "", "image");
+    expect(pic.matched).toBe("media");
+    expect(pic.replyText).toContain("字");
+    expect(await prisma.ownerNudge.count({ where: { catId: cat.id, consumedDay: null } })).toBe(1); // 留言没变多
+
     // 重置计数(模拟新的一天):留话第 1 条 → 人格化回执 + 深链
     await prisma.channel.updateMany({ where: { userId: U }, data: { repliesInDay: 0 } });
     const fresh = await handleInbound(WXID, "早点睡哦");

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   if (!wechatEnabled()) return new Response("channel disabled", { status: 503 });
   if (!verifyBridgeSecret(req)) return new Response("Unauthorized", { status: 401 });
 
-  let body: { from?: string; text?: string };
+  let body: { from?: string; text?: string; media?: string };
   try {
     body = await req.json();
   } catch {
@@ -20,6 +20,8 @@ export async function POST(req: Request) {
   const from = String(body.from ?? "").trim();
   if (!from) return new Response("missing from", { status: 400 });
 
-  const result = await handleInbound(from, String(body.text ?? ""));
+  // media:桥侧标注的媒体类型(image|voice|video|file)——猫只看得懂字,回旁白体轻响应
+  const media = typeof body.media === "string" && /^(image|voice|video|file)$/.test(body.media) ? body.media : null;
+  const result = await handleInbound(from, String(body.text ?? ""), media);
   return Response.json({ ok: true, matched: result.matched, replyText: result.replyText });
 }

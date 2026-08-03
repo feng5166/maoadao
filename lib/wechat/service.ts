@@ -9,7 +9,7 @@ import { sendFeishu } from "../feishu";
 import { track } from "@vercel/analytics/server";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay } from "../moments";
 import { shortEntryLink } from "./entry";
-import { closeReply, handshakeMessage, presenceReply, receiptReply, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
+import { closeReply, handshakeMessage, mediaReply, presenceReply, receiptReply, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
 
 export const WECHAT_KIND = "wechat_openclaw"; // 历史命名保留(通道 kind 标识,与协议实现解耦)
 const WINDOW_HOURS = 24;
@@ -99,8 +99,12 @@ export async function unbindChannel(openId: string): Promise<void> {
 
 export interface InboundResult {
   replyText: string | null;
-  matched: "nudge" | "status" | "closed" | "presence" | "unsubscribed" | "unknown" | "ignored";
+  matched: "nudge" | "status" | "closed" | "presence" | "media" | "unsubscribed" | "unknown" | "ignored";
 }
+
+/** 桥侧标注的媒体类型(iLink item type 2-5) */
+const MEDIA_KINDS = new Set(["image", "voice", "video", "file"]);
+const MEDIA_LABELS: Record<string, string> = { image: "图片", voice: "语音", video: "视频", file: "文件" };
 
 // 找猫意图(doc/11 修订·门铃规则):判断不清一律按留话处理——宁可错存,不可错聊
 const FIND_CAT_PATTERNS = [/在哪/, /在干嘛/, /在干什么/, /干嘛呢/, /忙什么/, /怎么样了?[?？]?$/, /^在吗/, /^你在/, /找你/, /看看你/, /想看看/];
@@ -132,22 +136,24 @@ async function firstPersonNow(catId: string): Promise<string> {
 }
 
 /** 入站总入口:分流 + 全量记录(每条都记,不论是否回复)+ 飞书同步 */
-export async function handleInbound(externalId: string, rawText: string): Promise<InboundResult> {
-  const result = await handleInboundCore(externalId, rawText);
+export async function handleInbound(externalId: string, rawText: string, media?: string | null): Promise<InboundResult> {
+  const kind = media && MEDIA_KINDS.has(media) ? media : null;
+  const result = await handleInboundCore(externalId, rawText, kind);
   const text = rawText.trim().slice(0, 500);
-  if (text) {
+  const logText = text || (kind ? `【${MEDIA_LABELS[kind]}】` : "");
+  if (logText) {
     const ch = await prisma.channel.findUnique({ where: { kind_externalId: { kind: WECHAT_KIND, externalId } } });
     const cat = ch ? await prisma.cat.findFirst({ where: { ownerId: ch.userId }, select: { name: true } }) : null;
-    await logWechatMessage(externalId, ch?.userId ?? null, cat?.name ?? null, text, result.matched);
+    await logWechatMessage(externalId, ch?.userId ?? null, cat?.name ?? null, logText, result.matched);
   }
   return result;
 }
 
 /** 分流核心:找猫 / 留话 / 退订。
  *  一来一回(doc/11 修订):同一北京日,第 1 条实质回复 + 第 2 条收束,之后静默(消息照收)。 */
-async function handleInboundCore(externalId: string, rawText: string): Promise<InboundResult> {
+async function handleInboundCore(externalId: string, rawText: string, media: string | null = null): Promise<InboundResult> {
   const text = rawText.trim().slice(0, 500);
-  if (!text) return { replyText: null, matched: "ignored" };
+  if (!text && !media) return { replyText: null, matched: "ignored" };
 
   const channel = await prisma.channel.findUnique({ where: { kind_externalId: { kind: WECHAT_KIND, externalId } } });
   if (!channel) {
@@ -174,6 +180,12 @@ async function handleInboundCore(externalId: string, rawText: string): Promise<I
   const bumpReplies = () =>
     prisma.channel.update({ where: { id: channel.id }, data: { replyDay: today, repliesInDay: replies + 1 } });
   const link = await shortEntryLink(channel.userId);
+
+  // ---- 媒体消息(图片/语音/视频/文件):它只看得懂字——旁白体轻响应,不占一来一回、不落留言 ----
+  if (!text && media) {
+    await safeTrack("wechat_inbound", { kind: "media" });
+    return { replyText: mediaReply(cat, media, today, link), matched: "media" };
+  }
 
   // ---- 找猫:报当前已解锁的真实状态,不落留言 ----
   const isFinding = FIND_CAT_PATTERNS.some((p) => p.test(text)) && text.length <= 20;
