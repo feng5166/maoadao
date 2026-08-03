@@ -53,7 +53,10 @@ curl -s http://127.0.0.1:8788/health   # {"ok":true,...}
 猫啊岛 → 桥(头 `x-bridge-secret`,媒体走 CDN 上传给 40s 超时):
 - `POST /send {openId, text, typing?}` 发文本
 - `POST /send-image {openId, image: b64, caption?}` 寄图(caption 单独一条文本先发;桥内 AES 加密→getuploadurl→CDN POST)
-- `POST /send-voice {openId, audio: b64, encodeType?, sampleRate?, durationMs?}` 寄语音(默认 encode_type 6=SILK,站侧用 silk-wasm 转;7=mp3 备用)
+- `POST /send-voice {openId, audio: b64 SILK, durationMs, encryptType?}` **⚠️ 服务端不下发**——接口全程 ret=0 但用户永远收不到
+  (2026-08-03 实测:playtime/duration 两种字段名、encrypt_type 0/1、有无 0x02 头共 5 种组合全部静默丢弃;
+  官方插件也从未实现过外发语音,两个开源 SDK 的发语音只有 mock 测试。结论:iLink 目前只让 Bot 收语音不让发,
+  端点保留待协议放开。业务侧已降级「海螺留声」:声音存站内 /api/voice/[catId],微信寄短链)
 
 桥 → 猫啊岛的回调(头 `x-bridge-secret`):
 - `POST /api/wechat/bind {userId, openId, text}` → `{replyText}`(首条消息激活;text=用户对猫说的第一句话)

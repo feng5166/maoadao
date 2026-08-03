@@ -1,7 +1,8 @@
 import sharp from "sharp";
 import { prisma } from "../db";
 import { synthCatVoice } from "../tts";
-import { sendWechatImage, sendWechatVoice } from "./bridge";
+import { sendWechat, sendWechatImage } from "./bridge";
+import { shortEntryLink } from "./entry";
 import { voiceFor } from "../narrative/voice";
 
 // 绑定激活的见面礼(里程碑寄送,doc/11 生命连接层的延伸):
@@ -56,12 +57,21 @@ export async function sendWelcomeGifts(userId: string, openId: string): Promise<
     if (!r.ok) console.error("[wechat-gift] 寄照片失败:", r.detail);
   }
 
-  // 2. 一句它的声音(按性格口吻;TTS 失败就当它今天不想说话)
+  // 2. 一句它的声音——海螺留声:iLink 不给 Bot 下发语音消息(2026-08-03 三种字段变体实测
+  // 全部静默丢弃),声音存进岛上,微信寄一句带门的话;TTS 失败就当它今天不想说话
   const v = voiceFor(cat);
   const line = `${v.selfRef === "我" ? "是我" : `是${v.selfRef}`}。以后想我了，就对着海螺说话——我听得见。`;
   const audio = await synthCatVoice(line);
   if (audio) {
-    const r = await sendWechatVoice(openId, audio.silk.toString("base64"), audio.durationMs, audio.sampleRate);
-    if (!r.ok) console.error("[wechat-gift] 寄语音失败:", r.detail);
+    const now = new Date();
+    const wavBytes = new Uint8Array(audio.wav);
+    await prisma.catVoiceNote.upsert({
+      where: { catId: cat.id },
+      update: { data: wavBytes, text: line, durationMs: audio.durationMs, createdAt: now },
+      create: { catId: cat.id, data: wavBytes, mime: "audio/wav", text: line, durationMs: audio.durationMs, createdAt: now },
+    });
+    const link = await shortEntryLink(userId);
+    const r = await sendWechat(openId, `${cat.name}对着海螺说了一句话，声音存在岛上了。贴耳朵听：\n${link}`);
+    if (!r.ok) console.error("[wechat-gift] 留声通知失败:", r.detail);
   }
 }

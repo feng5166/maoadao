@@ -26,7 +26,8 @@ export function fixWavLengths(wav: Buffer): Buffer {
 }
 
 export interface CatVoice {
-  silk: Buffer;
+  silk: Buffer; // 微信原生编码(iLink 暂不下发 Bot 语音,留作协议放开后用)
+  wav: Buffer; // 站内 <audio> 直接播放
   durationMs: number;
   sampleRate: number;
 }
@@ -67,7 +68,7 @@ export async function synthCatVoice(text: string): Promise<CatVoice | null> {
     }
     const sampleRate = wav.readUInt32LE(24);
     const silk = await encode(wav, 0); // 0 = 用 wav 自带采样率
-    return { silk: Buffer.from(silk.data), durationMs: Math.round(silk.duration), sampleRate };
+    return { silk: Buffer.from(silk.data), wav, durationMs: Math.round(silk.duration), sampleRate };
   } catch (err) {
     console.error("[tts] 异常:", err instanceof Error ? err.message.slice(0, 200) : err);
     return null;

@@ -402,9 +402,9 @@ http.createServer(async (req, res) => {
     recordSendResult(openId, r);
     return json(res, 200, { ok: r.ok, ret: r.data?.ret, http: r.http });
   }
-  // 寄语音:audio=base64(默认 SILK,encodeType 6;7=mp3 备用),durationMs/sampleRate 为播放元数据
+  // 寄语音:audio=base64 SILK(0x02#!SILK_V3),duration 毫秒。encryptType 可覆写(排障用,默认 1)
   if (req.method === "POST" && url.pathname === "/send-voice") {
-    const { openId, audio, encodeType, sampleRate, durationMs } = await readBody(req, MEDIA_BODY_MAX);
+    const { openId, audio, durationMs, encryptType } = await readBody(req, MEDIA_BODY_MAX);
     const c = creds[openId];
     if (!c) return json(res, 404, { ok: false, error: "not_bound" });
     if (!c.contextToken) return json(res, 200, { ok: false, error: "no_context_token" });
@@ -412,14 +412,15 @@ http.createServer(async (req, res) => {
     if (buf.length < 50 || buf.length > 2 * 1024 * 1024) return json(res, 400, { ok: false, error: "bad_audio" });
     const up = await uploadMediaToCdn(c.botToken, openId, buf, 4); // UploadMediaType.VOICE=4(用 3=FILE 会被静默丢弃,2026-08-03 实测)
     if (up.error) { console.error(`[bridge] 寄语音上传失败 ${openId}: ${up.error}`); return json(res, 200, { ok: false, error: up.error }); }
+    // 字段基线对齐 wechat-robot-go:media + duration(毫秒);file_size=密文大小(对齐图片 mid_size 的做法)
+    const media = { ...up.media };
+    if (encryptType !== undefined) media.encrypt_type = Number(encryptType);
     const r = await ilinkSendItem(c.botToken, openId, c.contextToken, {
       type: 3,
       voice_item: {
-        media: up.media,
-        encode_type: Number(encodeType) || 6,
-        sample_rate: Number(sampleRate) || 24000,
-        bits_per_sample: 16,
-        playtime: Number(durationMs) || 0,
+        media,
+        duration: Number(durationMs) || 0,
+        file_size: up.filesize,
       },
     });
     recordSendResult(openId, r);

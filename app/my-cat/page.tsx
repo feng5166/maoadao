@@ -108,6 +108,8 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
     ? marginNotes((summary.stateChanges ?? []) as { label: string; delta: string }[], threadProgress)
     : [];
   const scene = sceneFor(state?.location);
+  // 海螺留声:绑定见面礼时存的猫声(有才渲染,一次轻查询)
+  const voiceNote = await prisma.catVoiceNote.findUnique({ where: { catId: cat.id }, select: { durationMs: true } });
 
   // ============ "它现在怎么样"（doc/09 §5）：时段门的推导，全部内存计算 ============
   const segOrder: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
@@ -213,6 +215,13 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
 
       {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}
       <p className="font-diary mt-4 text-center text-[15px] text-ink">{nowText}</p>
+      {/* 海螺留声：它存在海螺里的一句话（绑定见面礼） */}
+      {voiceNote && (
+        <div className="mt-2 text-center">
+          <p className="text-xs text-ink-faint">海螺里存着它说的一句话</p>
+          <audio controls preload="none" src={`/api/voice/${cat.id}`} className="mx-auto mt-1.5 h-9 w-full max-w-[280px]" />
+        </div>
+      )}
       {/* 微信来的路(doc/11 修订 §五):确认刚才那句话已收进——只说"收到",不说"照做" */}
       {from === "wechat" && pendingNudge?.message && (
         <p className="mt-1.5 text-center text-xs text-ink-soft">

@@ -269,6 +269,17 @@ model Portrait {
   createdAt DateTime
 }
 
+// 猫的留声（海螺）：TTS 生成的猫声。iLink 不给 Bot 下发语音消息（2026-08-03 实测），
+// 声音存站内播放，微信只寄带短链的一句话
+model CatVoiceNote {
+  catId      String   @id
+  data       Bytes // wav
+  mime       String   @default("audio/wav")
+  text       String // 说的内容
+  durationMs Int
+  createdAt  DateTime
+}
+
 // 相遇照片：第一天在码头的拍立得（立绘定稿后合成一次，永久保存）
 model ArrivalPhoto {
   catId     String   @id
