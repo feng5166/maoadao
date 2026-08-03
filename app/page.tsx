@@ -48,8 +48,6 @@ export default async function HomePage() {
   const hour = beijingHour();
   const seg = currentSegment(hour);
   const night = hour >= 19 || hour < 6;
-  const dawn = hour >= 6 && hour < 8;
-  const dusk = hour >= 17 && hour < 19;
   const raining = world.weather === "雨";
 
   // ---- 值班猫(未领养首屏的主角):今天在码头等你的那一只 ----
@@ -110,23 +108,17 @@ export default async function HomePage() {
       <div className="text-center">
         <div className="relative mx-auto max-w-3xl overflow-hidden rounded-lg border border-line">
           <Image src="/scenes/dock.jpg" alt="猫啊岛的码头" width={1099} height={628} priority className="w-full" />
-          {/* 环境微动效(第二轮):静态插画开始呼吸——云影横漂、水面波光、雨天雨丝、晨昏色温 */}
-          {!night && <div className="fx-cloud" />}
-          {!night && <div className="fx-cloud fx-cloud--far" />}
+          {/* 环境微动效(第二轮):静态插画开始呼吸——云影横漂、水面波光、雨天雨丝 */}
+          <div className="fx-cloud" />
+          <div className="fx-cloud fx-cloud--far" />
           <div className="fx-shimmer" />
           {raining && <div className="fx-rain" />}
-          {dawn && <div className="fx-dawn" />}
-          {dusk && <div className="fx-dusk" />}
-          {night && <div className="pointer-events-none absolute inset-0 bg-[#1c2733]/45" />}
           {heroCat && (
             <PetCat
               id={heroCat.id}
               portraitUrl={heroCat.portraitUrl}
               line={petLine(heroCat.id, world.day, myCat ? myState?.mood : undefined)}
             />
-          )}
-          {night && (
-            <p className="absolute bottom-3 right-3 text-[11px] tracking-widest text-[#fdf9f2]/70">岛上入夜了</p>
           )}
         </div>
 
