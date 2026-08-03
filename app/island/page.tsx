@@ -38,32 +38,32 @@ const MAP_SPOTS: { key: string; label: string; x: number; y: number }[] = [
   { key: "渔船", label: "废弃渔船", x: 204, y: 138 },
 ];
 
-function IslandMiniMap({ activeLocs }: { activeLocs: string[] }) {
-  const isActive = (spot: (typeof MAP_SPOTS)[number]) => activeLocs.some((l) => l.includes(spot.key));
+function IslandMiniMap({ catsAtSpot }: { catsAtSpot: Map<string, string[]> }) {
+  // 地图不是导航,是偷窥窗口:亮点下面写着谁在这儿
   return (
-    <svg viewBox="0 0 320 168" className="mx-auto mt-3 w-full max-w-[340px]" aria-hidden="true">
+    <svg viewBox="0 0 320 178" className="mx-auto mt-3 w-full max-w-[340px]" aria-hidden="true">
       {/* 岛的轮廓:一笔不太规整的手绘圈 */}
       <path
-        d="M36 92 C28 56 68 22 128 20 C196 17 288 30 296 78 C302 118 258 152 188 156 C112 161 46 132 36 92 Z"
+        d="M36 96 C28 58 68 24 128 22 C196 19 288 32 296 82 C302 122 258 158 188 162 C112 167 46 136 36 96 Z"
         fill="none"
         stroke="var(--line)"
         strokeWidth="1.5"
       />
       {MAP_SPOTS.map((s) => {
-        const on = isActive(s);
+        const cats = catsAtSpot.get(s.key) ?? [];
+        const on = cats.length > 0;
         return (
           <g key={s.key}>
             <circle cx={s.x} cy={s.y} r={on ? 3.5 : 2.5} fill={on ? "var(--brick)" : "var(--line)"} />
-            <text
-              x={s.x}
-              y={s.y - 7}
-              textAnchor="middle"
-              fontSize="10"
-              fill={on ? "var(--ink)" : "var(--ink-faint)"}
-              style={{ fontFamily: "inherit" }}
-            >
+            <text x={s.x} y={s.y - 7} textAnchor="middle" fontSize="10" fill={on ? "var(--ink)" : "var(--ink-faint)"} style={{ fontFamily: "inherit" }}>
               {s.label}
             </text>
+            {on && (
+              <text x={s.x} y={s.y + 14} textAnchor="middle" fontSize="9" fill="var(--ink-soft)" style={{ fontFamily: "inherit" }}>
+                {cats.slice(0, 2).join(" · ")}
+                {cats.length > 2 ? " …" : ""}
+              </text>
+            )}
           </g>
         );
       })}
@@ -91,7 +91,7 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
     getCat("npc-xiaomei"),
     prisma.event.findMany({
       where: { day },
-      select: { id: true, catId: true, segment: true, type: true, outcome: true, data: true, targetId: true, isMain: true, contentValue: true },
+      select: { id: true, catId: true, segment: true, type: true, outcome: true, data: true, targetId: true, isMain: true, contentValue: true, threadKey: true },
     }),
   ]);
   const [myTip, rels] = myCat
@@ -113,7 +113,15 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
     [locOf(e), SEGMENT_CN[e.segment as Segment]].filter(Boolean).join(" · ");
   const mains = dayEvents.filter((e) => e.isMain);
   const mainOf = new Map(mains.map((e) => [e.catId, e]));
-  const activeLocs = [...new Set(mains.map(locOf).filter((l): l is string => Boolean(l)))];
+  // 地图上"谁在哪里":按地点归组,亮点下写名字
+  const catsAtSpot = new Map<string, string[]>();
+  for (const spot of MAP_SPOTS) {
+    const cats = mains
+      .filter((e) => locOf(e)?.includes(spot.key))
+      .map((e) => nameOf.get(e.catId)?.name)
+      .filter((n): n is string => Boolean(n));
+    if (cats.length) catsAtSpot.set(spot.key, cats);
+  }
 
   const [sceneLine, ambientLine] = WEATHER_SCENE[world.weather] ?? [`今天岛上是${world.weather}天。`, ""];
 
@@ -207,10 +215,12 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {/* ============ 头版:今天岛上的一件事 ============ */}
+      {/* ============ 岛闻头版:每天一个事件中心(唯一记忆点) ============ */}
       {headline && (
         <div className="mt-6 border-t border-line pt-4">
-          <p className="text-center text-xs tracking-widest text-ink-faint">{isToday ? "今天,岛上的一件事" : "那天,岛上的一件事"}</p>
+          <p className="text-center">
+            <span className="seal">岛闻 · 第 {day} 天</span>
+          </p>
           <Link
             href={`/cats/${headline.catId}`}
             className="note-slip relative mt-3 block p-5 transition-colors hover:border-sea-deep"
@@ -227,7 +237,19 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
                   {nameOf.get(headline.catId)?.name ?? "岛民"}
                   {summaryOf(headline)}
                 </span>
-                {metaOf(headline) && <span className="mt-1 block text-[11px] text-ink-faint">{metaOf(headline)}</span>}
+                <span className="mt-1.5 block text-[11px] text-ink-faint">
+                  {[
+                    metaOf(headline),
+                    headline.targetId && nameOf.get(headline.targetId)
+                      ? `${nameOf.get(headline.catId)?.name} 和 ${nameOf.get(headline.targetId)!.name}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                {headline.threadKey && (
+                  <span className="font-diary mt-1.5 block text-[13px] text-ink-soft">这件事,好像还没完。</span>
+                )}
               </span>
             </span>
           </Link>
@@ -247,11 +269,13 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      {/* ============ 今天的岛:地点感 ============ */}
-      {activeLocs.length > 0 && (
+      {/* ============ 今天的岛:偷窥窗口,谁在哪里 ============ */}
+      {catsAtSpot.size > 0 && (
         <div className="mt-6 border-t border-line pt-4 text-center">
           <p className="text-xs tracking-widest text-ink-faint">{isToday ? "今天的岛" : "那天的岛"}</p>
-          <IslandMiniMap activeLocs={activeLocs} />
+          <IslandMiniMap catsAtSpot={catsAtSpot} />
+          {/* 翻页的停顿:地图之后,喘一口气再进别人的日子 */}
+          <p className="font-diary mt-2 text-[13px] text-ink-faint">岛上的每只猫,都有自己的今天。</p>
         </div>
       )}
 
