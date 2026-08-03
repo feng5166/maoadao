@@ -5,7 +5,7 @@ import { PetCat } from "@/components/PetCat";
 import { StayTrack } from "@/components/StayTrack";
 import { Track } from "@/components/Track";
 import { getViewerId } from "@/lib/identity";
-import { getCatNameIndex, getCatState, getHomeShowcase, getIslandNewsWithCats, getViewerCat } from "@/lib/queries";
+import { describeAffinity, getCatNameIndex, getCatState, getHomeShowcase, getIslandNewsWithCats, getViewerCat } from "@/lib/queries";
 import { beijingHour, currentSegment, nowLine } from "@/lib/moments";
 import { factSummary } from "@/lib/sim/engine";
 import { petLine } from "@/lib/handbook";
@@ -30,19 +30,27 @@ export default async function HomePage() {
     getIslandNewsWithCats(6),
     getCatNameIndex(),
   ]);
-  const [todayEvents, myState] = await Promise.all([
+  const [todayEvents, myState, myRels] = await Promise.all([
     prisma.event.findMany({
       where: { day: world.day },
       select: { id: true, catId: true, segment: true, type: true, outcome: true, data: true, targetId: true, isMain: true, contentValue: true },
     }),
     myCat ? getCatState(myCat.id) : Promise.resolve(null),
+    myCat
+      ? prisma.relationship.findMany({ where: { OR: [{ catAId: myCat.id }, { catBId: myCat.id }] } })
+      : Promise.resolve([]),
   ]);
+  const affinityWith = new Map<string, number>();
+  for (const r of myRels) affinityWith.set(r.catAId === myCat?.id ? r.catBId : r.catAId, r.affinity);
 
   const news = newsRaw.filter((n) => !n.content.includes("向借钱")).slice(0, 3);
   const nameOf = new Map(catIndex.map((c) => [c.id, { name: c.name }]));
   const hour = beijingHour();
   const seg = currentSegment(hour);
   const night = hour >= 19 || hour < 6;
+  const dawn = hour >= 6 && hour < 8;
+  const dusk = hour >= 17 && hour < 19;
+  const raining = world.weather === "雨";
 
   // ---- 值班猫(未领养首屏的主角):今天在码头等你的那一只 ----
   const dutyPoolPresent = DUTY_POOL.filter((id) => npcs.some((n) => n.id === id));
@@ -85,8 +93,6 @@ export default async function HomePage() {
         : `${nameOf.get(e.catId)?.name}今晚:${factSummary({ type: e.type, outcome: e.outcome, data: e.data as Record<string, unknown>, targetId: e.targetId ?? undefined } as Fact, nameOf)}`,
     }));
 
-  const stripCats = npcs.slice(0, 12);
-  const moreCount = totalCats - stripCats.length;
 
   return (
     <div className="space-y-12 py-4">
@@ -104,6 +110,13 @@ export default async function HomePage() {
       <div className="text-center">
         <div className="relative mx-auto max-w-3xl overflow-hidden rounded-lg border border-line">
           <Image src="/scenes/dock.jpg" alt="猫啊岛的码头" width={1099} height={628} priority className="w-full" />
+          {/* 环境微动效(第二轮):静态插画开始呼吸——云影横漂、水面波光、雨天雨丝、晨昏色温 */}
+          {!night && <div className="fx-cloud" />}
+          {!night && <div className="fx-cloud fx-cloud--far" />}
+          <div className="fx-shimmer" />
+          {raining && <div className="fx-rain" />}
+          {dawn && <div className="fx-dawn" />}
+          {dusk && <div className="fx-dusk" />}
           {night && <div className="pointer-events-none absolute inset-0 bg-[#1c2733]/45" />}
           {heroCat && (
             <PetCat
@@ -175,32 +188,41 @@ export default async function HomePage() {
         </div>
       )}
 
-      {/* 岛民名册:一排小猫站在码头边(第二轮升级为状态卡) */}
-      {stripCats.length > 0 && (
-        <div className="text-center">
-          <div className="flex flex-wrap items-end justify-center gap-y-1.5">
-            {stripCats.map((c, i) => (
-              <Link
-                key={c.id}
-                href={`/cats/${c.id}`}
-                title={c.name}
-                className={`${i > 0 ? "-ml-1.5" : ""} inline-block transition-transform duration-200 hover:z-10 hover:-translate-y-1.5`}
-                style={{ zIndex: i }}
-              >
-                <CatAvatar id={c.id} size={50} portraitUrl={c.portraitUrl} />
-              </Link>
-            ))}
-            {moreCount > 0 && (
-              <span
-                className="-ml-1.5 mb-1 inline-flex h-[34px] items-center justify-center rounded-full bg-paper-deep px-2.5 text-[11px] text-ink-soft"
-                style={{ zIndex: stripCats.length }}
-              >
-                还有 {moreCount} 位岛民
-              </span>
-            )}
+      {/* 岛上的邻居:横滑状态卡——名字 + 此刻在干嘛 + 和你的猫的关系(或身份一句) */}
+      {npcs.length > 0 && (
+        <div>
+          <p className="font-title text-center text-sm text-ink-soft">岛上的邻居</p>
+          <div className="neighbor-scroll mx-auto mt-4 max-w-2xl">
+            {npcs.map((c) => {
+              const ev = seg
+                ? (todayEvents.find((e) => e.catId === c.id && e.segment === seg && e.isMain) ??
+                   todayEvents.find((e) => e.catId === c.id && e.segment === seg) ?? null)
+                : null;
+              const status = nowLine(
+                "",
+                ev ? { type: ev.type, data: ev.data as Record<string, unknown>, targetName: ev.targetId ? nameOf.get(ev.targetId)?.name : null } : null,
+                hour,
+              ).replace(/^现在/, "").replace(/^，/, "");
+              const aff = affinityWith.get(c.id);
+              const relLine = myCat
+                ? aff !== undefined
+                  ? `和${myCat.name}:${describeAffinity(aff)}`
+                  : `和${myCat.name}还没打过照面`
+                : (c.bio ?? "").split(/[。!！]/)[0];
+              return (
+                <Link key={c.id} href={`/cats/${c.id}`} className="neighbor-card group text-center">
+                  <div className="mx-auto w-fit transition-transform duration-200 group-hover:-translate-y-1">
+                    <CatAvatar id={c.id} size={64} portraitUrl={c.portraitUrl} />
+                  </div>
+                  <p className="font-title mt-1.5 text-sm font-bold text-ink">{c.name}</p>
+                  <p className="font-diary mt-0.5 text-xs leading-snug text-ink-soft">{status}</p>
+                  <p className="mt-1 text-[11px] leading-snug text-ink-faint">{relLine}</p>
+                </Link>
+              );
+            })}
           </div>
-          <p className="mt-2.5 text-xs text-ink-faint">
-            {myCat ? "岛上的邻居们，点开认识一下" : "他们都已经在岛上住下了，就等一位新邻居"}
+          <p className="mt-1 text-center text-xs text-ink-faint">
+            {myCat ? "都是它的邻居——点开认识一下" : "他们都已经在岛上住下了，就等一位新邻居"}
           </p>
         </div>
       )}

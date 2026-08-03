@@ -92,7 +92,7 @@ export async function getHomeShowcase() {
     getWorld(),
     prisma.cat.findMany({
       where: { isNpc: true },
-      select: { id: true, name: true, portraitUrl: true },
+      select: { id: true, name: true, portraitUrl: true, bio: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.cat.count(),

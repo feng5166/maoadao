@@ -145,3 +145,113 @@ body {
   font-size: 0.72rem;
   transform: rotate(-2deg);
 }
+
+/* ============ 首页第二轮:环境微动效(静态插画开始呼吸) ============ */
+/* 原则:6-20s 慢速、低透明度,像天气不像游戏大厅;尊重系统减少动效偏好 */
+
+/* 云影:柔焦光斑缓慢横漂 */
+.fx-cloud {
+  position: absolute;
+  top: 4%;
+  left: -30%;
+  width: 45%;
+  height: 26%;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.5), transparent 70%);
+  filter: blur(14px);
+  animation: fx-drift 38s linear infinite;
+  pointer-events: none;
+}
+.fx-cloud--far {
+  top: 12%;
+  width: 30%;
+  height: 18%;
+  opacity: 0.7;
+  animation-duration: 56s;
+  animation-delay: -22s;
+}
+@keyframes fx-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(290%); }
+}
+
+/* 波光:水面区一条极淡的光带慢慢晃 */
+.fx-shimmer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42%;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.14) 50%, transparent 58%);
+  background-size: 240% 100%;
+  animation: fx-shimmer 9s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes fx-shimmer {
+  from { background-position: 0% 0; }
+  to { background-position: 100% 0; }
+}
+
+/* 雨丝:细密斜线,只在雨天出现 */
+.fx-rain {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    100deg,
+    transparent 0px,
+    transparent 24px,
+    rgba(180, 200, 215, 0.28) 24px,
+    rgba(180, 200, 215, 0.28) 25px,
+    transparent 25px,
+    transparent 60px
+  );
+  animation: fx-rain 0.9s linear infinite;
+  pointer-events: none;
+}
+@keyframes fx-rain {
+  from { transform: translateY(-60px); }
+  to { transform: translateY(0); }
+}
+
+/* 晨昏色温:清晨偏青、黄昏偏暖(叠加层,静态) */
+.fx-dawn {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(180, 205, 220, 0.18), rgba(255, 235, 205, 0.12));
+  pointer-events: none;
+}
+.fx-dusk {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(255, 180, 120, 0.16), rgba(120, 90, 110, 0.14));
+  pointer-events: none;
+}
+
+/* 居民状态卡:横向滑动一排 */
+.neighbor-scroll {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.25rem 0.25rem 0.75rem;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.neighbor-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.neighbor-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 2px;
+}
+.neighbor-card {
+  scroll-snap-align: start;
+  flex: 0 0 132px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-cloud,
+  .fx-cloud--far,
+  .fx-shimmer,
+  .fx-rain {
+    animation: none;
+  }
+}
