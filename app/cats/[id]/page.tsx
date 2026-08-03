@@ -99,7 +99,8 @@ export default async function CatPage({
         <p className="mt-3 text-sm leading-relaxed text-ink">{cat.bio}</p>
 
         {state && (
-          <div className="mt-4 grid grid-cols-4 gap-2 border-t border-line pt-4 text-center">
+          {/* 390px 下四列会把"心情/位置"截断成省略号——窄屏走 2×2 */}
+          <div className="mt-4 grid grid-cols-2 gap-2 border-t border-line pt-4 text-center sm:grid-cols-4">
             <div>
               <p className="flex items-center justify-center gap-1 text-lg font-bold"><IconFishCoin size={16} className="text-lamp" /> {state.coins}</p>
               <p className="text-xs text-ink-faint">鱼币</p>
@@ -137,7 +138,7 @@ export default async function CatPage({
             <div className="flex flex-wrap gap-3">
               {friends.map((f) => (
                 <Link key={f.id} href={`/cats/${f.otherId}`} className="flex items-center gap-1.5 text-sm hover:text-brick">
-                  <CatAvatar id={f.otherId} size={28} />
+                  <CatAvatar id={f.otherId} size={28} portraitUrl={f.otherPortraitUrl} crop="head" />
                   {f.otherName}
                   <span className="text-xs text-ink-faint">{f.affinity > 40 ? <IconHeart size={12} className="text-brick" /> : "·"}</span>
                 </Link>

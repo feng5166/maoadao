@@ -62,7 +62,7 @@ export async function getFriends(id: string, limit = 6) {
     rels.map(async (r) => {
       const otherId = r.catAId === id ? r.catBId : r.catAId;
       const other = await getCat(otherId);
-      return { ...r, otherId, otherName: other?.name ?? "神秘猫" };
+      return { ...r, otherId, otherName: other?.name ?? "神秘猫", otherPortraitUrl: other?.portraitUrl ?? null };
     }),
   );
 }

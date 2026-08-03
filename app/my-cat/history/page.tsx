@@ -63,7 +63,7 @@ export default async function HistoryPage() {
           <div className="mt-2 space-y-2">
             {friends.map((f) => (
               <Link key={f.id} href={`/cats/${f.otherId}`} className="flex items-center gap-3 py-1 hover:opacity-80">
-                <CatAvatar id={f.otherId} size={34} />
+                <CatAvatar id={f.otherId} size={34} portraitUrl={f.otherPortraitUrl} crop="head" />
                 <span className="font-diary text-[15px]">{f.otherName}</span>
                 <span className="text-xs text-ink-soft">{describeAffinity(f.affinity)}</span>
               </Link>
