@@ -12,6 +12,10 @@
     {
       "path": "/api/wechat/dispatch",
       "schedule": "*/5 0 * * *"
+    },
+    {
+      "path": "/api/wechat/postcard",
+      "schedule": "0 12 * * *"
     }
   ]
 }

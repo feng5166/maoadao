@@ -8,6 +8,7 @@ import { accentTape } from "@/components/cat-profile";
 import { submitNewsTip } from "@/lib/actions";
 import { getViewerId } from "@/lib/identity";
 import { describeAffinity, getCat, getCatNameIndex, getIslandNews, getViewerCat, getWorld } from "@/lib/queries";
+import { rankHeadlines } from "@/lib/headline";
 import { factSummary } from "@/lib/sim/engine";
 import { SEGMENT_CN, type Fact, type Segment } from "@/lib/sim/types";
 import { prisma } from "@/lib/db";
@@ -103,13 +104,14 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
 
   const nameOf = new Map(catIndex.map((c) => [c.id, { name: c.name }]));
   const portraitOf = new Map(diariesRaw.map((d) => [d.cat.id, d.cat.portraitUrl]));
-  const summaryOf = (e: (typeof dayEvents)[number]) =>
+  type EvLike = { type: string; outcome: string; data: unknown; targetId: string | null };
+  const summaryOf = (e: EvLike) =>
     factSummary({ type: e.type, outcome: e.outcome, data: e.data as Record<string, unknown>, targetId: e.targetId ?? undefined } as Fact, nameOf);
-  const locOf = (e: (typeof dayEvents)[number]) => {
+  const locOf = (e: { data: unknown }) => {
     const loc = (e.data as Record<string, unknown>)?.location;
     return typeof loc === "string" ? loc : null;
   };
-  const metaOf = (e: (typeof dayEvents)[number]) =>
+  const metaOf = (e: EvLike & { segment: string }) =>
     [locOf(e), SEGMENT_CN[e.segment as Segment]].filter(Boolean).join(" · ");
   const mains = dayEvents.filter((e) => e.isMain);
   const mainOf = new Map(mains.map((e) => [e.catId, e]));
@@ -137,14 +139,24 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
         .filter((f) => f.ev)
     : [];
 
-  // ---- 头版:今天岛上的一件事 + 还有这些也在发生 ----
-  const ranked = [...mains]
-    .filter((e) => e.catId !== myCat?.id)
-    .sort((a, b) => b.contentValue - a.contentValue)
-    .filter((e, i, arr) => arr.findIndex((x) => x.type === e.type) === i);
+  // ---- 头版:今天岛上的一件事 + 还有这些也在发生(选稿与海螺明信片同源) ----
+  const ranked = rankHeadlines(mains, myCat?.id);
   const headline = ranked[0];
   const alsoHappening = ranked.slice(1, 3);
   const featuredIds = new Set(ranked.slice(0, 3).map((e) => e.catId));
+
+  // ---- 昨天那件事,后来——(P1 事件链:第二天回来找后续的理由) ----
+  const yMains =
+    isToday && day > 1
+      ? await prisma.event.findMany({
+          where: { day: day - 1, isMain: true },
+          select: { catId: true, segment: true, type: true, outcome: true, data: true, targetId: true, contentValue: true, threadKey: true },
+        })
+      : [];
+  const yHeadline = rankHeadlines(yMains)[0];
+  const followCont = yHeadline
+    ? (yHeadline.threadKey ? dayEvents.find((e) => e.threadKey === yHeadline.threadKey) : undefined) ?? mainOf.get(yHeadline.catId)
+    : undefined;
 
   // ---- 日记分层:朋友的猫(卡片) / 岛上的小事(一行体,随机发现感) ----
   const known = diariesRaw
@@ -260,6 +272,27 @@ export default async function IslandPage({ searchParams }: { searchParams: Promi
               </span>
             </span>
           </Link>
+
+          {/* 昨天那件事,后来——(事件链回访钩) */}
+          {yHeadline && (
+            <div className="mt-3 border-l-2 border-line pl-3">
+              <p className="text-[11px] text-ink-faint">
+                昨天:{nameOf.get(yHeadline.catId)?.name ?? "岛民"}
+                {summaryOf(yHeadline)}
+              </p>
+              {followCont ? (
+                <p className="font-diary mt-0.5 text-[13px] leading-relaxed text-ink">
+                  后来——
+                  <Link href={`/cats/${followCont.catId}`} className="hover:text-brick">
+                    {nameOf.get(followCont.catId)?.name}
+                    {summaryOf(followCont)}
+                  </Link>
+                </p>
+              ) : (
+                <p className="font-diary mt-0.5 text-[13px] text-ink-soft">后来怎么样了,今天还没听说。</p>
+              )}
+            </div>
+          )}
           {alsoHappening.length > 0 && (
             <ul className="font-diary mt-3 space-y-1.5 text-[14px] leading-relaxed text-ink-soft">
               {alsoHappening.map((e) => (
