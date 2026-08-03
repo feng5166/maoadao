@@ -5,7 +5,6 @@ import { IconBoat, IconMailbox, IconPaw, IconTicket } from "@/components/icons";
 import {
   ensureRecoveryCode,
   recoverByCode,
-  releaseCat,
   requestEmailCode,
   toggleNotify,
   verifyEmailCode,
@@ -149,36 +148,15 @@ export default async function AccountPage() {
         )}
       </div>
 
-      {/* 送它离开：重新领养的入口。收在折叠里——这不是常规操作 */}
+      {/* 送它离开：重新领养的入口——完整的告别在 /account/farewell，这里只留一扇门 */}
       {cat && (
         <div className="border-t border-line pt-4">
-          <details>
-            <summary className="cursor-pointer text-sm text-ink-faint hover:text-ink-soft">
-              <IconBoat size={15} /> 想重新领养一只？
-            </summary>
-            <div className="mt-3 border-l-2 border-brick/60 pl-3">
-              <p className="text-sm leading-relaxed text-ink">
-                重新领养，得先送{cat.name}离开小岛。
-                <br />
-                它的日记、照片、朋友和这些天的记忆，都会跟着船一起走——<b>没有找回的办法</b>。
-              </p>
-              <p className="mt-2 text-xs text-ink-faint">
-                之后回到码头重新办理领养，需要用一张新船票（你自己的票也可以用）。
-              </p>
-              <form action={releaseCat} className="mt-3 space-y-2.5">
-                <label className="flex items-center gap-2 text-xs text-ink-soft">
-                  <input type="checkbox" name="confirmRelease" className="accent-[#a8503c]" />
-                  我想清楚了，送{cat.name}离开，它的一切都不保留
-                </label>
-                <SubmitButton
-                  pendingText="船正在离港…"
-                  className="border border-brick px-4 py-1.5 text-sm text-brick hover:bg-brick hover:text-[#fdf9f2]"
-                >
-                  送它离开，去重新领养
-                </SubmitButton>
-              </form>
-            </div>
-          </details>
+          <Link
+            href="/account/farewell"
+            className="flex items-center gap-1.5 text-sm text-ink-faint hover:text-ink-soft"
+          >
+            <IconBoat size={15} /> 想重新领养一只？去码头送别 →
+          </Link>
         </div>
       )}
     </div>
