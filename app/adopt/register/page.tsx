@@ -1,7 +1,7 @@
 import { RegisterForm } from "@/components/RegisterForm";
 import { Track } from "@/components/Track";
 
-export const maxDuration = 120; // 领养后 after() 里异步生成首日内容、立绘与相遇照片
+export const maxDuration = 300; // 领养后 after() 里异步生成首日内容、立绘、相遇照片与姿势集(doc/15,姿势 5 张约 100s)
 
 // 岛民登记册（doc/10 §2）：不是"创建角色信息"，是第一次见到它之后帮它登个记。
 // 性格参数彻底隐身——三道"你觉得它是什么样"的心理选择题在服务端映射三轴。

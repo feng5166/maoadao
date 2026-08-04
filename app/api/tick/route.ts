@@ -1,5 +1,7 @@
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { advanceOneDay, TickInProgressError } from "@/lib/sim/tick";
+import { sweepMissingPoses } from "@/lib/visual/poses";
 import { narrateCommittedDay, narrationGap } from "@/lib/sim/renarrate";
 import { enqueueDailyWechat } from "@/lib/wechat/daily";
 import { wechatEnabled } from "@/lib/wechat/bridge";
@@ -69,6 +71,8 @@ export async function GET(req: Request) {
       .catch(() => {});
     // 叙事完成后排今日微信消息(D2 兑现/事件/缺席),dispatch cron 错峰投递
     if (wechatEnabled()) await enqueueDailyWechat(result.day).catch((e) => console.error("[wechat-enqueue]", e));
+    // 姿势集安全网(doc/15):领养链路生成失败/中断的猫,每天补一只(响应后执行,不占推进时间)
+    after(() => sweepMissingPoses(1).catch((e) => console.error("[poses-sweep]", e)));
     revalidatePath("/");
     return Response.json({ ...result, ...(deadLetter ? { deadLetter } : {}) });
   } catch (err) {

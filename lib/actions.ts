@@ -9,6 +9,7 @@ import { prisma } from "./db";
 import { moderateTexts } from "./moderation";
 import { AdoptError, adoptCat } from "./adoption";
 import { generateArrivalPhoto, generatePortrait } from "./portrait";
+import { generateCatPoses } from "./visual/poses";
 import { generateArrivalDay } from "./firstday";
 import { ensureViewerId, getViewerId } from "./identity";
 import { catDayOf } from "./sim/lifecycle";
@@ -98,7 +99,11 @@ export async function createCat(prevState: CreateCatState, formData: FormData): 
     await generatePortrait(result.catId).catch((e) => console.error("[portrait]", e));
     const g2 = Date.now();
     await generateArrivalPhoto(result.catId).catch((e) => console.error("[arrival-photo]", e));
-    console.log(`[adopt-after] 首日 ${g1 - g0}ms 立绘 ${g2 - g1}ms 相遇照 ${Date.now() - g2}ms`);
+    const g3 = Date.now();
+    // 姿势集(doc/15 L1):立绘定稿后接着生成,手账页此后走导演系统拼贴。
+    // 失败/超时不致命——页面会回落旧渲染,tick 每日安全网负责补齐
+    await generateCatPoses(result.catId).catch((e) => console.error("[poses]", e));
+    console.log(`[adopt-after] 首日 ${g1 - g0}ms 立绘 ${g2 - g1}ms 相遇照 ${g3 - g2}ms 姿势 ${Date.now() - g3}ms`);
   });
 
   // 埋点全部挪出关键路径：每个 track 都是一次出网往返，不该让用户等
