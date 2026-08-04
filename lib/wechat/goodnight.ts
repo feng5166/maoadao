@@ -51,6 +51,15 @@ async function weeklyTarget(userId: string): Promise<number> {
   return 2;
 }
 
+/** 北京时间"今天 h 点"的绝对时刻（窗口提前寄出的比较基准） */
+function beijingTodayAt(hour: number, now = new Date()): Date {
+  const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(now); // YYYY-MM-DD
+  return new Date(`${ymd}T${String(hour).padStart(2, "0")}:00:00+08:00`);
+}
+
+// 早晨档的消息类型：首周豁免"每日一主触点"时，这些不挡晚间档（拍板 2026-08-04）
+const MORNING_KINDS = ["handshake", "d2_promise", "event", "absence"];
+
 export interface EveningResult {
   day: number;
   sent: number;
@@ -80,17 +89,31 @@ export async function sendGoodnight(opts: { dryRun?: boolean } = {}): Promise<Ev
     const catDay = cat.firstTickDay > 0 ? catDayOf(day, cat.firstTickDay) : 99;
     // 偏好时段(cron 每小时跑一次,9-21 点):只在用户最容易被找到的那个钟点发
     const prefHour = catDay <= 3 ? 21 : await preferredEveningHour(ch.userId);
-    if (nowHour !== prefHour) continue;
-    // 每日一个主触点:今天已经收到过任何消息(早晨档)就不再发
-    const touched = await prisma.outboundMessage.count({ where: { userId: ch.userId, day, status: { in: ["sent", "queued"] } } });
+    const windowOpen = Boolean(ch.windowOpenUntil && ch.windowOpenUntil >= new Date());
+    // 窗口保护性提前(拍板 2026-08-04 之3):窗口会在今晚偏好时段之前关闭 →
+    // 趁还开着，在当前这班 cron 就把晚间档寄出去，而不是到点撞上 window_closed
+    const earlyDispatch =
+      nowHour !== prefHour &&
+      nowHour < prefHour &&
+      windowOpen &&
+      ch.windowOpenUntil! < beijingTodayAt(prefHour);
+    if (nowHour !== prefHour && !earlyDispatch) continue;
+    // 每日一个主触点——首周(D1-7)豁免(拍板 2026-08-04 之1):仪式建立期早晚都发，
+    // 早晨档不挡晚间档；但晚间档之间(含 19 点明信片)仍互斥。D8+ 维持一日一触点。
+    const touched = await prisma.outboundMessage.count({
+      where: {
+        userId: ch.userId,
+        day,
+        status: { in: ["sent", "queued"] },
+        ...(catDay <= 7 ? { kind: { notIn: MORNING_KINDS } } : {}),
+      },
+    });
     if (touched > 0) {
       out.skippedHadTouch++;
       continue;
     }
     const dup = await prisma.outboundMessage.count({ where: { userId: ch.userId, day, kind: { in: ["goodnight", "question", "question_name", "photo_moment"] } } });
     if (dup > 0) continue;
-
-    const windowOpen = ch.windowOpenUntil && ch.windowOpenUntil >= new Date();
 
     // 当天场景素材(和生活册同源同物)
     const todayMain = await prisma.event.findFirst({ where: { catId: cat.id, day, isMain: true }, orderBy: { segment: "desc" } });
@@ -188,6 +211,7 @@ export async function sendGoodnight(opts: { dryRun?: boolean } = {}): Promise<Ev
       out.kinds[kind] = (out.kinds[kind] ?? 0) + 1;
       await prisma.channel.update({ where: { id: ch.id }, data: { repliesInDay: 0 } }).catch(() => {});
       await safeTrack("wechat_msg_sent", { kind });
+      if (earlyDispatch) await safeTrack("wechat_early_send", { kind }); // 提前寄出的占比要单独看
     } else {
       out.failed++;
       console.error("[evening] 发送失败:", ch.userId, r.detail);
