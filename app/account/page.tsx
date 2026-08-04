@@ -3,7 +3,7 @@ import { CatAvatar } from "@/components/CatAvatar";
 import { ReturnEmailForm } from "@/components/ReturnEmailForm";
 import { ReturnKey } from "@/components/ReturnKey";
 import { SubmitButton } from "@/components/SubmitButton";
-import { TicketCard } from "@/components/TicketCard";
+import { TicketWallet } from "@/components/TicketWallet";
 import { IconBoat, IconKey, IconMailbox, IconTicket } from "@/components/icons";
 import { ensureRecoveryCode, recoverByCode, toggleNotify } from "@/lib/account-actions";
 import { emailEnabled } from "@/lib/email";
@@ -64,8 +64,6 @@ export default async function AccountPage() {
     const catByOwner = new Map(claimerCats.map((c) => [c.ownerId, c.name]));
     for (const c of claimers) if (c.inviteCode) claimedBy.set(c.inviteCode, catByOwner.get(c.id) ?? null);
   }
-  const walletShown = available.slice(0, 3);
-  const walletRest = available.slice(3);
 
   return (
     <div className="space-y-8">
@@ -74,23 +72,44 @@ export default async function AccountPage() {
         <p className="mt-1 text-xs text-ink-faint">这里收着你在猫啊岛留下的身份、船票，以及回来时需要的凭证。</p>
       </div>
 
-      {/* 岛民身份卡:先"我是谁",再谈怎么找回 */}
+      {/* 岛民身份卡:先"我是谁、为什么属于这里",再谈怎么找回 */}
       {cat ? (
         <div>
-          <div className="note-slip flex items-center gap-3.5 p-4" style={{ transform: "rotate(-0.4deg)" }}>
-            <CatAvatar id={cat.id} size={52} portraitUrl={cat.portraitUrl} crop="head" />
-            <div className="min-w-0">
-              <p className="text-[10px] tracking-[0.2em] text-ink-faint">猫啊岛 · 岛民</p>
-              <p className="font-title mt-0.5 text-lg font-bold leading-tight text-ink">
-                <Link href="/my-cat" className="hover:text-brick">{cat.name}</Link>的主人
-              </p>
-              <p className="mt-1 text-xs text-ink-soft">
-                来到猫啊岛第 {daysOnIsland} 天
-                {shellConnected != null && <> · 海螺{shellConnected ? "已连接" : "还没连接"}</>}
-                {" · "}回岛地址{user?.emailVerifiedAt ? "已留" : "未留"}
-              </p>
+          <div className="note-slip p-4" style={{ transform: "rotate(-0.4deg)" }}>
+            <div className="flex items-center gap-3.5">
+              {cat.arrivalPhotoUrl ? (
+                // 相遇照片当证件照:比单独的猫头像更"我为什么属于这里"
+                // eslint-disable-next-line @next/next/no-img-element -- 动态合成图走自有 API，长缓存
+                <img
+                  src={`${cat.arrivalPhotoUrl}${cat.arrivalPhotoUrl.includes("?") ? "&" : "?"}s=480`}
+                  alt="" width={84} height={58}
+                  className="h-[58px] w-[84px] shrink-0 rounded-sm border border-line object-cover"
+                />
+              ) : (
+                <CatAvatar id={cat.id} size={52} portraitUrl={cat.portraitUrl} crop="head" />
+              )}
+              <div className="min-w-0">
+                <p className="text-[10px] tracking-[0.2em] text-ink-faint">
+                  猫啊岛 · 岛民{viewerId && <> · 登记号 {viewerId.replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase()}</>}
+                </p>
+                <p className="font-title mt-0.5 text-lg font-bold leading-tight text-ink">
+                  <Link href="/my-cat" className="hover:text-brick">{cat.name}</Link>的主人
+                </p>
+                <p className="mt-1 text-xs text-ink-soft">
+                  来到猫啊岛第 {daysOnIsland} 天
+                  {shellConnected != null && <> · 海螺{shellConnected ? "已连接" : "还没连接"}</>}
+                  {" · "}回岛地址{user?.emailVerifiedAt ? "已留" : "未留"}
+                </p>
+              </div>
+              <span className="ml-auto inline-block shrink-0 -rotate-2 rounded-[4px] border border-line px-1.5 text-[11px] leading-relaxed text-ink-faint">
+                仍住在岛上
+              </span>
             </div>
-            <span className="seal ml-auto shrink-0">在岛</span>
+            {cat.firstWords && (
+              <p className="font-diary mt-3 border-t border-dashed border-line pt-2.5 text-[13px] leading-relaxed text-ink-soft">
+                它第一次见到你时，你说：「{cat.firstWords}」
+              </p>
+            )}
           </div>
           <p className="mt-2 text-xs leading-relaxed text-ink-faint">
             你现在的岛民身份暂存在这台设备上。换设备或清理浏览器后，要凭下面的钥匙或回岛地址才能回来。
@@ -112,27 +131,11 @@ export default async function AccountPage() {
             {available.length > 0 && <>你还有 {available.length} 张。</>}
           </p>
           {available.length > 0 && (
-            <div className="mt-3 space-y-2.5">
-              {walletShown.map((t) => (
-                <TicketCard key={t.code} code={t.code} shareUrl={`${SITE_URL}/adopt?ticket=${t.code}`} />
-              ))}
-              {walletRest.length > 0 && (
-                <details>
-                  <summary className="cursor-pointer text-center text-xs text-ink-faint hover:text-ink-soft">
-                    展开其余 {walletRest.length} 张
-                  </summary>
-                  <div className="mt-2.5 space-y-2.5">
-                    {walletRest.map((t) => (
-                      <TicketCard key={t.code} code={t.code} shareUrl={`${SITE_URL}/adopt?ticket=${t.code}`} />
-                    ))}
-                  </div>
-                </details>
-              )}
-            </div>
+            <TicketWallet tickets={available.map((t) => ({ code: t.code, shareUrl: `${SITE_URL}/adopt?ticket=${t.code}` }))} />
           )}
           {spent.length > 0 && (
             <div className="mt-3 space-y-1.5">
-              <p className="text-[11px] tracking-widest text-ink-faint">已经用掉的</p>
+              <p className="text-[11px] tracking-widest text-ink-faint">已有人凭这些票登岛</p>
               {spent.map((t) => (
                 <div key={t.code} className="flex items-center justify-between gap-2 border border-line bg-paper-deep/40 px-3 py-2 text-xs">
                   <span className="font-mono text-ink-faint line-through">{t.code}</span>
@@ -141,8 +144,8 @@ export default async function AccountPage() {
                       ? "这张票停用了"
                       : claimedBy.has(t.code)
                         ? claimedBy.get(t.code)
-                          ? `有人凭它上了岛，接走了${claimedBy.get(t.code)}`
-                          : "有人凭它上了岛 · 还没接到猫（未知喵）"
+                          ? `凭这张票登岛的岛民，接走了${claimedBy.get(t.code)}`
+                          : "已登岛 · 还没接到猫（未知喵）"
                         : "已被用掉"}
                   </span>
                 </div>
@@ -212,8 +215,8 @@ export default async function AccountPage() {
           </summary>
           <div className="mt-3 space-y-3 text-sm leading-relaxed text-ink-soft">
             <p>
-              重新领养之前，需要先送{cat.name}离开。
-              它的日记、照片、朋友和这些天的记忆，都会跟船一起走——这趟船开出去，就不回头了。
+              平常不需要打开这里。
+              重新领养之前，需要先送{cat.name}离开——它的日记、照片、朋友和这些天的记忆，都会跟船一起走，这趟船开出去就不回头了。
             </p>
             <Link href="/account/farewell" className="inline-block border border-line px-4 py-2 text-sm text-ink-soft transition-colors hover:border-sea-deep">
               去码头送别

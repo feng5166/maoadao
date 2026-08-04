@@ -38,13 +38,20 @@ export function ReturnEmailForm({ hasCat, mailReady }: { hasCat: boolean; mailRe
     });
   }
 
+  // 邮路没通时给完整的封闭态,不摆一个禁用表单像出了故障
+  if (!mailReady) {
+    return (
+      <div className="note-slip mt-3 p-3.5 text-center">
+        <p className="font-diary text-[14px] text-ink-soft">岛外邮路正在修整。</p>
+        <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+          目前请先保管好上面的回岛钥匙。邮路开通后，可以把新的凭证寄到你的邮箱。
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 space-y-3">
-      {!mailReady && (
-        <p className="border-l-2 border-line pl-2 text-xs text-ink-faint">
-          岛上的邮路还没通(邮件服务未配置)——先把上面的回岛钥匙收好。
-        </p>
-      )}
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="email"
