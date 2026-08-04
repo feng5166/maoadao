@@ -62,7 +62,7 @@ function Page({ no, title, children }: { no: string; title: string; children: Re
   );
 }
 
-export function RegisterForm() {
+export function RegisterForm({ initialTicket }: { initialTicket?: string }) {
   const [state, formAction] = useActionState(createCat, null);
   const errRef = useRef<HTMLDivElement>(null);
 
@@ -92,7 +92,7 @@ export function RegisterForm() {
           </label>
           <input
             id="ticket" name="ticket" required maxLength={19} placeholder="BOAT-XXXX-XXXX-XXXX"
-            defaultValue={v.ticket}
+            defaultValue={v.ticket ?? initialTicket}
             aria-invalid={ticketErr}
             className={`mt-1.5 w-full border-0 border-b bg-transparent px-1 py-2 uppercase focus:outline-none ${
               ticketErr ? "border-brick text-brick focus:border-brick" : "border-line focus:border-sea-deep"

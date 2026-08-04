@@ -126,6 +126,27 @@ export async function verifyEmailCode(formData: FormData) {
   revalidatePath("/account");
 }
 
+// 客户端分步表单用的安全封装:错误以返回值带回(生产环境直接 throw 会被脱敏成通用文案)
+export async function requestEmailCodeSafe(formData: FormData): Promise<{ ok: boolean; err?: string }> {
+  try {
+    await requestEmailCode(formData);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, err: e instanceof Error ? e.message : "出错了，稍后再试" };
+  }
+}
+
+export async function verifyEmailCodeSafe(formData: FormData): Promise<{ ok: boolean; err?: string }> {
+  try {
+    await verifyEmailCode(formData);
+    return { ok: true };
+  } catch (e) {
+    // 切换身份成功时 verifyEmailCode 内部 redirect——那不是错误,原样抛回让框架接管跳转
+    if (typeof (e as { digest?: string })?.digest === "string" && (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")) throw e;
+    return { ok: false, err: e instanceof Error ? e.message : "出错了，稍后再试" };
+  }
+}
+
 export async function toggleNotify() {
   const uid = await getViewerId();
   if (!uid) return;

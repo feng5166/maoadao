@@ -51,7 +51,7 @@ export default async function RootLayout({
                 岛上
               </Link>
               <Link href="/account" className="text-sea-deep hover:text-brick">
-                账户
+                岛民册
               </Link>
               <Suspense fallback={<span className="inline-block h-[33px] w-[92px] animate-pulse rounded-lg bg-paper-deep" />}>
                 <NavCatButton />

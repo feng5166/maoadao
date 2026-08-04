@@ -7,7 +7,11 @@ export const maxDuration = 300; // 领养后 after() 里异步生成首日内容
 // 性格参数彻底隐身——三道"你觉得它是什么样"的心理选择题在服务端映射三轴。
 // 表单本体在 components/RegisterForm.tsx（客户端）：出错就地显示、填过的不清空。
 
-export default function RegisterPage() {
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ ticket?: string }> }) {
+  // 船票深链(岛民寄出的邀请):票号自动填进登记册
+  const { ticket } = await searchParams;
+  const initialTicket = ticket && /^[A-Z0-9-]{4,24}$/i.test(ticket) ? ticket.toUpperCase() : undefined;
+
   return (
     <div className="mx-auto max-w-lg">
       <Track events={[{ name: "adopt_start" }]} />
@@ -21,7 +25,7 @@ export default function RegisterPage() {
         </p>
       </div>
 
-      <RegisterForm />
+      <RegisterForm initialTicket={initialTicket} />
     </div>
   );
 }

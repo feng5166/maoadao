@@ -185,3 +185,14 @@ export function IconShell(props: IconProps) {
     </Svg>
   );
 }
+
+/** 回岛钥匙：一把老式门钥匙——圆环柄、歪齿 */
+export function IconKey(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M8.9 5.2c2.3-.1 4.2 1.7 4.3 3.9.1 2.2-1.7 4.1-4 4.2-2.3.1-4.2-1.6-4.3-3.9-.1-2.3 1.7-4.1 4-4.2z" />
+      <path d="M11.9 12.1l7.3 6.9" />
+      <path d="M16.2 16.2l1.8-1.9M18.4 18.3l1.5-1.6" />
+    </Svg>
+  );
+}

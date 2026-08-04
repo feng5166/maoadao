@@ -1,163 +1,225 @@
 import Link from "next/link";
-import { CopyCode } from "@/components/CopyCode";
+import { CatAvatar } from "@/components/CatAvatar";
+import { ReturnEmailForm } from "@/components/ReturnEmailForm";
+import { ReturnKey } from "@/components/ReturnKey";
 import { SubmitButton } from "@/components/SubmitButton";
-import { IconBoat, IconMailbox, IconPaw, IconTicket } from "@/components/icons";
-import {
-  ensureRecoveryCode,
-  recoverByCode,
-  requestEmailCode,
-  toggleNotify,
-  verifyEmailCode,
-} from "@/lib/account-actions";
+import { TicketCard } from "@/components/TicketCard";
+import { IconBoat, IconKey, IconMailbox, IconTicket } from "@/components/icons";
+import { ensureRecoveryCode, recoverByCode, toggleNotify } from "@/lib/account-actions";
 import { emailEnabled } from "@/lib/email";
 import { getViewerId } from "@/lib/identity";
-import { getViewerCat } from "@/lib/queries";
+import { getViewerCat, getWorld } from "@/lib/queries";
+import { catDayOf } from "@/lib/sim/lifecycle";
+import { SITE_URL } from "@/lib/site";
 import { ensureBoatTickets } from "@/lib/tickets";
+import { wechatEnabled } from "@/lib/wechat/bridge";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// /account：找回与通知。匿名 Cookie 支撑单设备，这里补跨设备找回（定义 v0.6·P0-1）
+// 岛民册(账户页世界观翻译):不是管理账号,是保管你在猫啊岛的身份、船票和回来的路。
+// 结构:岛民身份卡 → 可以寄出的船票 → 回岛钥匙 → 留一个回岛地址 → 离岛与重新开始。
+// 底层功能(找回码/邀请码/邮箱验证码)不变,只换语言和物件感。
 
 export default async function AccountPage() {
   const viewerId = await getViewerId();
-  // 两波并行（doc/11 P1-3）：user/cat 互不依赖；找回码与船票依赖 cat 存在
-  const [user, cat] = await Promise.all([
+  const [user, cat, world] = await Promise.all([
     viewerId ? prisma.user.findUnique({ where: { id: viewerId } }) : null,
     getViewerCat(viewerId),
+    getWorld(),
   ]);
   const [recoveryCode, tickets] = cat
     ? await Promise.all([ensureRecoveryCode(), viewerId ? ensureBoatTickets(viewerId) : []])
     : [null, [] as Awaited<ReturnType<typeof ensureBoatTickets>>];
   const mailReady = emailEnabled();
 
-  return (
-    <div className="space-y-5">
-      <h1 className="font-title text-xl font-bold">账户与找回</h1>
+  // 来岛天数(与我的猫同口径):firstTickDay 未回填的老数据退回首事件倒推
+  let daysOnIsland = 0;
+  if (cat) {
+    const firstTickDay =
+      cat.firstTickDay > 0
+        ? cat.firstTickDay
+        : ((await prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } }))?.day ?? world.day) + 1;
+    daysOnIsland = catDayOf(world.day, firstTickDay);
+  }
 
+  // 海螺(微信通道)状态:功能开关关着就不提
+  const shellConnected =
+    cat && wechatEnabled() && viewerId
+      ? Boolean(await prisma.channel.findFirst({ where: { userId: viewerId, kind: "wechat_openclaw" }, select: { id: true } }))
+      : null;
+
+  // 船票分堆 + 已用票的去向:谁用这张票上的岛、接了哪只猫(还没接到猫 = 未知喵)
+  const available = tickets.filter((t) => !t.disabled && t.usedCount < t.maxUses);
+  const spent = tickets.filter((t) => t.disabled || t.usedCount >= t.maxUses);
+  const claimedBy = new Map<string, string | null>(); // code -> 猫名(null = 已上岛但还没接到猫)
+  if (spent.length > 0) {
+    const claimers = await prisma.user.findMany({
+      where: { inviteCode: { in: spent.map((t) => t.code) } },
+      select: { id: true, inviteCode: true },
+    });
+    const claimerCats = claimers.length
+      ? await prisma.cat.findMany({ where: { ownerId: { in: claimers.map((c) => c.id) } }, select: { ownerId: true, name: true } })
+      : [];
+    const catByOwner = new Map(claimerCats.map((c) => [c.ownerId, c.name]));
+    for (const c of claimers) if (c.inviteCode) claimedBy.set(c.inviteCode, catByOwner.get(c.id) ?? null);
+  }
+  const walletShown = available.slice(0, 3);
+  const walletRest = available.slice(3);
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="font-title text-xl font-bold">我的岛民册</h1>
+        <p className="mt-1 text-xs text-ink-faint">这里收着你在猫啊岛留下的身份、船票，以及回来时需要的凭证。</p>
+      </div>
+
+      {/* 岛民身份卡:先"我是谁",再谈怎么找回 */}
       {cat ? (
-        <div className="border-t border-line pt-4">
-          <p className="text-sm text-ink">
-            当前身份养着 <Link href="/my-cat" className="font-bold text-brick">{cat.name}</Link>。
-            身份存在这台设备的浏览器里——换设备或清了缓存，就靠下面两种方式找回。
+        <div>
+          <div className="note-slip flex items-center gap-3.5 p-4" style={{ transform: "rotate(-0.4deg)" }}>
+            <CatAvatar id={cat.id} size={52} portraitUrl={cat.portraitUrl} crop="head" />
+            <div className="min-w-0">
+              <p className="text-[10px] tracking-[0.2em] text-ink-faint">猫啊岛 · 岛民</p>
+              <p className="font-title mt-0.5 text-lg font-bold leading-tight text-ink">
+                <Link href="/my-cat" className="hover:text-brick">{cat.name}</Link>的主人
+              </p>
+              <p className="mt-1 text-xs text-ink-soft">
+                来到猫啊岛第 {daysOnIsland} 天
+                {shellConnected != null && <> · 海螺{shellConnected ? "已连接" : "还没连接"}</>}
+                {" · "}回岛地址{user?.emailVerifiedAt ? "已留" : "未留"}
+              </p>
+            </div>
+            <span className="seal ml-auto shrink-0">在岛</span>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+            你现在的岛民身份暂存在这台设备上。换设备或清理浏览器后，要凭下面的钥匙或回岛地址才能回来。
           </p>
         </div>
       ) : (
-        <div className="border-t border-line pt-4 text-sm text-ink">
-          这台设备上还没有猫。如果你在别处养过，用下面的找回码或邮箱把它找回来；
-          还没养过就去<Link href="/adopt" className="text-brick">领养一只</Link>。
+        <div className="border-t border-line pt-4 text-sm leading-relaxed text-ink">
+          这台设备上还没有岛民身份。在别处上过岛的话，用下面的回岛钥匙或回岛地址回来；
+          还没上过岛，就<Link href="/adopt" className="text-brick">去码头接一只猫</Link>。
         </div>
       )}
 
-      {/* 船票：岛靠邀请上，每位岛民手里有五张可转赠的票 */}
+      {/* 可以寄出的船票:默认只亮 3 张,其余收起;已寄出的看得到去向 */}
       {tickets.length > 0 && (
-        <div id="tickets" className="border-t border-line pt-4">
-          <h2 className="font-title flex items-center gap-1.5 font-bold"><IconTicket size={15} /> 我的船票</h2>
-          <p className="mt-1 text-xs text-ink-faint">
-            猫啊岛只能坐船来。你手里有 {tickets.length} 张船票——送出一张，朋友就能到码头领养自己的猫。
-            每张只能用一次，送给谁由你决定。
+        <div id="tickets">
+          <h2 className="font-title flex items-center gap-1.5 font-bold"><IconTicket size={15} /> 可以寄出的船票</h2>
+          <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+            每张船票只能带一位新岛民上岛，寄出去后就离开你的行囊。
+            {available.length > 0 && <>你还有 {available.length} 张。</>}
           </p>
-          <div className="mt-2 space-y-2">
-            {tickets.map((t) =>
-              t.disabled || t.usedCount >= t.maxUses ? (
-                <p key={t.code} className="bg-paper-deep/50 px-3 py-2 text-sm text-ink-faint">
-                  <span className="font-mono tracking-wider line-through">{t.code}</span>
-                  <span className="ml-2 text-xs">
-                    {t.disabled ? "（这张票停用了）" : "（已有人用它上岛了）"}
+          {available.length > 0 && (
+            <div className="mt-3 space-y-2.5">
+              {walletShown.map((t) => (
+                <TicketCard key={t.code} code={t.code} shareUrl={`${SITE_URL}/adopt?ticket=${t.code}`} />
+              ))}
+              {walletRest.length > 0 && (
+                <details>
+                  <summary className="cursor-pointer text-center text-xs text-ink-faint hover:text-ink-soft">
+                    展开其余 {walletRest.length} 张
+                  </summary>
+                  <div className="mt-2.5 space-y-2.5">
+                    {walletRest.map((t) => (
+                      <TicketCard key={t.code} code={t.code} shareUrl={`${SITE_URL}/adopt?ticket=${t.code}`} />
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+          {spent.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              <p className="text-[11px] tracking-widest text-ink-faint">已经用掉的</p>
+              {spent.map((t) => (
+                <div key={t.code} className="flex items-center justify-between gap-2 border border-line bg-paper-deep/40 px-3 py-2 text-xs">
+                  <span className="font-mono text-ink-faint line-through">{t.code}</span>
+                  <span className="shrink-0 text-ink-soft">
+                    {t.disabled
+                      ? "这张票停用了"
+                      : claimedBy.has(t.code)
+                        ? claimedBy.get(t.code)
+                          ? `有人凭它上了岛，接走了${claimedBy.get(t.code)}`
+                          : "有人凭它上了岛 · 还没接到猫（未知喵）"
+                        : "已被用掉"}
                   </span>
-                </p>
-              ) : (
-                <CopyCode key={t.code} code={t.code} />
-              ),
-            )}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* 找回码：零依赖，立即可用 */}
-      <div className="border-t border-line pt-4">
-        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconPaw size={15} /> 找回码</h2>
+      {/* 回岛钥匙(原找回码):有猫 = 展示要收好的钥匙;没猫 = 掏出钥匙开门 */}
+      <div>
+        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconKey size={15} /> 回岛钥匙</h2>
         {recoveryCode ? (
           <>
-            <p className="mt-1 text-xs text-ink-faint">抄下这串猫爪印，换设备时输入即可找回你的猫。别告诉别人——拿到码就等于拿到猫。</p>
-            <CopyCode code={recoveryCode} />
+            <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+              这串钥匙能帮你在新的设备上找回岛民身份。请把它放在只有自己知道的地方——拿到钥匙，就等于拿到猫。
+            </p>
+            <div className="mt-3">
+              <ReturnKey code={recoveryCode} />
+            </div>
           </>
         ) : (
-          <form action={recoverByCode} className="mt-2 flex gap-2">
-            <input
-              name="code" placeholder="MAO-XXXX-XXXX" maxLength={14}
-              className="flex-1 border border-line bg-paper px-3 py-2 font-mono text-sm uppercase focus:border-sea-deep focus:outline-none"
-            />
-            <SubmitButton pendingText="找回中…" className="stamp-btn px-4 py-2 text-sm">
-              找回我的猫
-            </SubmitButton>
-          </form>
+          <>
+            <p className="mt-1 text-xs text-ink-faint">在别的设备上抄过回岛钥匙？在这里用它开门。</p>
+            <form action={recoverByCode} className="mt-2 flex gap-2">
+              <input
+                name="code" placeholder="MAO-XXXX-XXXX-…" maxLength={34}
+                className="min-w-0 flex-1 border border-line bg-paper px-3 py-2 font-mono text-sm uppercase focus:border-sea-deep focus:outline-none"
+              />
+              <SubmitButton pendingText="开门中…" className="stamp-btn shrink-0 px-4 py-2 text-sm">
+                回到岛上
+              </SubmitButton>
+            </form>
+          </>
         )}
       </div>
 
-      {/* 邮箱绑定 / 登录 */}
-      <div className="border-t border-line pt-4">
-        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconMailbox size={15} /> 邮箱{user?.emailVerifiedAt ? "" : "绑定与找回"}</h2>
+      {/* 留一个回岛地址(原邮箱绑定):寄信语义,两步表单 */}
+      <div>
+        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconMailbox size={15} /> 留一个回岛地址</h2>
         {user?.emailVerifiedAt ? (
           <div className="mt-2 space-y-3 text-sm text-ink">
-            <p>已绑定：{user.email}</p>
+            <p>
+              回岛地址已留：<span className="text-ink-soft">{user.email}</span>
+            </p>
             <form action={toggleNotify}>
               <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-xs text-ink-soft hover:border-sea-deep">
-                {user.notifyDaily ? "每日故事邮件：开（点击关闭）" : "每日故事邮件：关（点击开启）"}
+                {user.notifyDaily ? "每日故事信：寄（点击停寄）" : "每日故事信：停（点击恢复）"}
               </SubmitButton>
             </form>
           </div>
         ) : (
-          <div className="mt-2 space-y-3">
-            {!mailReady && (
-              <p className="border-l-2 border-brick pl-2 text-xs text-brick">
-                邮件服务尚未配置（缺 RESEND_API_KEY），验证码暂时发不出去——先用上面的找回码。
-              </p>
-            )}
-            <form action={requestEmailCode} className="flex gap-2">
-              <input
-                name="email" type="email" placeholder="你的邮箱"
-                className="flex-1 border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none"
-              />
-              <SubmitButton pendingText="发送中…" className="border border-line px-4 py-2 text-sm text-sea-deep hover:border-sea-deep">
-                发验证码
-              </SubmitButton>
-            </form>
-            <form action={verifyEmailCode} className="space-y-2">
-              {/* 移动端竖排：三件套挤一行在 375px 下没法输入 */}
-              <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                name="email" type="email" placeholder="邮箱" required
-                className="w-full border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none sm:w-2/5"
-              />
-              <input
-                name="code" placeholder="6 位验证码" maxLength={6} required
-                className="w-full border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none sm:flex-1"
-              />
-              <SubmitButton pendingText="验证中…" className="stamp-btn px-4 py-2 text-sm">
-                绑定/登录
-              </SubmitButton>
-              </div>
-              <label className="flex items-center gap-2 text-xs text-ink-faint">
-                <input type="checkbox" name="confirmSwitch" className="accent-[#5c7382]" />
-                我知道，切换账户（仅当邮箱已绑定别的猫、且要放弃当前浏览器身份时勾选）
-              </label>
-            </form>
-            <p className="text-xs text-ink-faint">绑定后：换设备可用邮箱找回；猫有新故事时会收到一封「内容钩子」邮件（可随时关闭）。</p>
-          </div>
+          <>
+            <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+              如果回岛钥匙弄丢了，我们可以把新的凭证寄到这个邮箱。换设备时，也能用它回来。
+            </p>
+            <ReturnEmailForm hasCat={Boolean(cat)} mailReady={mailReady} />
+          </>
         )}
       </div>
 
-      {/* 送它离开：重新领养的入口——完整的告别在 /account/farewell，这里只留一扇门 */}
+      {/* 离岛与重新开始:高风险不可逆,默认折叠、低饱和按钮,不用主 CTA 色 */}
       {cat && (
-        <div className="border-t border-line pt-4">
-          <Link
-            href="/account/farewell"
-            className="flex items-center gap-1.5 text-sm text-ink-faint hover:text-ink-soft"
-          >
-            <IconBoat size={15} /> 想重新领养一只？去码头送别 →
-          </Link>
-        </div>
+        <details className="border-t border-line pt-4">
+          <summary className="flex cursor-pointer items-center gap-1.5 text-sm text-ink-faint hover:text-ink-soft">
+            <IconBoat size={15} /> 离岛与重新开始
+          </summary>
+          <div className="mt-3 space-y-3 text-sm leading-relaxed text-ink-soft">
+            <p>
+              重新领养之前，需要先送{cat.name}离开。
+              它的日记、照片、朋友和这些天的记忆，都会跟船一起走——这趟船开出去，就不回头了。
+            </p>
+            <Link href="/account/farewell" className="inline-block border border-line px-4 py-2 text-sm text-ink-soft transition-colors hover:border-sea-deep">
+              去码头送别
+            </Link>
+          </div>
+        </details>
       )}
     </div>
   );
