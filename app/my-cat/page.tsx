@@ -16,6 +16,9 @@ import { getCatState, getLatestSummary, getPendingNudge, getUnsentLetter, getVie
 import { marginNotes, petLine, sceneFor, todayLabel } from "@/lib/handbook";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay, unlockedSegments } from "@/lib/moments";
 import { timeBucket } from "@/lib/visual/director";
+import { CatVoiceOnEnter } from "@/components/CatVoice";
+import { catVoiceProfile } from "@/lib/voice/profile";
+import { emotionOf, voiceStateOf } from "@/lib/voice/emotion";
 import { wechatEnabled } from "@/lib/wechat/bridge";
 import { bondStage } from "@/lib/sim/firstweek";
 import { catDayOf, inArrival } from "@/lib/sim/lifecycle";
@@ -114,6 +117,20 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
   const voiceNote = await prisma.catVoiceNote.findUnique({ where: { catId: cat.id }, select: { durationMs: true } });
   // 姿势集就绪才走导演系统拼贴,否则保持旧路径(圆头像叠场景)
   const poseCount = await prisma.catPose.count({ where: { catId: cat.id } });
+  // 猫语声音引擎(doc/17 MVP):进入=user_enter(海螺来路=conch 有距离感);夜里在家=呼噜段落。
+  // relationLevel 用关系四阶段映射(stage 1-4 → 0-3)
+  const voiceProfile = catVoiceProfile(cat);
+  const voiceState = voiceStateOf(hour, state?.location);
+  const voiceEmotion = emotionOf(state?.mood);
+  const relationLevel = Math.min(3, Math.max(0, bond.stage - 1)) as 0 | 1 | 2 | 3;
+  const voiceReq = {
+    catId: cat.id,
+    context: (from === "wechat" ? "conch" : "user_enter") as "conch" | "user_enter",
+    state: voiceState,
+    emotion: voiceEmotion,
+    intensity: 1 as const,
+    relationLevel,
+  };
 
   // ============ "它现在怎么样"（doc/09 §5）：时段门的推导，全部内存计算 ============
   const segOrder: Record<string, number> = { morning: 0, afternoon: 1, evening: 2 };
@@ -250,12 +267,12 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
               src={`/api/moment/${cat.id}?v=${world.day}-${timeBucket(hour)}`}
               alt="" width={1200} height={686} className="w-full"
             />
-            <PetCat chip id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
+            <PetCat chip id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} voice={{ profile: voiceProfile, state: voiceState, emotion: voiceEmotion, relationLevel }} />
           </>
         ) : (
           <>
             <Image src={scene} alt="" width={1200} height={686} priority className="w-full" />
-            <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} />
+            <PetCat id={cat.id} portraitUrl={cat.portraitUrl} line={petLine(cat.id, world.day, state?.mood)} voice={{ profile: voiceProfile, state: voiceState, emotion: voiceEmotion, relationLevel }} />
           </>
         )}
         <div className="note-slip absolute bottom-2 right-2 px-2.5 py-1.5 text-right" style={{ transform: "rotate(0.8deg)" }}>

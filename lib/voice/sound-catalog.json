@@ -1,0 +1,242 @@
+[
+  {
+    "assetId": "PURR_young_1",
+    "voiceType": "PURR",
+    "timbre": "young",
+    "file": "/sounds/PURR/young-1.mp3",
+    "durationMs": 8046,
+    "loopable": true
+  },
+  {
+    "assetId": "PURR_young_2",
+    "voiceType": "PURR",
+    "timbre": "young",
+    "file": "/sounds/PURR/young-2.mp3",
+    "durationMs": 8046,
+    "loopable": true
+  },
+  {
+    "assetId": "PURR_normal_1",
+    "voiceType": "PURR",
+    "timbre": "normal",
+    "file": "/sounds/PURR/normal-1.mp3",
+    "durationMs": 8046,
+    "loopable": true
+  },
+  {
+    "assetId": "PURR_normal_2",
+    "voiceType": "PURR",
+    "timbre": "normal",
+    "file": "/sounds/PURR/normal-2.mp3",
+    "durationMs": 8046,
+    "loopable": true
+  },
+  {
+    "assetId": "PURR_deep_1",
+    "voiceType": "PURR",
+    "timbre": "deep",
+    "file": "/sounds/PURR/deep-1.mp3",
+    "durationMs": 8046,
+    "loopable": true
+  },
+  {
+    "assetId": "PURR_deep_2",
+    "voiceType": "PURR",
+    "timbre": "deep",
+    "file": "/sounds/PURR/deep-2.mp3",
+    "durationMs": 8046,
+    "loopable": true
+  },
+  {
+    "assetId": "MEOW_SHORT_SOFT_young_1",
+    "voiceType": "MEOW_SHORT_SOFT",
+    "timbre": "young",
+    "file": "/sounds/MEOW_SHORT_SOFT/young-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SHORT_SOFT_young_2",
+    "voiceType": "MEOW_SHORT_SOFT",
+    "timbre": "young",
+    "file": "/sounds/MEOW_SHORT_SOFT/young-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SHORT_SOFT_normal_1",
+    "voiceType": "MEOW_SHORT_SOFT",
+    "timbre": "normal",
+    "file": "/sounds/MEOW_SHORT_SOFT/normal-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SHORT_SOFT_normal_2",
+    "voiceType": "MEOW_SHORT_SOFT",
+    "timbre": "normal",
+    "file": "/sounds/MEOW_SHORT_SOFT/normal-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SHORT_SOFT_deep_1",
+    "voiceType": "MEOW_SHORT_SOFT",
+    "timbre": "deep",
+    "file": "/sounds/MEOW_SHORT_SOFT/deep-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SHORT_SOFT_deep_2",
+    "voiceType": "MEOW_SHORT_SOFT",
+    "timbre": "deep",
+    "file": "/sounds/MEOW_SHORT_SOFT/deep-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_BRIGHT_young_1",
+    "voiceType": "MEOW_BRIGHT",
+    "timbre": "young",
+    "file": "/sounds/MEOW_BRIGHT/young-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_BRIGHT_young_2",
+    "voiceType": "MEOW_BRIGHT",
+    "timbre": "young",
+    "file": "/sounds/MEOW_BRIGHT/young-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_BRIGHT_normal_1",
+    "voiceType": "MEOW_BRIGHT",
+    "timbre": "normal",
+    "file": "/sounds/MEOW_BRIGHT/normal-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_BRIGHT_normal_2",
+    "voiceType": "MEOW_BRIGHT",
+    "timbre": "normal",
+    "file": "/sounds/MEOW_BRIGHT/normal-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_BRIGHT_deep_1",
+    "voiceType": "MEOW_BRIGHT",
+    "timbre": "deep",
+    "file": "/sounds/MEOW_BRIGHT/deep-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_BRIGHT_deep_2",
+    "voiceType": "MEOW_BRIGHT",
+    "timbre": "deep",
+    "file": "/sounds/MEOW_BRIGHT/deep-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SAD_young_1",
+    "voiceType": "MEOW_SAD",
+    "timbre": "young",
+    "file": "/sounds/MEOW_SAD/young-1.mp3",
+    "durationMs": 3030,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SAD_young_2",
+    "voiceType": "MEOW_SAD",
+    "timbre": "young",
+    "file": "/sounds/MEOW_SAD/young-2.mp3",
+    "durationMs": 3030,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SAD_normal_1",
+    "voiceType": "MEOW_SAD",
+    "timbre": "normal",
+    "file": "/sounds/MEOW_SAD/normal-1.mp3",
+    "durationMs": 3030,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SAD_normal_2",
+    "voiceType": "MEOW_SAD",
+    "timbre": "normal",
+    "file": "/sounds/MEOW_SAD/normal-2.mp3",
+    "durationMs": 3030,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SAD_deep_1",
+    "voiceType": "MEOW_SAD",
+    "timbre": "deep",
+    "file": "/sounds/MEOW_SAD/deep-1.mp3",
+    "durationMs": 3030,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_SAD_deep_2",
+    "voiceType": "MEOW_SAD",
+    "timbre": "deep",
+    "file": "/sounds/MEOW_SAD/deep-2.mp3",
+    "durationMs": 3030,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_IRRITATED_young_1",
+    "voiceType": "MEOW_IRRITATED",
+    "timbre": "young",
+    "file": "/sounds/MEOW_IRRITATED/young-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_IRRITATED_young_2",
+    "voiceType": "MEOW_IRRITATED",
+    "timbre": "young",
+    "file": "/sounds/MEOW_IRRITATED/young-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_IRRITATED_normal_1",
+    "voiceType": "MEOW_IRRITATED",
+    "timbre": "normal",
+    "file": "/sounds/MEOW_IRRITATED/normal-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_IRRITATED_normal_2",
+    "voiceType": "MEOW_IRRITATED",
+    "timbre": "normal",
+    "file": "/sounds/MEOW_IRRITATED/normal-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_IRRITATED_deep_1",
+    "voiceType": "MEOW_IRRITATED",
+    "timbre": "deep",
+    "file": "/sounds/MEOW_IRRITATED/deep-1.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  },
+  {
+    "assetId": "MEOW_IRRITATED_deep_2",
+    "voiceType": "MEOW_IRRITATED",
+    "timbre": "deep",
+    "file": "/sounds/MEOW_IRRITATED/deep-2.mp3",
+    "durationMs": 2038,
+    "loopable": false
+  }
+]
