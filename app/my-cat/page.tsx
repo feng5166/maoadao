@@ -245,6 +245,8 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
     <div className="mx-auto max-w-lg">
       <Track events={funnelEvents} />
       <StayTrack page="my-cat" />
+      {/* 猫语声音(doc/17):进入轻叫/夜里在家呼噜/海螺来路有距离感——引擎决定,多数时候不叫 */}
+      <CatVoiceOnEnter req={voiceReq} profile={voiceProfile} />
 
       {/* 页眉：日期与天气（手账体例;来岛天数移进名牌——它是猫的信息,不是日历的） */}
       <p className="text-center text-xs tracking-widest text-ink-faint">
