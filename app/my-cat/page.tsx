@@ -131,7 +131,7 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
   const showTodayStory = dayComplete || (summary != null && summary.day < world.day);
 
   // ============ 第二波：依赖第一波结果的查询并行 ============
-  const [missedSummaries, commission, targets, prevSummary] = await Promise.all([
+  const [missedSummaries, commission, targets] = await Promise.all([
     missedDays >= 3
       ? prisma.catDailySummary.findMany({
           where: { catId: cat.id, day: { gt: viewer!.lastSeenDay!, lt: summary?.day ?? world.day } },
@@ -145,9 +145,6 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
     targetIds.length
       ? prisma.cat.findMany({ where: { id: { in: targetIds } }, select: { id: true, name: true } })
       : Promise.resolve([]),
-    !showTodayStory && summary
-      ? prisma.catDailySummary.findFirst({ where: { catId: cat.id, day: { lt: summary.day } }, orderBy: { day: "desc" } })
-      : Promise.resolve(null),
   ]);
   const commissionNpc = commission ? String((commission.data as Record<string, unknown>).npcName ?? "") : "";
   const targetById = new Map(targets.map((t) => [t.id, { name: t.name }]));
@@ -170,6 +167,9 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
     hour,
     state?.location,
   );
+  // 此刻的地点与正文同源:有当前时段事件用事件地点(nowText 里说的就是它),否则退回状态地点——
+  // 名牌和缀行别跟正文各说各的("蹲在礁石边"配"灯塔坡"会穿帮)
+  const hereLocation = String((nowEvent?.data as Record<string, unknown> | null)?.location ?? state?.location ?? "岛上");
   const timeline = todayEvents
     .filter((e) => unlocked.has(e.segment))
     .map((e) => ({
@@ -178,8 +178,8 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
       text: factSummary({ type: e.type, outcome: e.outcome, data: e.data as Record<string, unknown>, targetId: e.targetId ?? undefined } as Fact, targetById),
     }));
 
-  // 第三波（仅白天读昨日日记时多一跳）：展示那篇日记的形态
-  const displayed = showTodayStory ? summary : prevSummary;
+  // 日记严格按世界时间(P2 去重复):白天不回放昨天的日记(那是生活册的事),晚上六点后才展开今天的
+  const displayed = showTodayStory ? summary : null;
   // 兜底日记是"第 N 天,天气X。今天:清单"——和上面"三件小事"完全重复(P2 合并),
   // 只在展示当天且时间轴齐全时压掉正文,批注/回应/悬念照留;昨日日记不压(时间轴是今天的)
   const isFallbackDiary =
@@ -206,7 +206,7 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
       <p className="text-center">
         <span className="seal">相遇档案</span>
       </p>
-      <div className="note-slip mx-auto mt-3 max-w-sm p-3" style={{ transform: "rotate(-0.8deg)" }}>
+      <div className="note-slip mx-auto mt-3 max-w-xs p-3" style={{ transform: "rotate(-0.8deg)" }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- 动态合成图走自有 API，长缓存 */}
         <img
           src={`${cat.arrivalPhotoUrl}${cat.arrivalPhotoUrl.includes("?") ? "&" : "?"}s=720`}
@@ -218,7 +218,8 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         <p className="font-diary mt-2 text-center text-[14px] text-ink-soft">猫啊岛历 第 1 天 · 码头</p>
       </div>
       <p className="mt-2 text-center text-xs text-ink-faint">
-        这是它第一次看到你的地方。这一页会一直在这里。
+        这是它第一次看见你的地方。
+        <Link href="/my-cat/history" className="ml-1.5 text-sea-deep hover:text-brick">翻开相遇那天 →</Link>
       </p>
     </div>
   ) : null;
@@ -260,22 +261,24 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         <div className="note-slip absolute bottom-2 right-2 px-2.5 py-1.5 text-right" style={{ transform: "rotate(0.8deg)" }}>
           <p className="font-title text-[15px] font-bold leading-tight text-ink">{cat.name}</p>
           <p className="mt-0.5 text-[11px] text-ink-soft">
-            来岛第 {daysOnIsland} 天 · {state?.location ?? "岛上"}
+            来岛第 {daysOnIsland} 天 · {hereLocation}
           </p>
         </div>
       </div>
 
-      {/* 此刻状态行：当前时段事实的现在时（doc/09：打开=看它此刻在干嘛） */}
+      {/* 此刻状态行：当前时段事实的观察体（doc/09：打开=看它此刻在干嘛），下面缀地点·时段·心情 */}
       <p className="font-diary mt-4 text-center text-[16px] leading-relaxed text-ink">{nowText}</p>
+      <p className="mt-1.5 text-center text-xs text-ink-faint">
+        {hereLocation} · {seg ? SEGMENT_CN[seg] : "夜里"} · {state?.mood ?? "平静"}
+      </p>
       {/* 海螺留声(P3):声音是生活痕迹,不摆播放器 */}
-      {voiceNote && <SeaVoice src={`/api/voice/${cat.id}`} />}
+      {voiceNote && <SeaVoice src={`/api/voice/${cat.id}`} seconds={Math.max(1, Math.round(voiceNote.durationMs / 1000))} />}
       {/* 微信来的路(doc/11 修订 §五):确认刚才那句话已收进——只说"收到",不说"照做" */}
       {from === "wechat" && pendingNudge?.message && (
         <p className="mt-1.5 text-center text-xs text-ink-soft">
           你刚对着海螺说:「{pendingNudge.message}」——它把这句话收进了今天的纸条。
         </p>
       )}
-      <p className="mt-1 text-center text-xs text-ink-soft">这会儿的心情：{state?.mood ?? "平静"}</p>
       {/* 船靠岸(doc/12 §八.9):首日的生成等待是世界过程,不是 loading */}
       {!cat.portraitUrl &&
         (arrivalDay ? <BoatArriving stage="boat" /> : <p className="mt-1 text-center text-xs text-ink-faint">它的画像还在画，稍后刷新看看</p>)}
@@ -387,8 +390,9 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      {/* 猫的一天(P2):不是日志,是几件小事——时段靠左像手账页边,正文用日记体(按现实时段解锁) */}
-      {timeline.length > 0 && (
+      {/* 猫的一天(P2):不是日志,是几件小事——时段靠左像手账页边,正文用日记体(按现实时段解锁)。
+          严格分工:白天只给已解锁的事实;晚上日记收束后这块让位给日记(兜底日记没正文,才留着当记录) */}
+      {timeline.length > 0 && (!dayComplete || !displayed || isFallbackDiary) && (
         <div className="mt-5 border-t border-line pt-4">
           <p className="text-center text-xs tracking-widest text-ink-faint">
             {dayComplete
@@ -421,16 +425,16 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      {/* 故事正文 + 更新状态 */}
-      {summary && summary.day < world.day && (
-        <p className="mt-4 text-center text-xs text-ink-faint">
-          今天的日记还没送到（每天早上八点前后写好）——先看看它昨天写的
-        </p>
-      )}
-      {!showTodayStory && displayed && (
-        <p className="mt-4 text-center text-xs text-ink-faint">
-          今天的日记要等它把这一天过完（晚上六点后来看）——先翻翻它昨天写的
-        </p>
+      {/* 故事正文:严格跟世界时间走。白天这一页还没写完,只给一句交代——不提前泄露,也不回放昨天 */}
+      {!showTodayStory && (
+        <div className="mt-8 text-center">
+          <p className="font-diary text-[15px] text-ink-soft">今天这一页还没写完。</p>
+          <p className="mt-1.5 text-xs text-ink-faint">
+            晚上六点以后，它会把今天收进
+            <Link href="/my-cat/history" className="text-sea-deep hover:text-brick">生活册</Link>
+            ——之前的日子也都收在那里。
+          </p>
+        </div>
       )}
       {displayed ? (
         <article className="mt-6">
@@ -486,12 +490,17 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
             </div>
           )}
         </article>
-      ) : (
+      ) : showTodayStory ? (
         <p className="font-diary mt-8 text-center text-[15px] leading-relaxed text-ink-soft">
           {cat.name}正在熟悉小岛。它的第一篇日记今晚就会写好——
           <br />
           它会在你离开后继续生活，明天回来看看它写了什么。
         </p>
+      ) : null}
+
+      {/* 相遇档案（P1）：D3 起跟在今天的内容后面——比留言区靠前,但永远都在,D30 回来它还在这里 */}
+      {daysOnIsland > 2 && meetArchive && (
+        <div className="mt-8 border-t border-line pt-6">{meetArchive}</div>
       )}
 
       {/* 往期回音：它这些天怎么回应你说过的话（读自己留下的痕迹，也喂"它记得我"的认知） */}
@@ -522,11 +531,6 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
         </div>
       )}
 
-      {/* 相遇档案（P1）：D3 起沉到页面下方,但永远都在——D30 回来,这个地方还在这里 */}
-      {daysOnIsland > 2 && meetArchive && (
-        <div className="mt-8 border-t border-line pt-6">{meetArchive}</div>
-      )}
-
       {/* 今晚给它留句话(P3 便签化):不是功能表单,是桌上的一张空白便签 */}
       <div id="nudge" className="note-slip mt-8 p-4" style={{ transform: "rotate(0.3deg)" }}>
         <p className="text-xs text-ink-faint">{pendingNudge ? "桌上的便签" : "桌上放着一张空白便签"}</p>
@@ -540,56 +544,53 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
             明天早上八点之后回来，看看它怎么说。
           </p>
         ) : (
-          <form action={saveNudge} className="mt-3 space-y-3">
+          <form action={saveNudge} className="mt-2 space-y-3">
             <input type="hidden" name="catId" value={cat.id} />
+            {/* 文本框就是纸本身:无边框无底色,写在便签上 */}
             <textarea
-              name="message" maxLength={60} rows={2} placeholder={`想对${cat.name}说的话（60 字内）`}
-              className="w-full border border-line bg-paper px-3 py-2 text-sm focus:border-sea-deep focus:outline-none"
+              name="message" maxLength={60} rows={3} placeholder={`写给${cat.name}……`}
+              className="font-diary w-full resize-none border-0 bg-transparent text-[15px] leading-relaxed text-ink placeholder:text-ink-faint focus:outline-none"
             />
-            <label className="flex items-center gap-2 text-xs text-ink-soft">
-              <input type="checkbox" name="isPublic" className="accent-[#5c7382]" />
-              它可以在日记里提到这句话（不勾选就只有它自己知道）
-            </label>
-            {/* 建议选择器。D1 收进二级（doc/10 §7）：第一次见面不让主人"管理"猫——不选=它自己决定 */}
-            {(() => {
-              const picker = (
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  {daysOnIsland > 1 && (
-                    <span className="text-xs text-ink-soft">
-                      {commissionNpc ? `${commissionNpc}托付的事，你希望它……` : choices ? "这件事，你希望它……" : "你希望它明天……"}
-                    </span>
-                  )}
-                  {(choices
-                    ? [{ v: "", label: "让它自己拿主意" }, ...choices.map((c) => ({ v: c.value, label: c.label }))]
-                    : [
-                        { v: "", label: "随它去" },
-                        { v: "earn", label: "去赚点鱼币" },
-                        { v: "explore", label: "出门走走" },
-                        { v: "social", label: "找朋友玩" },
-                        { v: "rest", label: "好好休息" },
-                      ]
-                  ).map((o, i) => (
-                    <label
-                      key={o.v}
-                      className="cursor-pointer border border-line px-2.5 py-1.5 has-[:checked]:border-sea-deep has-[:checked]:bg-paper"
-                    >
-                      <input type="radio" name="suggestion" value={o.v} defaultChecked={i === 0} className="hidden" />
-                      {o.label}
-                    </label>
-                  ))}
-                </div>
-              );
-              return daysOnIsland <= 1 ? (
-                <details>
-                  <summary className="cursor-pointer text-xs text-ink-soft">
-                    你希望它明天更接近哪种生活？（不选的话，它自己决定）
-                  </summary>
-                  <div className="mt-2">{picker}</div>
-                </details>
-              ) : (
-                picker
-              );
-            })()}
+            {/* 谁能看见:不用 checkbox,两句低权重的话(默认只给它看) */}
+            <div className="flex gap-4 text-xs text-ink-faint">
+              <label className="cursor-pointer border-b border-transparent pb-0.5 has-[:checked]:border-ink-faint has-[:checked]:text-ink-soft">
+                <input type="radio" name="isPublic" value="" defaultChecked className="hidden" />
+                只给它看
+              </label>
+              <label className="cursor-pointer border-b border-transparent pb-0.5 has-[:checked]:border-ink-faint has-[:checked]:text-ink-soft">
+                <input type="radio" name="isPublic" value="on" className="hidden" />
+                也允许它以后在日记里提起
+              </label>
+            </div>
+            {/* 建议选择器全部收进二级(doc/10 §7):首屏主动作只有"交给它",不选=它自己决定 */}
+            <details>
+              <summary className="cursor-pointer text-xs text-ink-faint hover:text-ink-soft">不知道说什么？</summary>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                {daysOnIsland > 1 && (
+                  <span className="text-xs text-ink-soft">
+                    {commissionNpc ? `${commissionNpc}托付的事，你希望它……` : choices ? "这件事，你希望它……" : "你希望它明天……"}
+                  </span>
+                )}
+                {(choices
+                  ? [{ v: "", label: "让它自己拿主意" }, ...choices.map((c) => ({ v: c.value, label: c.label }))]
+                  : [
+                      { v: "", label: "随它去" },
+                      { v: "earn", label: "去赚点鱼币" },
+                      { v: "explore", label: "出门走走" },
+                      { v: "social", label: "找朋友玩" },
+                      { v: "rest", label: "好好休息" },
+                    ]
+                ).map((o, i) => (
+                  <label
+                    key={o.v}
+                    className="cursor-pointer border border-line px-2.5 py-1.5 has-[:checked]:border-sea-deep has-[:checked]:bg-paper"
+                  >
+                    <input type="radio" name="suggestion" value={o.v} defaultChecked={i === 0} className="hidden" />
+                    {o.label}
+                  </label>
+                ))}
+              </div>
+            </details>
             <SubmitButton pendingText="正在交给它…" className="stamp-btn px-5 py-1.5 text-sm">
               交给它
             </SubmitButton>

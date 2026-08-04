@@ -47,9 +47,11 @@ export function nowLine(catName: string, ev: NowEvent | null, hour: number, loca
     if (hour >= 22 || hour < 6) return `这个点，${catName}已经睡下了。`;
     return `天刚亮，${catName}还没起。`;
   }
-  if (!ev) return `${catName}现在在${location ?? "自家小屋"}待着。`;
+  if (!ev) return `${catName}在${location ?? "自家小屋"}待着，没什么特别要干的。`;
   const d = ev.data;
   const at = (fallback: string) => String(d.location ?? location ?? fallback);
+  // 观察体,不是系统描述("现在在X做Y"→"蹲在X边,已经Y了好一会儿"):
+  // 只加姿态和时长感,绝不引入事实之外的新事件/新对象
   switch (ev.type) {
     // 首日剧本(ARRIVAL_DAY,doc/12 §五):世界时间优先于现实时间
     case "arrival":
@@ -57,36 +59,36 @@ export function nowLine(catName: string, ev: NowEvent | null, hour: number, loca
     case "arrival_home":
       return `${catName}在小屋里收拾新家。`;
     case "fish":
-      return `${catName}现在在${at("海边礁石")}钓鱼。`;
+      return `${catName}蹲在${at("海边礁石")}边，已经盯着水面看了好一会儿。`;
     case "explore":
-      return `${catName}现在在${at("岛上")}附近晃悠。`;
+      return `${catName}在${at("岛上")}附近慢慢晃着，走两步就停下来闻闻。`;
     case "odd_job":
-      return `${catName}现在在给${d.boss}帮工——${d.what}。`;
+      return `${catName}在给${d.boss}帮工——${d.what}，干得挺认真。`;
     case "market":
-      return `${catName}现在在集市广场逛摊。`;
+      return `${catName}在集市广场，一个摊一个摊地慢慢逛。`;
     case "rest":
-      return `${catName}现在在${at("自家小屋")}，${d.pose ?? "蜷着"}，睡得正香。`;
+      return `${catName}在${at("自家小屋")}${d.pose ?? "蜷着"}，睡得正香。`;
     case "stargaze":
-      return `${catName}现在在${at("灯塔坡")}看星星，${d.sky ?? "夜色很好"}。`;
+      return `${catName}蹲在${at("灯塔坡")}看星星，${d.sky ?? "夜色很好"}。`;
     case "visit":
-      return ev.targetName ? `${catName}现在在${ev.targetName}家串门。` : `${catName}现在出门串门去了。`;
+      return ev.targetName ? `${catName}在${ev.targetName}家串门，赖着还没走。` : `${catName}出门串门去了，这会儿还没回来。`;
     case "gossip":
-      return ev.targetName ? `${catName}现在正缠着${ev.targetName}打听新鲜事。` : `${catName}现在在外面打听新鲜事。`;
+      return ev.targetName ? `${catName}正缠着${ev.targetName}打听新鲜事。` : `${catName}在外面打听新鲜事。`;
     case "borrow_money":
-      return ev.targetName ? `${catName}现在在${ev.targetName}那儿，磨一件不太好开口的事。` : `${catName}现在在办一件不太好开口的事。`;
+      return ev.targetName ? `${catName}在${ev.targetName}那儿，磨一件不太好开口的事。` : `${catName}在办一件不太好开口的事。`;
     case "quarrel":
-      return ev.targetName ? `${catName}现在和${ev.targetName}呛上了，谁也不让谁。` : `${catName}现在正跟谁呛着呢。`;
+      return ev.targetName ? `${catName}和${ev.targetName}呛上了，谁也不让谁。` : `${catName}正跟谁呛着呢。`;
     case "shop_open":
     case "shop_day":
-      return d.shopName ? `${catName}现在守在「${d.shopName}」里。` : `${catName}现在在自己店里忙活。`;
+      return d.shopName ? `${catName}守在「${d.shopName}」里，时不时朝门口张望。` : `${catName}在自己店里忙活。`;
     case "debt_collect":
-      return `${catName}现在被${d.creditorName ?? "债主"}堵在门口，正在想辙。`;
+      return `${catName}被${d.creditorName ?? "债主"}堵在门口，正在想辙。`;
     case "debt_repay":
-      return `${catName}现在揣着鱼币出门了，去办一件郑重的事。`;
+      return `${catName}揣着鱼币出门了，去办一件郑重的事。`;
     case "first_secret":
-      return `${catName}现在在自家小屋，心里藏着今天的一个小秘密。`;
+      return `${catName}在自家小屋，心里藏着今天的一个小秘密。`;
     default:
       // 事件线/委托等：不细说，留悬念
-      return `${catName}现在在${location ?? "岛上"}，心里揣着一件事。`;
+      return `${catName}在${location ?? "岛上"}，心里揣着一件事。`;
   }
 }
