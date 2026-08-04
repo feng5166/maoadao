@@ -9,7 +9,7 @@ import type { Fact, Segment } from "../sim/types";
 import { THREAD_LABELS } from "../sim/threads";
 import { catDayOf } from "../sim/lifecycle";
 import { sendWechat } from "./bridge";
-import { absenceMessage, d2Message, echoMessage, eventMessage, firstTimeMessage, morningMessage } from "./messages";
+import { absenceMessage, d2Message, echoMessage, eventMessage, firstTimeMessage, morningMessage, namingEchoMessage } from "./messages";
 import { safeTrack, WECHAT_KIND } from "./service";
 import { hashSeed, mulberry32 } from "../sim/rng";
 
@@ -89,7 +89,28 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
         : new Set<string>();
       const firstType = todayTypes.find((t) => !priorTypes.has(t));
 
-      if (summary?.interventionResponse) {
+      // 命名兑现(V2 P2,优先于普通 echo):昨晚问了名字且主人回了 → 名字进记忆,长期复用
+      const namingQ = await prisma.outboundMessage.findFirst({
+        where: { userId: ch.userId, kind: "question_name", day: day - 1, status: "sent" },
+      });
+      const nameReply = namingQ?.sentAt
+        ? await prisma.wechatMessageLog.findFirst({
+            where: { userId: ch.userId, matched: "nudge", createdAt: { gt: namingQ.sentAt } },
+            orderBy: { createdAt: "asc" },
+          })
+        : null;
+      if (namingQ && nameReply) {
+        const obj = namingQ.content.match(/捡到(.+?),/)?.[1] ?? "那件小东西";
+        const objName = nameReply.text.trim().slice(0, 12);
+        await prisma.memoryEntry.create({
+          data: {
+            id: randomUUID(), catId: cat.id, day, kind: "semantic", importance: 7,
+            content: `它把那天捡的${obj}起名叫「${objName}」——名字是主人取的,它一直用着。`,
+          },
+        }).catch(() => {});
+        kind = "echo";
+        content = namingEchoMessage(cat, obj, objName, LINK);
+      } else if (summary?.interventionResponse) {
         // 兑现(最高优先):昨天主人说了话,今天猫的回应必须送到手机上——习惯环的核心一扣
         const respFirst = summary.interventionResponse.split(/\n/)[0];
         kind = "echo";

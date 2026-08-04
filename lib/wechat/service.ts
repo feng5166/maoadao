@@ -9,7 +9,10 @@ import { sendFeishu } from "../feishu";
 import { track } from "@vercel/analytics/server";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay } from "../moments";
 import { shortEntryLink } from "./entry";
-import { closeReply, handshakeMessage, mediaReply, presenceReply, receiptReply, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
+import { closeReply, handshakeMessage, islandGlanceReply, mediaReply, presenceReply, receiptReply, returnGreeting, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
+import { rankHeadlines } from "../headline";
+import { factSummary as factSummaryFn } from "../sim/engine";
+import type { Fact as FactType } from "../sim/types";
 
 export const WECHAT_KIND = "wechat_openclaw"; // 历史命名保留(通道 kind 标识,与协议实现解耦)
 const WINDOW_HOURS = 24;
@@ -107,7 +110,26 @@ const MEDIA_KINDS = new Set(["image", "voice", "video", "file"]);
 const MEDIA_LABELS: Record<string, string> = { image: "图片", voice: "语音", video: "视频", file: "文件" };
 
 // 找猫意图(doc/11 修订·门铃规则):判断不清一律按留话处理——宁可错存,不可错聊
-const FIND_CAT_PATTERNS = [/在哪/, /在干嘛/, /在干什么/, /干嘛呢/, /忙什么/, /怎么样了?[?？]?$/, /^在吗/, /^你在/, /找你/, /看看你/, /想看看/];
+const FIND_CAT_PATTERNS = [/在哪/, /在干嘛/, /在干什么/, /干嘛呢/, /忙什么/, /怎么样了?[?？]?$/, /^在吗/, /^你在/, /找你/, /看看你/, /想看看/, /^找猫$/];
+
+// 看岛意图(V2 三动作之三):岛上今天怎么样——回当日岛闻一句 + 公告栏短链
+const ISLAND_PATTERNS = [/^看岛$/, /岛上.{0,6}(怎么样|如何|啥事|什么事|发生)/, /岛上今天/, /今天岛上/];
+
+/** 当日岛闻一句(与今日页/晚间图分享同一套选稿) */
+async function islandHeadlineLine(day: number): Promise<string | null> {
+  const mains = await prisma.event.findMany({
+    where: { day, isMain: true },
+    select: { catId: true, segment: true, type: true, outcome: true, data: true, targetId: true, contentValue: true, threadKey: true },
+  });
+  const top = rankHeadlines(mains)[0];
+  if (!top) return null;
+  const [actor, target] = await Promise.all([
+    prisma.cat.findUnique({ where: { id: top.catId }, select: { name: true } }),
+    top.targetId ? prisma.cat.findUnique({ where: { id: top.targetId }, select: { name: true } }) : null,
+  ]);
+  const nameOf = new Map(target && top.targetId ? [[top.targetId, { name: target.name }]] : []);
+  return `${actor?.name ?? "有猫"}${factSummaryFn({ type: top.type, outcome: top.outcome, data: top.data as Record<string, unknown>, targetId: top.targetId ?? undefined } as FactType, nameOf)}`;
+}
 
 function beijingDateInt(now = new Date()): number {
   return Number(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(now).replaceAll("-", ""));
@@ -161,6 +183,9 @@ async function handleInboundCore(externalId: string, rawText: string, media: str
     return { replyText: "咦,我们还不认识——去猫啊岛的页面上点「让它找到我」,扫个码就好。", matched: "unknown" };
   }
 
+  // 断联检测要在刷新窗口之前:到达时窗口已关 = 用户断联后回来了(V2 doc/19 回归摘要)
+  const wasDisconnected = !channel.windowOpenUntil || channel.windowOpenUntil < new Date();
+
   // 任何入站都刷新 24h 窗口(doc/11 §六:通道要的和产品要的在同一个动作上)
   const today = beijingDateInt();
   const replies = channel.replyDay === today ? channel.repliesInDay : 0;
@@ -168,6 +193,23 @@ async function handleInboundCore(externalId: string, rawText: string, media: str
 
   const cat = await prisma.cat.findFirst({ where: { ownerId: channel.userId } });
   if (!cat) return { replyText: null, matched: "ignored" };
+
+  // 断联回归:不倾倒不责怪,只说最重要的一件,其余引回生活册。
+  // 留话仍照常落库(在下方分流里),这里只接管"第一句回应"。
+  if (wasDisconnected && text) {
+    const unsent = await prisma.outboundMessage.findMany({
+      where: { userId: channel.userId, status: "window_closed", createdAt: { gte: new Date(Date.now() - 7 * 86400_000) } },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+    if (unsent.length > 0) {
+      const latestLine = unsent[0].content.split("\n").filter((l) => l && !l.includes("http") && !l.startsWith("🐱"))[0] ?? null;
+      if (!FIND_CAT_PATTERNS.some((p) => p.test(text))) await saveWechatNudge(cat.id, text);
+      await prisma.channel.update({ where: { id: channel.id }, data: { replyDay: today, repliesInDay: replies + 1 } });
+      await safeTrack("wechat_return_after_gap", { unsent: unsent.length });
+      return { replyText: returnGreeting(cat, unsent.length, latestLine, await shortEntryLink(channel.userId)), matched: "nudge" };
+    }
+  }
 
   // 退订(不受节流限制:退订确认永远要回,带回岛链接)
   if (UNSUBSCRIBE_WORDS.some((w) => text === w || text === `「${w}」`)) {
@@ -185,6 +227,22 @@ async function handleInboundCore(externalId: string, rawText: string, media: str
   if (!text && media) {
     await safeTrack("wechat_inbound", { kind: "media" });
     return { replyText: mediaReply(cat, media, today, link), matched: "media" };
+  }
+
+  // ---- 看岛(V2 三动作):当日岛闻一句 + 公告栏短链,不落留言,占一来一回额度 ----
+  const isIslandGlance = ISLAND_PATTERNS.some((p) => p.test(text)) && text.length <= 20;
+  if (isIslandGlance) {
+    if (replies >= 2) {
+      await bumpReplies();
+      return { replyText: presenceReply(cat, beijingHour(), replies - 2, today, link), matched: "presence" };
+    }
+    const world = await prisma.worldState.findUnique({ where: { id: 1 } });
+    const headline = world ? await islandHeadlineLine(world.day) : null;
+    const { createShortLink } = await import("../shortlink");
+    const islandLink = await createShortLink("/island", 72 * 3600_000);
+    await bumpReplies();
+    await safeTrack("wechat_inbound", { kind: "island" });
+    return { replyText: islandGlanceReply(cat.name, world?.day ?? 0, headline, islandLink), matched: "status" };
   }
 
   // ---- 找猫:报当前已解锁的真实状态,不落留言 ----

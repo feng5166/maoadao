@@ -110,14 +110,43 @@ const PRESENCE_NIGHT = [
   "（枕头边的纸条又多了一张）",
 ];
 
-/** n = 今天第几次微响应(从 0 起):连发多条后收敛为一个爪印,防刷也防旁白疲劳。
- *  旁白档带短链(回复用户主动消息,无 spam 特征;给此刻就想去看它的人留门);🐾 档保持赤裸。 */
-export function presenceReply(cat: MsgCat, hourBJ: number, n: number, dayKey: number, link: string): string {
-  if (n >= 4) return "🐾";
+/** n = 今天第几次微响应(从 0 起)。V2 收束(doc/19):适时沉默比持续微响应更像生命——
+ *  连发到第 5 次给一句"海螺安静了"作交代,之后彻底沉默(消息照收,不再回复)。 */
+export function presenceReply(cat: MsgCat, hourBJ: number, n: number, dayKey: number, link: string): string | null {
+  if (n === 4) return "（海螺安静了一会儿。它已经把你的话都带走了。）";
+  if (n > 4) return null;
   const night = hourBJ >= 22 || hourBJ < 7;
   const pool = night ? PRESENCE_NIGHT : PRESENCE_DAY;
   const rng = mulberry32(hashSeed(dayKey, "presence", cat.id, n));
   return `${pick(rng, pool)}\n${link}`;
+}
+
+/** 看岛(V2 三动作之一):当日岛闻一句 + 回岛短链 */
+export function islandGlanceReply(catName: string, day: number, headline: string | null, link: string): string {
+  const line = headline ? `今天岛上,${headline}。` : "今天岛上安安静静的,大家都在过自己的日子。";
+  return `${header(catName)}\n${line}\n\n去公告栏看全部:\n${link}`;
+}
+
+/** 断联回归(V2 doc/19):不倾倒、不责怪——只说最重要的一件,其余引回生活册 */
+export function returnGreeting(cat: MsgCat, unsentCount: number, latestLine: string | null, link: string): string {
+  const opening = "你来了。";
+  const body = latestLine
+    ? unsentCount > 1
+      ? `这几天有 ${unsentCount} 件事本来想告诉你。先说最近的一件——\n${latestLine}`
+      : `有件事本来想告诉你——\n${latestLine}`
+    : "这几天岛上照常过着,我把日子都记在册子里了。";
+  const tail = unsentCount > 1 ? "\n剩下的收在生活册里,回来慢慢翻:" : "\n来看看?";
+  return `${header(cat.name)}\n${opening}${body}\n${tail}\n${link}`;
+}
+
+/** 物件命名(V2 P2,每月至多 2-3 次):回复的名字会进它的记忆,长期复用 */
+export function namingQuestionMessage(cat: MsgCat, objName: string, link: string): string {
+  return `${header(cat.name)}\n我今天捡到${objName},一直带在身上。\n你愿意给它取个名字吗?\n\n(你取的名字,我会一直用。)\n${link}`;
+}
+
+/** 命名兑现(次日):比普通 echo 更郑重 */
+export function namingEchoMessage(cat: MsgCat, objName: string, name: string, link: string): string {
+  return `${header(cat.name)}\n你给${objName}起的名字,我记住了——「${name}」。\n从今天起它就叫这个,我把它摆在窗边了。\n\n${link}`;
 }
 
 // ============ 媒体消息(图片/语音/文件/视频):猫只看得懂字 ============
