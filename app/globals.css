@@ -303,6 +303,7 @@ body {
   will-change: transform;
 }
 @keyframes fx-cat-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.012) translateY(-0.5px); }
+  0%, 100% { transform: scale(1, 1); }
+  /* 纵向为主的呼吸(胸腔起伏),64px 头像上约 +3px——盯着看得见,扫过去不打扰 */
+  50% { transform: scale(1.02, 1.05) translateY(-1px); }
 }
