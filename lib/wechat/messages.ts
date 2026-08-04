@@ -171,7 +171,42 @@ export function absenceMessage(cat: MsgCat, todayLine: string, link: string): st
   return `${header(cat.name)}\n我没什么事。就是今天${todayLine}的时候，多看了两眼码头。\n\n${link}`;
 }
 
-// ============ 早安/晚安(2026-08-04 拍板:每日仪式,白名单事件优先占早安位)============
+// ============ 习惯环 V2(doc/19):每日至多一个主触点,兑现优先 ============
+
+/** 兑现(OWNER_ECHO,最高优先):昨天你说的话,今天猫用自己的话回你——粘性的真正来源 */
+export function echoMessage(cat: MsgCat, respLine: string, link: string): string {
+  return `${header(cat.name)}\n关于你昨天说的——\n${respLine}\n\n${link}`;
+}
+
+/** 第一次(FIRST_TIME):值得郑重告诉主人的小纪念 */
+export function firstTimeMessage(cat: MsgCat, line: string, link: string): string {
+  return `${header(cat.name)}\n今天有个第一次:${line}。\n记下来了。\n\n${link}`;
+}
+
+/** 二选一(SMALL_CHOICE):基于当天真实小物,回哪个字都行;次日由回执链路兑现 */
+export function choiceQuestionMessage(cat: MsgCat, objName: string, link: string): string {
+  return `${header(cat.name)}\n我今天捡到${objName}。\n放在窗边,还是收进抽屉?\n\n(回我哪个都行。明天告诉你我最后怎么放的。)\n${link}`;
+}
+
+// 图片观察题:按场景给两个都在画面里的东西,回复成本一个词
+const PHOTO_AB: Record<string, [string, string]> = {
+  dock: ["小船", "木箱"],
+  reef: ["潮水", "礁石"],
+  market: ["灯串", "棚子"],
+  lighthouse: ["灯塔", "坡下的屋顶"],
+  pines: ["小径", "光斑"],
+  home: ["毛线球", "桌上的小灯"],
+  boat: ["旧船", "藤蔓"],
+  farewell: ["落日", "远处的小船"],
+  sailed: ["落日", "远处的小船"],
+};
+export function photoQuestionMessage(cat: MsgCat, sceneKey: string, link: string): string | null {
+  const ab = PHOTO_AB[sceneKey];
+  if (!ab) return null;
+  return `${header(cat.name)}\n把今天待的地方拍给你了。\n你第一眼看到的,是${ab[0]},还是${ab[1]}?\n${link}`;
+}
+
+// ============ 早安/晚安(V2 后仅 D1-3 关系建立期保底使用)============
 // 变体池 × 事实素材,按 (day, catId) 确定——同一天重看是同一句,天天看不重样。
 // 文风遵守 doc/15:小动作,不抒情;事实句永远来自 factSummary/tomorrowHook,不在这里编。
 

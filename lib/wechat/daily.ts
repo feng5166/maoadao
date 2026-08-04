@@ -9,7 +9,7 @@ import type { Fact, Segment } from "../sim/types";
 import { THREAD_LABELS } from "../sim/threads";
 import { catDayOf } from "../sim/lifecycle";
 import { sendWechat } from "./bridge";
-import { absenceMessage, d2Message, eventMessage, morningMessage } from "./messages";
+import { absenceMessage, d2Message, echoMessage, eventMessage, firstTimeMessage, morningMessage } from "./messages";
 import { safeTrack, WECHAT_KIND } from "./service";
 import { hashSeed, mulberry32 } from "../sim/rng";
 
@@ -67,20 +67,34 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
     let kind: string | null = null;
     let content: string | null = null;
 
+    // ============ 习惯环 V2(doc/19)早晨选稿:兑现 > 剧情 > 第一次 > 缺席 > D1-3 保底 > 静默 ============
+    // 每日至多一个主触点;没有值得说的事就不发——粘性来自"回一句明天有痕迹",不来自频率
+    const summary = await prisma.catDailySummary.findUnique({ where: { catId_day: { catId: cat.id, day } } });
     if (catDay === 2) {
-      // D2 兑现:必发(doc/11 消息日历)。回执摘句取第一句。
-      const summary = await prisma.catDailySummary.findUnique({ where: { catId_day: { catId: cat.id, day } } });
+      // D2 兑现:必发(doc/11 消息日历,一次性关系契约)。回执摘句取第一句。
       const respFirst = summary?.interventionResponse?.split(/[。！？\n]/)[0];
       kind = "d2_promise";
       content = d2Message(cat, morningLine, respFirst ? `${respFirst}。` : null, LINK);
     } else if (catDay > 2) {
-      // 事件白名单:今天落幕的事件线 / 开店 / D7 纪念册
       const finished = await prisma.storyline.findFirst({
         where: { catId: cat.id, status: { in: ["resolved", "failed"] }, endDay: day },
       });
       const shopOpen = await prisma.event.findFirst({ where: { catId: cat.id, day, type: "shop_open" } });
       const weekBook = catDay === 7 ? await prisma.weekBook.findUnique({ where: { catId_weekIndex: { catId: cat.id, weekIndex: 1 } } }) : null;
-      if (finished) {
+      // 第一次侦测:今天出现了此前从未有过的事件类型(值得郑重告诉主人的小纪念)
+      const NOTABLE_FIRSTS = new Set(["fish", "stargaze", "explore", "visit", "market", "odd_job"]);
+      const todayTypes = [...new Set((await prisma.event.findMany({ where: { catId: cat.id, day }, select: { type: true } })).map((e) => e.type))].filter((t) => NOTABLE_FIRSTS.has(t));
+      const priorTypes = todayTypes.length
+        ? new Set((await prisma.event.groupBy({ by: ["type"], where: { catId: cat.id, day: { lt: day }, type: { in: todayTypes } } })).map((g) => g.type))
+        : new Set<string>();
+      const firstType = todayTypes.find((t) => !priorTypes.has(t));
+
+      if (summary?.interventionResponse) {
+        // 兑现(最高优先):昨天主人说了话,今天猫的回应必须送到手机上——习惯环的核心一扣
+        const respFirst = summary.interventionResponse.split(/\n/)[0];
+        kind = "echo";
+        content = echoMessage(cat, respFirst, LINK);
+      } else if (finished) {
         const label = THREAD_LABELS[finished.kind] ?? finished.kind;
         kind = "event";
         content = eventMessage(cat, `「${label}」这件事，今天有了结局。`, LINK);
@@ -91,6 +105,9 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
       } else if (weekBook) {
         kind = "event";
         content = eventMessage(cat, "我们已经认识一整周了。这一周的事,我记成了一小册。", LINK);
+      } else if (firstType) {
+        kind = "first_time";
+        content = firstTimeMessage(cat, morningLine, LINK);
       } else {
         // 缺席 3 天关怀(冷却 5 天)
         const owner = await prisma.user.findUnique({ where: { id: ch.userId }, select: { lastSeenDay: true } });
@@ -100,13 +117,12 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
         if (owner?.lastSeenDay != null && day - owner.lastSeenDay >= ABSENCE_GAP_DAYS && recentAbsence === 0) {
           kind = "absence";
           content = absenceMessage(cat, morningLine, LINK);
-        } else {
-          // 早安保底(2026-08-04 拍板:每天 8 点必有早安):白名单没新闻的日子,
-          // 猫也要跟主人道早——变体池按天轮换,事实句来自今晨主事件。
-          // 昨晚(北京 18 点后)回过话的主人,开头带回执感(doc/17 窗口保活的习惯环)
+        } else if (catDay === 3) {
+          // D1-3 关系建立期保底(D3 唯一还发普通早安的日子);D4+ 无高价值内容就静默,
+          // 晚间档(goodnight cron)还有问题/图片的机会
           const lastInbound = ch.windowOpenUntil ? new Date(ch.windowOpenUntil.getTime() - 24 * 3600_000) : null;
           const yesterdayEve = new Date();
-          yesterdayEve.setHours(yesterdayEve.getHours() - 14); // 8:00 入队 - 14h = 昨天 18:00
+          yesterdayEve.setHours(yesterdayEve.getHours() - 14);
           const repliedLastNight = Boolean(lastInbound && lastInbound >= yesterdayEve);
           kind = "morning";
           content = morningMessage(cat, morningLine, world?.weather ?? "晴", LINK, day, repliedLastNight);
