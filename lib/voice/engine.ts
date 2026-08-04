@@ -142,8 +142,8 @@ export function resolveCatVoice(
   const type = pickType(req, session, now);
   if (!type) return { shouldPlay: false };
   if (type === "PURR" && session.purrPlayed) return { shouldPlay: false };
-  const last = session.lastPlayedByType[type] ?? 0;
-  if (type !== "PURR" && now - last < (COOLDOWN[type] ?? 10_000)) return { shouldPlay: false };
+  const last = session.lastPlayedByType[type]; // undefined = 从没叫过,不算冷却
+  if (type !== "PURR" && last !== undefined && now - last < (COOLDOWN[type] ?? 10_000)) return { shouldPlay: false };
   // 近 3 次不允许完全相同类型连发(呼噜除外)
   if (type !== "PURR" && session.recentTypes.slice(-3).every((t) => t === type) && session.recentTypes.length >= 3) {
     return { shouldPlay: false };
