@@ -14,8 +14,8 @@
       "schedule": "*/5 0 * * *"
     },
     {
-      "path": "/api/wechat/postcard",
-      "schedule": "0 11 * * *"
+      "path": "/api/wechat/goodnight",
+      "schedule": "0 13 * * *"
     }
   ]
 }

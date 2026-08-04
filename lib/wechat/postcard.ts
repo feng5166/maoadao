@@ -17,8 +17,8 @@ import { sendWechatImage } from "./bridge";
 import { safeTrack, WECHAT_KIND } from "./service";
 import { shortEntryLink } from "./entry";
 
-/** 挑今晚的一幕 + 备好图(1080 宽 JPEG);headline 为空 = 今天没得寄 */
-async function pickMoment(day: number) {
+/** 挑今晚的一幕 + 备好图(1080 宽 JPEG);headline 为空 = 今天没得寄。晚安消息带图时也用它。 */
+export async function pickMoment(day: number) {
   const mains = await prisma.event.findMany({
     where: { day, isMain: true },
     select: { catId: true, segment: true, type: true, outcome: true, data: true, targetId: true, contentValue: true, threadKey: true },

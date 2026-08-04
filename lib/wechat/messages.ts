@@ -170,3 +170,70 @@ export function eventMessage(cat: MsgCat, eventLine: string, link: string): stri
 export function absenceMessage(cat: MsgCat, todayLine: string, link: string): string {
   return `${header(cat.name)}\n我没什么事。就是今天${todayLine}的时候，多看了两眼码头。\n\n${link}`;
 }
+
+// ============ 早安/晚安(2026-08-04 拍板:每日仪式,白名单事件优先占早安位)============
+// 变体池 × 事实素材,按 (day, catId) 确定——同一天重看是同一句,天天看不重样。
+// 文风遵守 doc/15:小动作,不抒情;事实句永远来自 factSummary/tomorrowHook,不在这里编。
+
+const MORNING_OPENERS = [
+  "早上好。",
+  "早。岛上刚亮透。",
+  "早上好呀。",
+  "早。我比太阳起得早一点点。",
+  "早上好。夜里没什么事,就是梦见了鱼。",
+  "早。窗台已经晒热了一小块。",
+  "早上好。胡子已经洗过了。",
+  "早。海上今天有雾,一会儿就散。",
+];
+const MORNING_TAILS = [
+  "白天的事,晚上讲给你听。",
+  "来看看?",
+  "今天也会好好过的。",
+  "先去忙了。",
+  "晚上等我的消息。",
+];
+
+export function morningMessage(cat: MsgCat, morningLine: string, weather: string, link: string, day: number): string {
+  const rng = mulberry32(hashSeed(day, "morning-msg", cat.id));
+  const v = voiceFor(cat);
+  const self = v.selfRef === "我" ? "我" : v.selfRef;
+  const opener = pick(rng, MORNING_OPENERS);
+  // 天气句三天里出现一次左右,别成固定格式
+  const weatherLine = rng() < 0.35 ? `今天${weather}。` : "";
+  const tail = pick(rng, MORNING_TAILS);
+  return `${header(cat.name)}\n${opener}${weatherLine}${self}今天的头一件事——${morningLine}。\n\n${tail}\n${link}`;
+}
+
+const GOODNIGHT_OPENERS = [
+  "晚安。",
+  "该睡了。",
+  "岛上熄灯了。",
+  "今天就到这儿。",
+  "困了。",
+  "灯塔的光刚扫过窗台。",
+];
+const GOODNIGHT_TAILS = [
+  "明早八点,新的一天讲给你听。",
+  "被窝已经睡热了。你也早点睡。",
+  "你也别熬夜。",
+  "明天见。",
+  "梦里要是有鱼,分你一条。",
+];
+
+/** 晚安:material 按优先级给一句真实收束(今晚的事 > 明日盼头 > 安静的一天) */
+export function goodnightMessage(
+  cat: MsgCat,
+  material: { eveningLine?: string | null; hook?: string | null },
+  link: string,
+  day: number,
+): string {
+  const rng = mulberry32(hashSeed(day, "goodnight-msg", cat.id));
+  const opener = pick(rng, GOODNIGHT_OPENERS);
+  const body = material.eveningLine
+    ? `今天最后一件事,是${material.eveningLine}。`
+    : material.hook
+      ? material.hook
+      : "今天没什么大事。挺好的。";
+  const tail = pick(rng, GOODNIGHT_TAILS);
+  return `${header(cat.name)}\n${opener}${body}\n\n${tail}\n${link}`;
+}

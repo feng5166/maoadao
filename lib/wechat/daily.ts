@@ -9,7 +9,7 @@ import type { Fact, Segment } from "../sim/types";
 import { THREAD_LABELS } from "../sim/threads";
 import { catDayOf } from "../sim/lifecycle";
 import { sendWechat } from "./bridge";
-import { absenceMessage, d2Message, eventMessage } from "./messages";
+import { absenceMessage, d2Message, eventMessage, morningMessage } from "./messages";
 import { safeTrack, WECHAT_KIND } from "./service";
 import { hashSeed, mulberry32 } from "../sim/rng";
 
@@ -100,6 +100,11 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
         if (owner?.lastSeenDay != null && day - owner.lastSeenDay >= ABSENCE_GAP_DAYS && recentAbsence === 0) {
           kind = "absence";
           content = absenceMessage(cat, morningLine, LINK);
+        } else {
+          // 早安保底(2026-08-04 拍板:每天 8 点必有早安):白名单没新闻的日子,
+          // 猫也要跟主人道早——变体池按天轮换,事实句来自今晨主事件。
+          kind = "morning";
+          content = morningMessage(cat, morningLine, world?.weather ?? "晴", LINK, day);
         }
       }
     }
