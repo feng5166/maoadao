@@ -1,19 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import { CatAvatar } from "./CatAvatar";
 
 /** 摸摸它：每天一句由状态确定性生成的反应。它不受你控制，但会回应你。
+ *  反应像真的猫理你一下——冒出来几秒,自己淡掉;再摸还会理你(埋点只报首次)。
  *  chip 形态：猫已经以贴纸出现在画面里(导演系统)时,不再叠圆头像,只留一枚安静的小按钮 */
 export function PetCat({ id, portraitUrl, line, chip = false }: { id: string; portraitUrl?: string | null; line: string; chip?: boolean }) {
   const [petted, setPetted] = useState(false);
+  const [showLine, setShowLine] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pet = () => {
     if (!petted) {
       setPetted(true);
       track("pet_cat");
     }
+    setShowLine(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setShowLine(false), 4000);
   };
+  useEffect(() => () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+  }, []);
+  const bubble = petted && (
+    <div
+      className={`note-slip absolute bottom-full left-0 mb-2 w-52 px-3 py-2 text-left transition-opacity duration-700 ${showLine ? "opacity-100" : "pointer-events-none opacity-0"}`}
+    >
+      <p className="font-diary text-[13px] leading-relaxed text-ink">{line}</p>
+    </div>
+  );
   if (chip) {
     return (
       <div className="absolute bottom-2 left-2">
@@ -24,11 +40,7 @@ export function PetCat({ id, portraitUrl, line, chip = false }: { id: string; po
         >
           摸摸它
         </button>
-        {petted && (
-          <div className="note-slip absolute bottom-full left-0 mb-2 w-52 px-3 py-2 text-left">
-            <p className="font-diary text-[13px] leading-relaxed text-ink">{line}</p>
-          </div>
-        )}
+        {bubble}
       </div>
     );
   }
@@ -42,11 +54,7 @@ export function PetCat({ id, portraitUrl, line, chip = false }: { id: string; po
       >
         <CatAvatar id={id} size={64} portraitUrl={portraitUrl} />
       </button>
-      {petted && (
-        <div className="note-slip absolute bottom-full left-0 mb-2 w-52 px-3 py-2 text-left">
-          <p className="font-diary text-[13px] leading-relaxed text-ink">{line}</p>
-        </div>
-      )}
+      {bubble}
     </div>
   );
 }
