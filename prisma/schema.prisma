@@ -18,7 +18,8 @@ model User {
   email           String?   @unique
   emailVerifiedAt DateTime?
   notifyDaily     Boolean   @default(true) // 每日故事邮件（绑定邮箱后默认开，可关）
-  recoveryCode    String?   @unique // 零依赖跨设备找回码
+  recoveryCode    String?   @unique // 回岛钥匙:密码遗失时的兜底凭证(重置后旋转)
+  passwordHash    String? // scrypt(见 lib/password.ts);null = 尚未设置登录凭证的设备身份
   inviteCode      String? // 用的哪个邀请码
   inviteBatch     String? // 来源批次：team | friends | strangers
   lastSeenDay     Int? // 最后一次看 /my-cat 时的世界天数（未回摘要用）

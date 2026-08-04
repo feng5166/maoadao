@@ -147,6 +147,120 @@ export async function verifyEmailCodeSafe(formData: FormData): Promise<{ ok: boo
   }
 }
 
+// ============ 登录凭证(doc/20 渐进验证):邮箱+密码注册即用,验证是能力升级门槛 ============
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UNIFORM_LOGIN_ERR = "邮箱或密码不正确"; // 统一话术,防账号枚举
+const UNIFORM_TAKEN_ERR = "无法使用这个邮箱。可以试着用它登录,或者换一个邮箱";
+
+/** 把当前设备身份存进岛民册:设置登录邮箱+密码,立即生效(邮箱状态 UNVERIFIED) */
+export async function setupCredentials(formData: FormData): Promise<{ ok: boolean; err?: string }> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const pw = String(formData.get("password") ?? "");
+  const pw2 = String(formData.get("password2") ?? "");
+  if (!EMAIL_RE.test(email)) return { ok: false, err: "邮箱格式不对,检查一下" };
+  if (pw !== pw2) return { ok: false, err: "两次输入的密码不一样" };
+  const { passwordPolicyError, hashPassword } = await import("./password");
+  const policyErr = passwordPolicyError(pw);
+  if (policyErr) return { ok: false, err: policyErr };
+
+  const uid = await ensureViewerId();
+  if ((await failsInWindow("setup_fail", uid)) >= 8) return { ok: false, err: "试得太频繁,15 分钟后再来" };
+
+  const taken = await prisma.user.findUnique({ where: { email } });
+  if (taken && taken.id !== uid) {
+    await prisma.authAttempt.create({ data: { id: randomUUID(), kind: "setup_fail", key: uid, createdAt: new Date() } }).catch(() => {});
+    return { ok: false, err: UNIFORM_TAKEN_ERR };
+  }
+
+  await prisma.user.upsert({
+    where: { id: uid },
+    // 注意:不动 emailVerifiedAt——注册即用,验证归验证(doc/20)
+    update: { email, passwordHash: hashPassword(pw), status: "registered" },
+    create: { id: uid, name: "岛民", email, passwordHash: hashPassword(pw), status: "registered", createdAt: new Date() },
+  });
+  await track("credentials_setup", {});
+  revalidatePath("/account");
+  return { ok: true };
+}
+
+/** 邮箱+密码登录(跨设备回岛)。统一报错;当前设备已有别的猫时需显式确认切换。 */
+export async function loginWithPassword(formData: FormData): Promise<{ ok: boolean; err?: string; needSwitch?: boolean }> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const pw = String(formData.get("password") ?? "");
+  const confirmSwitch = formData.get("confirmSwitch") === "on";
+  if (!email || !pw) return { ok: false, err: UNIFORM_LOGIN_ERR };
+
+  const uid = (await getViewerId()) ?? "anon";
+  if ((await failsInWindow("login_fail", `${uid}:${email}`)) >= 8) {
+    return { ok: false, err: "尝试次数过多,15 分钟后再试" };
+  }
+  const fail = async () => {
+    await prisma.authAttempt.create({ data: { id: randomUUID(), kind: "login_fail", key: `${uid}:${email}`, createdAt: new Date() } }).catch(() => {});
+    return { ok: false as const, err: UNIFORM_LOGIN_ERR };
+  };
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user?.passwordHash) return fail();
+  const { verifyPassword } = await import("./password");
+  if (!verifyPassword(pw, user.passwordHash)) return fail();
+
+  // 切换保护:当前设备已有另一只猫,静默切换等于遗弃它
+  if (uid !== "anon" && user.id !== uid) {
+    const currentCat = await prisma.cat.findFirst({ where: { ownerId: uid } });
+    if (currentCat && !confirmSwitch) {
+      return {
+        ok: false,
+        needSwitch: true,
+        err: `这台设备上还住着「${currentCat.name}」——登录后它会留在原来的身份下。确认要切换,勾选后重试`,
+      };
+    }
+  }
+  const jar = await cookies();
+  jar.set("maoadao_uid", user.id, { httpOnly: true, sameSite: "lax", secure: true, maxAge: 60 * 60 * 24 * 365, path: "/" });
+  await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
+  await track("login_success", { method: "password" });
+  redirect("/my-cat");
+}
+
+/** 忘记密码:登录邮箱 + 回岛钥匙 → 设新密码;旧钥匙作废并旋转,新钥匙当场展示一次。不自动登录。 */
+export async function resetPasswordWithRecovery(formData: FormData): Promise<{ ok: boolean; err?: string; newKey?: string }> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const code = String(formData.get("code") ?? "").trim().toUpperCase();
+  const pw = String(formData.get("password") ?? "");
+  const pw2 = String(formData.get("password2") ?? "");
+  if (!email || !code) return { ok: false, err: "邮箱和回岛钥匙都要填" };
+  if (pw !== pw2) return { ok: false, err: "两次输入的密码不一样" };
+  const { passwordPolicyError, hashPassword } = await import("./password");
+  const policyErr = passwordPolicyError(pw);
+  if (policyErr) return { ok: false, err: policyErr };
+
+  const uid = (await getViewerId()) ?? "anon";
+  if ((await failsInWindow("recover_fail", uid)) >= 5) return { ok: false, err: "尝试次数过多,15 分钟后再试" };
+
+  // 双因子匹配:钥匙 + 登录邮箱必须同属一人
+  const user = await prisma.user.findUnique({ where: { recoveryCode: code } });
+  if (!user || (user.email ?? "").toLowerCase() !== email) {
+    await prisma.authAttempt.create({ data: { id: randomUUID(), kind: "recover_fail", key: uid, createdAt: new Date() } }).catch(() => {});
+    return { ok: false, err: "邮箱或回岛钥匙不对" };
+  }
+  const newKey = makeRecoveryCode();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: hashPassword(pw), recoveryCode: newKey },
+  });
+  await track("password_reset", { method: "recovery_key" });
+  // 不自动登录(doc/20):让用户走一次正常登录;新钥匙当场展示,这是唯一一次
+  return { ok: true, newKey };
+}
+
+/** 退出登录:清当前设备 cookie(UI 只对已设密码的用户展示——匿名身份退出即失联) */
+export async function logout() {
+  const jar = await cookies();
+  jar.delete("maoadao_uid");
+  redirect("/");
+}
+
 export async function toggleNotify() {
   const uid = await getViewerId();
   if (!uid) return;

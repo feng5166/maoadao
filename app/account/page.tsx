@@ -5,7 +5,8 @@ import { ReturnKey } from "@/components/ReturnKey";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TicketWallet } from "@/components/TicketWallet";
 import { IconBoat, IconKey, IconMailbox, IconTicket } from "@/components/icons";
-import { ensureRecoveryCode, recoverByCode, toggleNotify } from "@/lib/account-actions";
+import { ensureRecoveryCode, logout, recoverByCode, toggleNotify } from "@/lib/account-actions";
+import { CredentialsForm } from "@/components/CredentialsForm";
 import { emailEnabled } from "@/lib/email";
 import { getViewerId } from "@/lib/identity";
 import { getViewerCat, getWorld } from "@/lib/queries";
@@ -98,7 +99,12 @@ export default async function AccountPage() {
                 <p className="mt-1 text-xs text-ink-soft">
                   来到猫啊岛第 {daysOnIsland} 天
                   {shellConnected != null && <> · 海螺{shellConnected ? "已连接" : "还没连接"}</>}
-                  {" · "}回岛地址{user?.emailVerifiedAt ? "已留" : "未留"}
+                  {" · "}
+                  {user?.passwordHash
+                    ? user.emailVerifiedAt
+                      ? "邮箱已确认"
+                      : "可邮箱登录 · 邮箱未确认"
+                    : "身份仅存于本设备"}
                 </p>
               </div>
               <span className="ml-auto inline-block shrink-0 -rotate-2 rounded-[4px] border border-line px-1.5 text-[11px] leading-relaxed text-ink-faint">
@@ -112,13 +118,16 @@ export default async function AccountPage() {
             )}
           </div>
           <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-            你现在的岛民身份暂存在这台设备上。换设备或清理浏览器后，要凭下面的钥匙或回岛地址才能回来。
+            {user?.passwordHash
+              ? "这段身份已收进岛民册——换设备时,用登录邮箱和密码就能回来。"
+              : "你现在的岛民身份暂存在这台设备上。把它存进岛民册(设置登录邮箱和密码),换设备也能回来。"}
           </p>
         </div>
       ) : (
         <div className="border-t border-line pt-4 text-sm leading-relaxed text-ink">
-          这台设备上还没有岛民身份。在别处上过岛的话，用下面的回岛钥匙或回岛地址回来；
-          还没上过岛，就<Link href="/adopt" className="text-brick">去码头接一只猫</Link>。
+          这台设备上还没有岛民身份。在别处上过岛的话，
+          <Link href="/login" className="text-sea-deep hover:text-brick">用登录邮箱和密码回来</Link>，
+          或用下面的回岛钥匙开门；还没上过岛，就<Link href="/adopt" className="text-brick">去码头接一只猫</Link>。
         </div>
       )}
 
@@ -155,6 +164,42 @@ export default async function AccountPage() {
         </div>
       )}
 
+      {/* 登录邮箱与密码(doc/20):注册即用;验证是能力升级,不是使用门槛 */}
+      {cat && (
+        <div>
+          <h2 className="font-title flex items-center gap-1.5 font-bold"><IconMailbox size={15} /> 登录邮箱与密码</h2>
+          {user?.passwordHash ? (
+            <div className="mt-2 space-y-2 text-sm text-ink">
+              <p>
+                登录邮箱:<span className="text-ink-soft">{user.email}</span>
+                {user.emailVerifiedAt ? (
+                  <span className="ml-2 text-xs text-sea-deep">已确认</span>
+                ) : (
+                  <span className="ml-2 text-xs text-ink-faint">尚未确认归属</span>
+                )}
+              </p>
+              {!user.emailVerifiedAt && (
+                <p className="text-xs leading-relaxed text-ink-faint">
+                  目前它只用于登录。想让它也能在忘记密码时救你,去下面「确认邮箱」——确认前请保管好回岛钥匙。
+                </p>
+              )}
+              <form action={logout}>
+                <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-xs text-ink-soft hover:border-sea-deep">
+                  退出这台设备的登录
+                </SubmitButton>
+              </form>
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+                把这段相遇存进岛民册:设置登录邮箱和密码,以后换一台设备也能回到它身边。
+              </p>
+              <CredentialsForm />
+            </>
+          )}
+        </div>
+      )}
+
       {/* 回岛钥匙(原找回码):有猫 = 展示要收好的钥匙;没猫 = 掏出钥匙开门 */}
       <div>
         <h2 className="font-title flex items-center gap-1.5 font-bold"><IconKey size={15} /> 回岛钥匙</h2>
@@ -185,11 +230,12 @@ export default async function AccountPage() {
 
       {/* 留一个回岛地址(原邮箱绑定):寄信语义,两步表单 */}
       <div>
-        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconMailbox size={15} /> 留一个回岛地址</h2>
+        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconMailbox size={15} /> 确认邮箱</h2>
         {user?.emailVerifiedAt ? (
           <div className="mt-2 space-y-3 text-sm text-ink">
             <p>
-              回岛地址已留：<span className="text-ink-soft">{user.email}</span>
+              这条回岛地址已经确认:<span className="text-ink-soft">{user.email}</span>
+              <span className="ml-2 text-xs text-sea-deep">✓</span>
             </p>
             <form action={toggleNotify}>
               <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-xs text-ink-soft hover:border-sea-deep">
@@ -200,7 +246,7 @@ export default async function AccountPage() {
         ) : (
           <>
             <p className="mt-1 text-xs leading-relaxed text-ink-faint">
-              如果回岛钥匙弄丢了，我们可以把新的凭证寄到这个邮箱。换设备时，也能用它回来。
+              确认这个邮箱确实属于你之后,它就升级成一条可靠的回岛路:忘记密码能靠它救回,每日故事信也寄到这里。
             </p>
             <ReturnEmailForm hasCat={Boolean(cat)} mailReady={mailReady} />
           </>

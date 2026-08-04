@@ -156,6 +156,9 @@ export default async function HomePage() {
             {dutyCat && (
               <p className="mt-3 text-xs text-ink-faint">今天在码头值班的是{dutyCat.name}——摸摸它试试。</p>
             )}
+            <p className="mt-2 text-xs text-ink-faint">
+              在别处上过岛?<Link href="/login" className="text-sea-deep hover:text-brick">用邮箱和密码回来</Link>
+            </p>
           </>
         )}
       </div>
