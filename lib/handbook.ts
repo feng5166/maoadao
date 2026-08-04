@@ -95,6 +95,29 @@ export function petLine(catId: string, day: number, mood?: string | null): strin
   return pick(rng, pool);
 }
 
+// "留下"的小物(按地点派生,隔天出现):猫不制造悬念,只留下痕迹。
+// 小屋生活册与主人生活册共用一套池子,同一天同一只猫两边看到的是同一件。
+const LEFT_BEHIND: Record<string, string[]> = {
+  reef: ["半枚白色的小贝壳", "一颗被海水磨圆的玻璃珠", "爪印一排,朝着退潮的方向"],
+  lighthouse: ["一根灰色的羽毛", "一小段旧绳头", "草叶上蹭下来的一撮毛"],
+  market: ["一张皱巴巴的价签", "半张烤鱼的油纸", "摊子底下滚出来的小硬币"],
+  dock: ["一小截缆绳须", "一片剥落的船漆", "木板上晒干的一个湿爪印"],
+  pines: ["一颗完整的松果", "一片还带着露水的松针", "树皮上新添的一道磨爪印"],
+  home: ["窗台上的一小撮猫毛", "一团玩剩的毛线", "垫子上一个睡出来的窝"],
+  boat: ["一小块生锈的铁环", "一片藤蔓的叶子", "船板缝里抠出来的小螺壳"],
+  farewell: ["一枚黄昏色的小石子", "码头尽头的一个坐印"],
+  sailed: ["一枚黄昏色的小石子", "码头尽头的一个坐印"],
+};
+
+/** 这一天留下了什么:场景图路径 → 小物;隔天出现一次,别机械到每页都有 */
+export function leftBehindFor(catId: string, day: number, sceneImg: string | null): string | null {
+  const key = sceneImg?.match(/\/scenes\/(\w+)\.jpg/)?.[1];
+  const pool = key ? LEFT_BEHIND[key] : undefined;
+  if (!pool) return null;
+  if (hashSeed(day, "left-gate", catId) % 2 !== 0) return null;
+  return pick(mulberry32(hashSeed(day, "left", catId)), pool);
+}
+
 /** 鱼币/体力 → 生活语言(猫主页 P1:数值感降权,精确数字收进"细账") */
 export function coinsLine(coins: number): string {
   if (coins <= 0) return "口袋空空,正琢磨去哪儿赚点鱼币。";

@@ -20,7 +20,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { getViewerId } from "@/lib/identity";
 import { track } from "@vercel/analytics/server";
 import { LIFE_PHOTO_IDS, LIFE_PHOTO_PLACES } from "@/lib/cats-life";
-import { coinsLine, energyLine, marginNotes, sceneFor } from "@/lib/handbook";
+import { coinsLine, energyLine, leftBehindFor, marginNotes, sceneFor } from "@/lib/handbook";
 import { getLatestSummary } from "@/lib/queries";
 import { HUT_ITEMS, secretOfDay } from "@/lib/secrets";
 import { beijingHour, currentSegment, nowLine } from "@/lib/moments";
@@ -62,19 +62,6 @@ const HERO_FLAVORS = [
   "它挑了个晒得到太阳的位置。",
   "这是它常来的地方。",
 ];
-
-// 这个瞬间留下了什么(生活册页脚小物,按当天地点派生;猫不制造悬念,只留下痕迹)
-const LEFT_BEHIND: Record<string, string[]> = {
-  reef: ["半枚白色的小贝壳", "一颗被海水磨圆的玻璃珠", "爪印一排,朝着退潮的方向"],
-  lighthouse: ["一根灰色的羽毛", "一小段旧绳头", "草叶上蹭下来的一撮毛"],
-  market: ["一张皱巴巴的价签", "半张烤鱼的油纸", "摊子底下滚出来的小硬币"],
-  dock: ["一小截缆绳须", "一片剥落的船漆", "木板上晒干的一个湿爪印"],
-  pines: ["一颗完整的松果", "一片还带着露水的松针", "树皮上新添的一道磨爪印"],
-  home: ["窗台上的一小撮猫毛", "一团玩剩的毛线", "垫子上一个睡出来的窝"],
-  boat: ["一小块生锈的铁环", "一片藤蔓的叶子", "船板缝里抠出来的小螺壳"],
-  farewell: ["一枚黄昏色的小石子", "码头尽头的一个坐印"],
-  sailed: ["一枚黄昏色的小石子", "码头尽头的一个坐印"],
-};
 
 // 小屋门口的生活痕迹(按天轮换):小事情比大事件更有陪伴感
 const TRACE_LINES = [
@@ -217,13 +204,7 @@ export default async function CatPage({
       .filter(Boolean)
       .join(" · ");
     const sceneImg = main?.loc ? sceneFor(main.loc) : null;
-    // "留下":按地点小物池 + 天数轮换;隔天出现一次,别机械到每页都有
-    const sceneKey = sceneImg?.match(/\/scenes\/(\w+)\.jpg/)?.[1];
-    const pool = sceneKey ? LEFT_BEHIND[sceneKey] : undefined;
-    const leftBehind =
-      pool && hashSeed(d.day, "left-gate", cat.id) % 2 === 0
-        ? pick(mulberry32(hashSeed(d.day, "left", cat.id)), pool)
-        : null;
+    const leftBehind = leftBehindFor(cat.id, d.day, sceneImg);
     return {
       id: d.id,
       day: d.day,
