@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { CatAvatar } from "@/components/CatAvatar";
 import { PetCat } from "@/components/PetCat";
+import { LivingImage } from "@/components/LivingImage";
+import { resolveMotion } from "@/lib/visual/motion";
 import { StayTrack } from "@/components/StayTrack";
 import { Track } from "@/components/Track";
 import { getViewerId } from "@/lib/identity";
@@ -106,14 +108,13 @@ export default async function HomePage() {
 
       {/* 第一屏:活的岛屿舞台——场景更大,猫是主角,夜里天会黑 */}
       <div className="text-center">
-        <div className="relative mx-auto max-w-3xl overflow-hidden rounded-lg border border-line">
+        {/* 微动导演(doc/15 V1.5):环境层由 MotionSpec 声明,LivingImage 统一播放 */}
+        <LivingImage
+          motion={resolveMotion({ scene: "dock", time: night ? "night" : "day", pose: null, raining })}
+          className="relative mx-auto max-w-3xl overflow-hidden rounded-lg border border-line"
+        >
           {/* 夜里不压滤镜,直接换夜晚版码头图(月亮/渔火是画出来的,滤镜压暗效果差) */}
           <Image src={night ? "/scenes/dock-night.jpg" : "/scenes/dock.jpg"} alt="猫啊岛的码头" width={1099} height={628} priority className="w-full" />
-          {/* 环境微动效(第二轮):静态插画开始呼吸——云影横漂、水面波光、雨天雨丝 */}
-          {!night && <div className="fx-cloud" />}
-          {!night && <div className="fx-cloud fx-cloud--far" />}
-          <div className="fx-shimmer" />
-          {raining && <div className="fx-rain" />}
           {heroCat && (
             <PetCat
               id={heroCat.id}
@@ -121,7 +122,7 @@ export default async function HomePage() {
               line={petLine(heroCat.id, world.day, myCat ? myState?.mood : undefined)}
             />
           )}
-        </div>
+        </LivingImage>
 
         {myCat ? (
           <>
@@ -205,7 +206,10 @@ export default async function HomePage() {
               return (
                 <Link key={c.id} href={`/cats/${c.id}`} className="neighbor-card group text-center">
                   <div className="mx-auto w-fit transition-transform duration-200 group-hover:-translate-y-1">
-                    <CatAvatar id={c.id} size={64} portraitUrl={c.portraitUrl} />
+                    {/* 邻居在呼吸(V1.5 P3):NPC 猫体微动,相位按猫错开;自己的猫不做(拍板) */}
+                    <LivingImage motion={resolveMotion({ scene: "card", time: "day", pose: "sit", catId: c.id, catScale: 1 })} inline>
+                      <CatAvatar id={c.id} size={64} portraitUrl={c.portraitUrl} />
+                    </LivingImage>
                   </div>
                   <p className="font-title mt-1.5 text-sm font-bold text-ink">{c.name}</p>
                   <p className="font-diary mt-0.5 text-xs leading-snug text-ink-soft">{status}</p>

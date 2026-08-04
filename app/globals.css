@@ -289,7 +289,20 @@ body {
   .fx-cloud--far,
   .fx-shimmer,
   .fx-rain,
-  .fx-breathe {
+  .fx-breathe,
+  .fx-cat-breathe {
     animation: none;
   }
+}
+
+/* 猫的呼吸(微动词表 breathing/belly_rise,doc/15 V1.5):比照片呼吸(fx-breathe)周期短、
+   幅度更小,锚在脚底;周期 7s 守 doc/16 的"≥6s"线 */
+.fx-cat-breathe {
+  animation: fx-cat-breathe 7s ease-in-out infinite;
+  transform-origin: 50% 88%;
+  will-change: transform;
+}
+@keyframes fx-cat-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.012) translateY(-0.5px); }
 }
