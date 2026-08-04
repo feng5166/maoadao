@@ -41,11 +41,7 @@ export async function sendGoodnight(opts: { dryRun?: boolean } = {}): Promise<Go
     // 幂等:今晚已道过晚安就不再发(cron 重试安全)
     const dup = await prisma.outboundMessage.count({ where: { userId: ch.userId, day, kind: "goodnight" } });
     if (dup > 0) continue;
-    // 24h 硬窗口:关了安静跳过,晚安不值得变成"未寄出的信"
-    if (!ch.windowOpenUntil || ch.windowOpenUntil < new Date()) {
-      out.windowClosed++;
-      continue;
-    }
+    const windowOpen = ch.windowOpenUntil && ch.windowOpenUntil >= new Date();
 
     // 素材:今晚的事 > 明日盼头 > 安静的一天
     const eveningMain = await prisma.event.findFirst({
@@ -72,6 +68,20 @@ export async function sendGoodnight(opts: { dryRun?: boolean } = {}): Promise<Go
     const content = goodnightMessage(cat, { eveningLine, hook: summary?.tomorrowHook ?? null }, LINK, day);
     out.preview.push(content.slice(0, 60));
     if (dryRun) continue;
+
+    // 窗口关了:不硬发,但把晚安落成"未寄出的信"(doc/17 断链召回)——
+    // 主人回到网页会看到猫昨晚没送出去的话,说一句就能叫醒海螺
+    if (!windowOpen) {
+      out.windowClosed++;
+      await prisma.outboundMessage.create({
+        data: {
+          id: randomUUID(), userId: ch.userId, catId: cat.id, day, kind: "goodnight",
+          content, link: LINK, status: "window_closed", sendAfter: new Date(), createdAt: new Date(),
+        },
+      });
+      await safeTrack("wechat_window_closed_drop", { kind: "goodnight" });
+      continue;
+    }
 
     const r = moment
       ? await sendWechatImage(ch.externalId, moment.imgB64, content)

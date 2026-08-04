@@ -103,8 +103,13 @@ export async function enqueueDailyWechat(day: number): Promise<{ queued: number 
         } else {
           // 早安保底(2026-08-04 拍板:每天 8 点必有早安):白名单没新闻的日子,
           // 猫也要跟主人道早——变体池按天轮换,事实句来自今晨主事件。
+          // 昨晚(北京 18 点后)回过话的主人,开头带回执感(doc/17 窗口保活的习惯环)
+          const lastInbound = ch.windowOpenUntil ? new Date(ch.windowOpenUntil.getTime() - 24 * 3600_000) : null;
+          const yesterdayEve = new Date();
+          yesterdayEve.setHours(yesterdayEve.getHours() - 14); // 8:00 入队 - 14h = 昨天 18:00
+          const repliedLastNight = Boolean(lastInbound && lastInbound >= yesterdayEve);
           kind = "morning";
-          content = morningMessage(cat, morningLine, world?.weather ?? "晴", LINK, day);
+          content = morningMessage(cat, morningLine, world?.weather ?? "晴", LINK, day, repliedLastNight);
         }
       }
     }

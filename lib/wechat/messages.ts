@@ -193,15 +193,31 @@ const MORNING_TAILS = [
   "晚上等我的消息。",
 ];
 
-export function morningMessage(cat: MsgCat, morningLine: string, weather: string, link: string, day: number): string {
+// 昨晚回执感(窗口保活 doc/17):昨晚说过话的主人,早安开头先接住那句话——
+// 让用户第一次发现"回它是有用的",习惯从这里长出来
+const MORNING_ACKS = [
+  "昨晚你说的话,我睡前又看了一遍。",
+  "昨晚你回我的那句,我记着呢。",
+  "睡前收到你的话,我把尾巴卷得特别整齐。",
+];
+
+export function morningMessage(
+  cat: MsgCat,
+  morningLine: string,
+  weather: string,
+  link: string,
+  day: number,
+  repliedLastNight = false,
+): string {
   const rng = mulberry32(hashSeed(day, "morning-msg", cat.id));
   const v = voiceFor(cat);
   const self = v.selfRef === "我" ? "我" : v.selfRef;
   const opener = pick(rng, MORNING_OPENERS);
+  const ack = repliedLastNight ? `${pick(rng, MORNING_ACKS)}` : "";
   // 天气句三天里出现一次左右,别成固定格式
   const weatherLine = rng() < 0.35 ? `今天${weather}。` : "";
   const tail = pick(rng, MORNING_TAILS);
-  return `${header(cat.name)}\n${opener}${weatherLine}${self}今天的头一件事——${morningLine}。\n\n${tail}\n${link}`;
+  return `${header(cat.name)}\n${opener}${ack}${weatherLine}${self}今天的头一件事——${morningLine}。\n\n${tail}\n${link}`;
 }
 
 const GOODNIGHT_OPENERS = [
@@ -212,12 +228,16 @@ const GOODNIGHT_OPENERS = [
   "困了。",
   "灯塔的光刚扫过窗台。",
 ];
+// 尾巴池里一部分是"可回应的"(doc/17 轻钩子):回不回都成立,回了窗口自然续上
 const GOODNIGHT_TAILS = [
   "明早八点,新的一天讲给你听。",
   "被窝已经睡热了。你也早点睡。",
   "你也别熬夜。",
   "明天见。",
   "梦里要是有鱼,分你一条。",
+  "你要是还没睡,跟我说一声。",
+  "睡前想跟我说什么,现在正是时候。",
+  "回我一个字,我就当被摸过头了。",
 ];
 
 /** 晚安:material 按优先级给一句真实收束(今晚的事 > 明日盼头 > 安静的一天) */
