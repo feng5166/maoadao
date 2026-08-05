@@ -1,5 +1,7 @@
 import "./_env";
-// 七仔母版候选批产（doc/22 §三 外形拍板 + doc2.0/10 M0 首铲）。
+// 七仔母版候选批产（doc/22 §三 外形拍板 + doc2.0/13）。
+// ⚠️ 母版已于 2026-08-05 定稿：assets/qizai/master.jpg（永不重生成，doc/22 §三）。
+// 本脚本仅存档备查——不要再跑去替换母版；派生姿势/场景一律以母版为参考图。
 // 用法：npx tsx scripts/qizai-master.ts [--n=4]
 // 产出：assets/qizai-master-raw/candidate-N.png（gitignore 外的本机归档，定稿前不入库不进 git）。
 // 定稿流程：人工从候选里挑一张 → 锁为母版 → 此后姿势/场景/周边全部从母版派生，不再重生成（doc/22）。
