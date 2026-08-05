@@ -25,13 +25,13 @@ export default async function LoginPage() {
       </div>
       <div className="mt-6 space-y-2 text-center text-xs text-ink-faint">
         <p>
-          忘记密码?<Link href="/login/reset" className="text-sea-deep hover:text-brick">用回岛钥匙回来</Link>
+          忘记密码?<Link href="/login/reset" className="text-sea-deep hover:text-brick">用确认过的邮箱或回岛钥匙重置</Link>
         </p>
         <p>
           第一次来?<Link href="/adopt" className="text-sea-deep hover:text-brick">我有一张船票</Link>
         </p>
         <p>
-          没设过密码?<Link href="/account" className="text-sea-deep hover:text-brick">用回岛钥匙或邮箱验证码开门</Link>
+          没设过密码?<Link href="/account" className="text-sea-deep hover:text-brick">用回岛钥匙开门</Link>
         </p>
       </div>
     </div>

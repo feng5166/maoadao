@@ -40,6 +40,7 @@ export default async function HistoryPage() {
   if (!cat) redirect("/adopt");
   const world = await getWorld();
 
+  const viewer = viewerId ? await prisma.user.findUnique({ where: { id: viewerId }, select: { passwordHash: true, emailVerifiedAt: true } }) : null;
   const [summaries, friendsAll, threads, keepsakes, arrivalNote, firsts, catIndex] = await Promise.all([
     getSummaries(cat.id),
     getFriends(cat.id, 8),
@@ -246,6 +247,16 @@ export default async function HistoryPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* D7 后的低权重提醒(doc/20 §五 入口二):一起生活一周了,才提一次确认邮箱——
+          不弹窗、不打断,放在册子末尾之前,像一句顺口的叮嘱 */}
+      {daysOnIsland >= 7 && viewer?.passwordHash && !viewer.emailVerifiedAt && (
+        <p className="margin-note mt-7 border-t border-line pt-4">
+          已经一起生活 {daysOnIsland} 天了。
+          <Link href="/account" className="text-sea-deep hover:text-brick">确认一下登录邮箱</Link>
+          ,可以给这段日子多留一条回来的路。
+        </p>
       )}
 
       {/* ============ 按天翻阅:每一天是一张生活页 ============ */}

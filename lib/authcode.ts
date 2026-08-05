@@ -28,14 +28,25 @@ export async function failsInWindow(kind: string, key: string): Promise<number> 
 
 export type ConsumeResult = "ok" | "invalid" | "locked" | "rate_limited";
 
-/** 校验并原子消费验证码。任何失败路径都计入审计。 */
-export async function consumeLoginCode(email: string, code: string): Promise<ConsumeResult> {
+/** 校验并原子消费验证码。任何失败路径都计入审计。
+ *  purpose/userId:一码一用途、锚定账户(doc/20 §七)——签发给"改邮箱"的码换不到"重置密码"。 */
+export async function consumeLoginCode(
+  email: string,
+  code: string,
+  opts: { purpose?: string; userId?: string | null } = {},
+): Promise<ConsumeResult> {
   if ((await failsInWindow("verify_email_fail", email)) >= MAX_FAILS_PER_WINDOW) {
     return "rate_limited";
   }
 
   const row = await prisma.loginCode.findFirst({
-    where: { email, usedAt: null, expiresAt: { gte: new Date() } },
+    where: {
+      email,
+      usedAt: null,
+      expiresAt: { gte: new Date() },
+      purpose: opts.purpose ?? "VERIFY_EMAIL",
+      ...(opts.userId ? { userId: opts.userId } : {}),
+    },
     orderBy: { createdAt: "desc" },
   });
   if (!row) {

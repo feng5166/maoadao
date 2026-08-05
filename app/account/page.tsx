@@ -7,6 +7,7 @@ import { TicketWallet } from "@/components/TicketWallet";
 import { IconBoat, IconKey, IconMailbox, IconTicket } from "@/components/icons";
 import { ensureRecoveryCode, logout, recoverByCode, toggleNotify } from "@/lib/account-actions";
 import { CredentialsForm } from "@/components/CredentialsForm";
+import { ChangeEmailForm, ChangePasswordForm } from "@/components/AccountSecurityForms";
 import { emailEnabled } from "@/lib/email";
 import { getViewerId } from "@/lib/identity";
 import { getViewerCat, getWorld } from "@/lib/queries";
@@ -183,6 +184,8 @@ export default async function AccountPage() {
                   目前它只用于登录。想让它也能在忘记密码时救你,去下面「确认邮箱」——确认前请保管好回岛钥匙。
                 </p>
               )}
+              <ChangeEmailForm currentEmail={user.email ?? ""} />
+              <ChangePasswordForm />
               <form action={logout}>
                 <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-xs text-ink-soft hover:border-sea-deep">
                   退出这台设备的登录
@@ -228,30 +231,37 @@ export default async function AccountPage() {
         )}
       </div>
 
-      {/* 留一个回岛地址(原邮箱绑定):寄信语义,两步表单 */}
-      <div>
-        <h2 className="font-title flex items-center gap-1.5 font-bold"><IconMailbox size={15} /> 确认邮箱</h2>
-        {user?.emailVerifiedAt ? (
-          <div className="mt-2 space-y-3 text-sm text-ink">
-            <p>
-              这条回岛地址已经确认:<span className="text-ink-soft">{user.email}</span>
-              <span className="ml-2 text-xs text-sea-deep">✓</span>
-            </p>
-            <form action={toggleNotify}>
-              <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-xs text-ink-soft hover:border-sea-deep">
-                {user.notifyDaily ? "每日故事信：寄（点击停寄）" : "每日故事信：停（点击恢复）"}
-              </SubmitButton>
-            </form>
-          </div>
-        ) : (
-          <>
-            <p className="mt-1 text-xs leading-relaxed text-ink-faint">
-              确认这个邮箱确实属于你之后,它就升级成一条可靠的回岛路:忘记密码能靠它救回,每日故事信也寄到这里。
-            </p>
-            <ReturnEmailForm hasCat={Boolean(cat)} mailReady={mailReady} />
-          </>
-        )}
-      </div>
+      {/* 确认邮箱(doc/20):验证是能力升级门槛,不是使用门槛;验证的永远是账户自己的登录邮箱 */}
+      {user?.passwordHash && user.email && (
+        <div>
+          <h2 className="font-title flex items-center gap-1.5 font-bold"><IconMailbox size={15} /> 确认邮箱</h2>
+          {user.emailVerifiedAt ? (
+            <div className="mt-2 space-y-3 text-sm text-ink">
+              <p>
+                这条回岛地址已经确认:<span className="text-ink-soft">{user.email}</span>
+                <span className="ml-2 text-xs text-sea-deep">✓</span>
+              </p>
+              <ul className="space-y-0.5 text-xs text-ink-soft">
+                <li>✓ 忘记密码可以用邮件重置</li>
+                <li>✓ 每日故事信寄到这里</li>
+                <li>✓ 海螺失联时,还有一条能找到你的路</li>
+              </ul>
+              <form action={toggleNotify}>
+                <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-xs text-ink-soft hover:border-sea-deep">
+                  {user.notifyDaily ? "每日故事信：寄（点击停寄）" : "每日故事信：停（点击恢复）"}
+                </SubmitButton>
+              </form>
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+                确认这个邮箱确实属于你之后,它就升级成一条可靠的回岛路:忘记密码能靠它救回,每日故事信也寄到这里。
+              </p>
+              <ReturnEmailForm email={user.email} mailReady={mailReady} />
+            </>
+          )}
+        </div>
+      )}
 
       {/* 离岛与重新开始:高风险不可逆,默认折叠、低饱和按钮,不用主 CTA 色 */}
       {cat && (

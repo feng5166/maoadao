@@ -49,6 +49,11 @@ export async function recoverByCode(formData: FormData) {
       .catch(() => {});
     throw new Error("找回码不对，检查一下再试试");
   }
+  // 已经设过登录凭证的账户:钥匙不再单独开门(那样等于绕过密码)——
+  // 走「忘记密码」的邮箱+钥匙双因子重置(doc/20 §三)
+  if (user.passwordHash) {
+    throw new Error("这个账户已经设过登录邮箱和密码——用邮箱和密码登录;忘了密码就去「忘记密码」用钥匙重置");
+  }
   const jar = await cookies();
   jar.set("maoadao_uid", user.id, { httpOnly: true, sameSite: "lax", secure: true, maxAge: 60 * 60 * 24 * 365, path: "/" });
   await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
@@ -56,95 +61,160 @@ export async function recoverByCode(formData: FormData) {
   redirect("/my-cat");
 }
 
-// ============ 邮箱验证码：绑定与登录 ============
+// ============ 邮箱验证(doc/20 §八 铁律)============
+// 验证码只证明"这个邮箱属于你",**永远不能用来登录或接管账户**——
+// 收到验证邮件的人只有码、没有密码,拿不走别人的猫。跨设备回岛一律走邮箱+密码。
 
-export async function requestEmailCode(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("邮箱格式不对");
-
-  // 限频：同邮箱 1 分钟一条
+/** 签发一封验证码邮件。锚定账户与用途,一码一用。 */
+async function issueCode(email: string, purpose: string, userId: string | null): Promise<{ ok: boolean; err?: string }> {
   const recent = await prisma.loginCode.findFirst({
-    where: { email, createdAt: { gte: new Date(Date.now() - 60_000) } },
+    where: { email, purpose, createdAt: { gte: new Date(Date.now() - 60_000) } },
   });
-  if (recent) throw new Error("发太快了，一分钟后再试");
-
-  if (!emailEnabled()) {
-    // 邮件未配置：明确失败，不发码、不把邮箱和验证码写进生产日志
-    throw new Error("邮件服务尚未开通，请先用找回码");
-  }
+  if (recent) return { ok: false, err: "发太快了,一分钟后再试" };
+  if (!emailEnabled()) return { ok: false, err: "岛外邮路还没通,先用回岛钥匙" };
 
   const code = randomInt(100000, 999999).toString();
   await prisma.loginCode.create({
     data: {
       id: randomUUID(),
       email,
+      purpose,
+      userId,
       codeHash: hashCode(email, code),
       expiresAt: new Date(Date.now() + 10 * 60_000),
       createdAt: new Date(),
     },
   });
   const sent = await sendEmail(email, "猫啊岛验证码", otpEmailHtml(code));
-  if (!sent) throw new Error("验证码发送失败，稍后再试");
-  revalidatePath("/account");
+  if (!sent) return { ok: false, err: "验证码没寄出去,稍后再试" };
+  return { ok: true };
 }
 
-export async function verifyEmailCode(formData: FormData) {
+function codeError(result: string): string | null {
+  if (result === "rate_limited") return "尝试次数过多,15 分钟后再试";
+  if (result === "locked") return "这个验证码试错太多次已失效,请重新获取";
+  if (result !== "ok") return "验证码不对或已过期";
+  return null;
+}
+
+/** 当前账户请求确认自己的登录邮箱(必须已设密码——只有知道密码的人能发起验证) */
+export async function requestVerifyEmailCode(): Promise<{ ok: boolean; err?: string; email?: string }> {
+  const uid = await getViewerId();
+  const user = uid ? await prisma.user.findUnique({ where: { id: uid } }) : null;
+  if (!user?.email || !user.passwordHash) return { ok: false, err: "先设置登录邮箱和密码,再来确认它" };
+  if (user.emailVerifiedAt) return { ok: true, email: user.email };
+  const r = await issueCode(user.email, "VERIFY_EMAIL", user.id);
+  return r.ok ? { ok: true, email: user.email } : r;
+}
+
+/** 确认登录邮箱:只把当前账户自己的邮箱标记为已确认,不切换任何身份 */
+export async function confirmEmailCode(formData: FormData): Promise<{ ok: boolean; err?: string }> {
+  const code = String(formData.get("code") ?? "").trim();
+  const uid = await getViewerId();
+  const user = uid ? await prisma.user.findUnique({ where: { id: uid } }) : null;
+  if (!user?.email || !user.passwordHash) return { ok: false, err: "先设置登录邮箱和密码,再来确认它" };
+
+  const result = await consumeLoginCode(user.email, code, { purpose: "VERIFY_EMAIL", userId: user.id });
+  const err = codeError(result);
+  if (err) return { ok: false, err };
+
+  await prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+  await track("email_verified", {});
+  revalidatePath("/account");
+  return { ok: true };
+}
+
+/** 修改登录邮箱(doc/20 §八 的逃生舱:填错邮箱要能自己改回来)。
+ *  需当前密码;不验证旧邮箱;新邮箱立即生效但回到未确认态,想用邮件找回再去确认。 */
+export async function changeLoginEmail(formData: FormData): Promise<{ ok: boolean; err?: string }> {
+  const newEmail = String(formData.get("newEmail") ?? "").trim().toLowerCase();
+  const pw = String(formData.get("currentPassword") ?? "");
+  if (!EMAIL_RE.test(newEmail)) return { ok: false, err: "邮箱格式不对,检查一下" };
+
+  const uid = await getViewerId();
+  const user = uid ? await prisma.user.findUnique({ where: { id: uid } }) : null;
+  if (!user?.passwordHash) return { ok: false, err: "先设置登录邮箱和密码" };
+  if ((await failsInWindow("login_fail", `${uid}:change_email`)) >= 8) return { ok: false, err: "试得太频繁,15 分钟后再来" };
+
+  const { verifyPassword } = await import("./password");
+  if (!verifyPassword(pw, user.passwordHash)) {
+    await prisma.authAttempt.create({ data: { id: randomUUID(), kind: "login_fail", key: `${uid}:change_email`, createdAt: new Date() } }).catch(() => {});
+    return { ok: false, err: "当前密码不正确" };
+  }
+  if (newEmail === (user.email ?? "").toLowerCase()) return { ok: false, err: "这就是现在的登录邮箱" };
+
+  const taken = await prisma.user.findUnique({ where: { email: newEmail } });
+  if (taken && taken.id !== user.id) return { ok: false, err: UNIFORM_TAKEN_ERR };
+
+  // 换邮箱 = 换登录名:新地址未经确认,能力回到未验证档
+  await prisma.user.update({ where: { id: user.id }, data: { email: newEmail, emailVerifiedAt: null } });
+  await track("email_changed", {});
+  revalidatePath("/account");
+  return { ok: true };
+}
+
+/** 修改密码:需当前密码。回岛钥匙不变(它是离线灾备,不因改密码作废)。 */
+export async function changePassword(formData: FormData): Promise<{ ok: boolean; err?: string }> {
+  const cur = String(formData.get("currentPassword") ?? "");
+  const pw = String(formData.get("password") ?? "");
+  const pw2 = String(formData.get("password2") ?? "");
+  if (pw !== pw2) return { ok: false, err: "两次输入的新密码不一样" };
+
+  const uid = await getViewerId();
+  const user = uid ? await prisma.user.findUnique({ where: { id: uid } }) : null;
+  if (!user?.passwordHash) return { ok: false, err: "还没有设置过密码" };
+  if ((await failsInWindow("login_fail", `${uid}:change_pw`)) >= 8) return { ok: false, err: "试得太频繁,15 分钟后再来" };
+
+  const { verifyPassword, passwordPolicyError, hashPassword } = await import("./password");
+  if (!verifyPassword(cur, user.passwordHash)) {
+    await prisma.authAttempt.create({ data: { id: randomUUID(), kind: "login_fail", key: `${uid}:change_pw`, createdAt: new Date() } }).catch(() => {});
+    return { ok: false, err: "当前密码不正确" };
+  }
+  const policyErr = passwordPolicyError(pw);
+  if (policyErr) return { ok: false, err: policyErr };
+
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(pw) } });
+  await track("password_changed", {});
+  revalidatePath("/account");
+  return { ok: true };
+}
+
+// ---- 邮件重置密码(已确认邮箱才有的能力,doc/20 §六)----
+
+/** 请求重置邮件。响应对"邮箱是否存在/是否已确认"一律中性,防账号枚举。 */
+export async function requestPasswordResetEmail(formData: FormData): Promise<{ ok: boolean; err?: string }> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) return { ok: false, err: "邮箱格式不对,检查一下" };
+  const user = await prisma.user.findUnique({ where: { email } });
+  // 只有"已确认归属 + 已设密码"的账户才真的寄信;其余情况静默走过,对外表现一致
+  if (user?.emailVerifiedAt && user.passwordHash) {
+    const r = await issueCode(email, "RESET_PASSWORD", user.id);
+    if (!r.ok) return r;
+  }
+  return { ok: true };
+}
+
+/** 用邮件验证码设新密码。回岛钥匙保持不变(没被用到就不必旋转)。 */
+export async function resetPasswordWithEmailCode(formData: FormData): Promise<{ ok: boolean; err?: string }> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const code = String(formData.get("code") ?? "").trim();
-  const confirmSwitch = formData.get("confirmSwitch") === "on";
+  const pw = String(formData.get("password") ?? "");
+  const pw2 = String(formData.get("password2") ?? "");
+  if (pw !== pw2) return { ok: false, err: "两次输入的密码不一样" };
+  const { passwordPolicyError, hashPassword } = await import("./password");
+  const policyErr = passwordPolicyError(pw);
+  if (policyErr) return { ok: false, err: policyErr };
 
-  const result = await consumeLoginCode(email, code);
-  if (result === "rate_limited") throw new Error("尝试次数过多，15 分钟后再试");
-  if (result === "locked") throw new Error("这个验证码试错太多次已失效，请重新获取");
-  if (result !== "ok") throw new Error("验证码不对或已过期");
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user?.emailVerifiedAt || !user.passwordHash) return { ok: false, err: "验证码不对或已过期" };
 
-  const uid = await ensureViewerId();
-  const existing = await prisma.user.findUnique({ where: { email } });
-  const jar = await cookies();
+  const result = await consumeLoginCode(email, code, { purpose: "RESET_PASSWORD", userId: user.id });
+  const err = codeError(result);
+  if (err) return { ok: false, err };
 
-  if (existing && existing.id !== uid) {
-    // 邮箱属于另一个身份：当前身份已有猫时，静默切换会遗弃它——必须显式确认
-    const currentCat = await prisma.cat.findFirst({ where: { ownerId: uid } });
-    if (currentCat && !confirmSwitch) {
-      throw new Error(
-        `这个邮箱已绑定另一只猫的主人。继续登录会离开当前的「${currentCat.name}」（它会留在这个浏览器身份下）。确认要切换的话，勾选"我知道，切换账户"后重试`,
-      );
-    }
-    jar.set("maoadao_uid", existing.id, { httpOnly: true, sameSite: "lax", secure: true, maxAge: 60 * 60 * 24 * 365, path: "/" });
-    await prisma.user.update({ where: { id: existing.id }, data: { lastActiveAt: new Date() } });
-    await track("recover_success", { method: "email" });
-    redirect("/my-cat");
-  }
-
-  // 首次绑定（或邮箱本就属于当前身份）→ 挂到当前身份
-  await prisma.user.upsert({
-    where: { id: uid },
-    update: { email, emailVerifiedAt: new Date(), status: "registered" },
-    create: { id: uid, name: "岛民", email, emailVerifiedAt: new Date(), status: "registered", createdAt: new Date() },
-  });
-  await track("email_bound", {});
-  revalidatePath("/account");
-}
-
-// 客户端分步表单用的安全封装:错误以返回值带回(生产环境直接 throw 会被脱敏成通用文案)
-export async function requestEmailCodeSafe(formData: FormData): Promise<{ ok: boolean; err?: string }> {
-  try {
-    await requestEmailCode(formData);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, err: e instanceof Error ? e.message : "出错了，稍后再试" };
-  }
-}
-
-export async function verifyEmailCodeSafe(formData: FormData): Promise<{ ok: boolean; err?: string }> {
-  try {
-    await verifyEmailCode(formData);
-    return { ok: true };
-  } catch (e) {
-    // 切换身份成功时 verifyEmailCode 内部 redirect——那不是错误,原样抛回让框架接管跳转
-    if (typeof (e as { digest?: string })?.digest === "string" && (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")) throw e;
-    return { ok: false, err: e instanceof Error ? e.message : "出错了，稍后再试" };
-  }
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(pw) } });
+  await track("password_reset", { method: "email" });
+  return { ok: true };
 }
 
 // ============ 登录凭证(doc/20 渐进验证):邮箱+密码注册即用,验证是能力升级门槛 ============
