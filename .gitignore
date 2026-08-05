@@ -50,3 +50,4 @@ next-env.d.ts
 
 # 视觉资产临时预览目录(doc/15,本机翻看用)
 tmp-assets/
+/assets/qizai-master-raw/
