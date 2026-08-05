@@ -72,6 +72,49 @@ const SHEET: Spec[] = [
 // Scene ID / 叙事目的 / 用户此刻感受 / 镜头 / 主体 / 环境 / 七仔动作 / 禁止 / 动画空间 → Prompt
 const SHOTS: { id: string; file: string; ref: string[]; prompt: string }[] = [
   {
+    id: "S2", // 幕二·岛在运行：报摊换新一期（画面里没有完整的猫，只有一只爪）
+    file: "s2-newsstand",
+    ref: [],
+    prompt:
+      "中景偏远：海边小镇的木公告栏与报摊。公告栏上钉着几张小告示纸，报摊上摞着几份报纸，" +
+      "一只猫爪（花色不限，不是参考图里的猫）正把最上面一份压好。画面里没有完整的猫。黄昏。" +
+      "所有纸面上**只有淡淡的色块和模糊的浅色横线示意版面，绝对没有任何可辨认的文字、字母或数字**。" +
+      `${STYLE_SCENE}。参考图只锁定画风。禁止：任何文字/字母/数字、水印、完整的猫出现。`,
+  },
+  {
+    id: "S3", // 幕二·岛在运行：世界的密度——没有主角
+    file: "s3-vista",
+    ref: [],
+    prompt:
+      "大远景：黄昏的海岛坡地与滩涂。三个互不相关的小生命点位——礁石上打盹的一只黑白猫、" +
+      "沿小路往渔港方向走的一只三花猫、坡顶亮灯小屋边的一只灰猫——**三只花色各不相同，都不是橘猫**。" +
+      "猫都很小很远。天空占画面上半部，大面积留白，安静。" +
+      `${STYLE_SCENE}。参考图只锁定画风。禁止：任何猫的近景、文字、水印。`,
+  },
+  {
+    id: "S5", // 幕三·七仔=生命感：收藏有秩序（嘴空，瓶盖在排尾——全程嘴空原则）
+    file: "s5-collection",
+    ref: ["sit", "front"],
+    prompt:
+      "中近景：旧木箱旁的地面上整齐排着一排小收藏——一枚生锈的顶针、一颗玻璃珠、" +
+      "一片羽毛、一枚小贝壳、一小截旧绳结等六七件小东西；那枚圆形扁平的金属啤酒瓶盖" +
+      "躺在这一排的最末尾。七仔**蹲坐**在收藏排前，伸出一只前爪轻轻把其中一件挪正，" +
+      "**嘴里没有叼任何东西**。**尾巴是极短的一小截绒球，紧贴身侧，绝对不能画成长尾巴。**" +
+      "暖橙色的黄昏天空，码头一角，大量留白。" +
+      `${IDENTITY.replace("嘴里轻轻叼着同一枚小瓶盖。", "")}${STYLE_SCENE}。${FORBID}、嘴里叼任何东西。`,
+  },
+  {
+    id: "S8", // 幕四·空小屋：放下瓶盖退两步的静止（结构 aha 锚；此屋为 S10 的同屋参考）
+    file: "s8-emptyhome",
+    ref: ["side", "sit"],
+    prompt:
+      "中景：一间安静的小木屋正面，**门完全关着**；门上挂着一块空白的小木门牌" +
+      "（门牌上没有任何字）；门前石阶上放着一枚小小的金属啤酒瓶盖。" +
+      "七仔站在屋前两步远的地方，侧身站定，头朝小屋方向——像刚放下什么、" +
+      "退开了两步的样子，**嘴里没有叼东西**。暖黄的暮色，大量留白。" +
+      `${IDENTITY.replace("嘴里轻轻叼着同一枚小瓶盖。", "")}${STYLE_SCENE}。${FORBID}、嘴里叼任何东西、门牌出现文字、门开着。`,
+  },
+  {
     id: "S4", // 叙事目的：行为即生命（拍两下是它的规矩）；感受："这只猫不是NPC"；动画空间：拍两下→叼起
     file: "s4-bottlecap",
     ref: ["walk", "side"],
@@ -105,12 +148,13 @@ const SHOTS: { id: string; file: string; ref: string[]; prompt: string }[] = [
   {
     id: "S10", // 叙事目的：完成引路——它知道你的故事还没开始；动画空间：转头→迈步
     file: "s10-farewell",
-    ref: ["side", "walk"],
+    ref: ["side", "walk", "s8"],
     prompt:
       "中景：黄昏的小路上，七仔停在一间小木屋前的侧影，头转向木屋门口。" +
       "**木屋的门是关着的**，门上挂着一块空白的木门牌；" +
       "门口台阶上放着一枚圆形扁平的金属啤酒瓶盖（很小的一枚，绝不是罐子或瓶子）。" +
       "此镜头它嘴里没有叼东西（瓶盖已经放在门口）。" +
+      "**小木屋的外观必须与参考图里的小木屋保持一致（同一间屋子：同样的屋顶、门、门牌位置）**。" +
       "环境：安静的小屋、空白门牌、暖黄的天色。" +
       `${IDENTITY.replace("嘴里轻轻叼着同一枚小瓶盖。", "")}${STYLE_SCENE}。${FORBID}、门牌上出现文字。`,
   },
@@ -118,12 +162,17 @@ const SHOTS: { id: string; file: string; ref: string[]; prompt: string }[] = [
 
 async function loadRef(files: string[]): Promise<{ data: Buffer; mime: string }[]> {
   const refs: { data: Buffer; mime: string }[] = [{ data: await readFile(MASTER), mime: "image/jpeg" }];
+  const DIRS = [SHEET_FINAL_DIR, path.join("assets", "qizai", "shots")];
   for (const f of files) {
-    try {
-      refs.push({ data: await readFile(path.join(SHEET_FINAL_DIR, `${f}.jpg`)), mime: "image/jpeg" });
-    } catch {
-      console.warn(`[warn] 角色表 ${f}.jpg 未定稿（assets/qizai/sheet/），该参考跳过`);
+    let buf: Buffer | null = null;
+    for (const dir of DIRS) {
+      try {
+        buf = await readFile(path.join(dir, `${f}.jpg`));
+        break;
+      } catch {}
     }
+    if (buf) refs.push({ data: buf, mime: "image/jpeg" });
+    else console.warn(`[warn] 参考 ${f}.jpg 未定稿（sheet/shots 均无），跳过`);
   }
   return refs;
 }
