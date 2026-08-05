@@ -165,8 +165,9 @@ async function main() {
     await run(specs, SHEET_RAW, n, false);
     console.log(`定稿：把选中的图拷入 ${SHEET_FINAL_DIR}/{front,side,back,walk,sit,avatar}.jpg`);
   } else if (step === "shots") {
-    console.log(`Step2 关键镜头 S4/S6a/S6b/S10 ×${n}（参考=母版+角色表）`);
-    await run(SHOTS as unknown as Spec[], SHOTS_RAW, n, true);
+    const specs = only ? SHOTS.filter((s) => only.includes(s.id)) : SHOTS;
+    console.log(`Step2 关键镜头 ×${n}（${specs.map((s) => s.id).join("/")}，参考=母版+角色表）`);
+    await run(specs as unknown as Spec[], SHOTS_RAW, n, true);
   } else {
     console.log("用法：npx tsx scripts/qizai-d0.ts sheet [--n=1] | shots [--n=2]");
     process.exit(1);
