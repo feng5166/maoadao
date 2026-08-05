@@ -319,6 +319,20 @@ model CatDailySummary {
 }
 
 // 邮箱验证码（绑定与登录共用）：只存 HMAC 哈希，单码限试 5 次，原子消费
+// 设备会话(doc/20 §八):cookie 里放会话令牌而不是账户 id,这样才能远程踢出某台设备。
+// 匿名设备身份仍走长效 uid cookie;一旦设了登录凭证,就必须持有效会话才算登录。
+model Session {
+  id         String    @id
+  userId     String
+  tokenHash  String    @unique // sha256(token);明文只在 cookie 里
+  label      String? // 设备标签(UA 粗略推断,给用户认得出是哪台)
+  createdAt  DateTime
+  lastSeenAt DateTime
+  revokedAt  DateTime?
+
+  @@index([userId, revokedAt])
+}
+
 // 邮箱验证挑战(doc/20 §七 EmailVerificationChallenge 的落地形态,沿用历史表名)。
 // purpose 区分用途:确认自己的登录邮箱 / 改成新邮箱 / 已验证邮箱的密码重置——
 // 一码只能用于签发时的那个用途,不能跨用途兑换。

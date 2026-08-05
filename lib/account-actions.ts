@@ -3,10 +3,12 @@
 import { randomUUID, randomInt, randomBytes } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { after } from "next/server";
+import { cookies, headers } from "next/headers";
 import { track } from "@vercel/analytics/server";
 import { prisma } from "./db";
-import { getViewerId, ensureViewerId } from "./identity";
+import { getViewerId, getSessionId, ensureViewerId } from "./identity";
+import { endCurrentSession, startSession } from "./session";
 import { otpEmailHtml, sendEmail, emailEnabled } from "./email";
 import { consumeLoginCode, hashCode, failsInWindow } from "./authcode";
 
@@ -249,6 +251,8 @@ export async function setupCredentials(formData: FormData): Promise<{ ok: boolea
     update: { email, passwordHash: hashPassword(pw), status: "registered" },
     create: { id: uid, name: "岛民", email, passwordHash: hashPassword(pw), status: "registered", createdAt: new Date() },
   });
+  // 设了凭证之后 uid cookie 不再单独算登录——当场换发会话,否则这台设备立刻掉线
+  await startSession(uid);
   await track("credentials_setup", {});
   revalidatePath("/account");
   return { ok: true };
@@ -286,11 +290,57 @@ export async function loginWithPassword(formData: FormData): Promise<{ ok: boole
       };
     }
   }
-  const jar = await cookies();
-  jar.set("maoadao_uid", user.id, { httpOnly: true, sameSite: "lax", secure: true, maxAge: 60 * 60 * 24 * 365, path: "/" });
+  // 登录前先看这个账户原本有没有别的活跃设备——用来判断是不是"新设备登录"
+  const priorSessions = await prisma.session.count({ where: { userId: user.id, revokedAt: null } });
+  await startSession(user.id);
   await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
   await track("login_success", { method: "password" });
+
+  // 异常登录提醒(doc/20 §八):账户已有别的设备在线 + 邮箱已确认归属 → 寄一封知会信。
+  // after() 里发,不挡登录;失败只记日志。
+  if (priorSessions > 0 && user.emailVerifiedAt && user.email) {
+    const ua = (await headers()).get("user-agent") ?? "";
+    const email = user.email;
+    after(async () => {
+      const { newDeviceLoginEmailHtml } = await import("./email");
+      await sendEmail(email, "猫啊岛:有新设备登录了你的账户", newDeviceLoginEmailHtml(ua)).catch(() => false);
+    });
+  }
   redirect("/my-cat");
+}
+
+/** 踢出其他设备:作废本账户除当前会话外的全部会话 */
+export async function revokeOtherSessions(): Promise<{ ok: boolean; revoked?: number; err?: string }> {
+  const uid = await getViewerId();
+  const sid = await getSessionId();
+  if (!uid || !sid) return { ok: false, err: "先登录再管理设备" };
+  const r = await prisma.session.updateMany({
+    where: { userId: uid, revokedAt: null, id: { not: sid } },
+    data: { revokedAt: new Date() },
+  });
+  await track("sessions_revoked", { count: r.count });
+  revalidatePath("/account");
+  return { ok: true, revoked: r.count };
+}
+
+/** 看完整的回岛钥匙:已设密码的账户必须验一次密码——钥匙等同身份,不在页面源码里裸奔 */
+export async function revealRecoveryKey(formData: FormData): Promise<{ ok: boolean; code?: string; err?: string }> {
+  const pw = String(formData.get("password") ?? "");
+  const uid = await getViewerId();
+  const user = uid ? await prisma.user.findUnique({ where: { id: uid } }) : null;
+  if (!user) return { ok: false, err: "先登录" };
+
+  if (user.passwordHash) {
+    if ((await failsInWindow("login_fail", `${uid}:reveal`)) >= 8) return { ok: false, err: "试得太频繁,15 分钟后再来" };
+    const { verifyPassword } = await import("./password");
+    if (!verifyPassword(pw, user.passwordHash)) {
+      await prisma.authAttempt.create({ data: { id: randomUUID(), kind: "login_fail", key: `${uid}:reveal`, createdAt: new Date() } }).catch(() => {});
+      return { ok: false, err: "密码不正确" };
+    }
+  }
+  const code = user.recoveryCode ?? (await ensureRecoveryCode());
+  if (!code) return { ok: false, err: "还没有钥匙" };
+  return { ok: true, code };
 }
 
 /** 忘记密码:登录邮箱 + 回岛钥匙 → 设新密码;旧钥匙作废并旋转,新钥匙当场展示一次。不自动登录。 */
@@ -324,8 +374,9 @@ export async function resetPasswordWithRecovery(formData: FormData): Promise<{ o
   return { ok: true, newKey };
 }
 
-/** 退出登录:清当前设备 cookie(UI 只对已设密码的用户展示——匿名身份退出即失联) */
+/** 退出登录:作废这台设备的会话并清 cookie(UI 只对已设密码的用户展示——匿名身份退出即失联) */
 export async function logout() {
+  await endCurrentSession();
   const jar = await cookies();
   jar.delete("maoadao_uid");
   redirect("/");

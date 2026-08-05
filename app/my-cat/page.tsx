@@ -7,6 +7,7 @@ import { PetCat } from "@/components/PetCat";
 import { SeaVoice } from "@/components/SeaVoice";
 import { StayTrack } from "@/components/StayTrack";
 import { WechatConnect } from "@/components/WechatConnect";
+import { CredentialsForm } from "@/components/CredentialsForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Track } from "@/components/Track";
 import { keepArrivalPromise, renameCat, saveNudge } from "@/lib/actions";
@@ -48,7 +49,7 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
       prisma.event.findFirst({ where: { catId: cat.id }, orderBy: { day: "asc" }, select: { day: true } }),
       prisma.ownerNudge.count({ where: { catId: cat.id } }),
       prisma.weekBook.findUnique({ where: { catId_weekIndex: { catId: cat.id, weekIndex: 1 } } }),
-      prisma.user.findUnique({ where: { id: viewerId! }, select: { lastSeenDay: true, visitDays: true } }),
+      prisma.user.findUnique({ where: { id: viewerId! }, select: { lastSeenDay: true, visitDays: true, passwordHash: true } }),
       prisma.arrivalNote.findUnique({ where: { catId: cat.id } }),
       // 留言回音：多取一条，最新一天的（已在上方展示）由下面过滤
       prisma.catDailySummary.findMany({
@@ -337,6 +338,20 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
       {/* 让它找到你(doc/11):亮相后的主曝光——情感峰值点接关系动作 */}
       {daysOnIsland <= 2 && (
         <WechatConnect userId={viewerId!} catName={cat.name} variant="prominent" />
+      )}
+
+      {/* 把这段相遇存进岛民册(doc/20 §八):D1-3 就地给一次入口——
+          这时用户刚见到猫,是最愿意留下凭证的时刻;设过就不再出现 */}
+      {daysOnIsland <= 3 && !viewer?.passwordHash && (
+        <div className="note-slip mt-5 p-4" style={{ transform: "rotate(-0.4deg)" }}>
+          <p className="font-title text-sm font-bold">把这段相遇存进岛民册</p>
+          <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+            现在{cat.name}只住在这台设备上。留一个登录邮箱和密码,换手机、清缓存都能回到它身边。
+          </p>
+          <div className="mt-3">
+            <CredentialsForm />
+          </div>
+        </div>
       )}
 
       {/* 第一天的小约定：码头塞给新岛民的一张纸，记满收进生活册。

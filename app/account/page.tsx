@@ -9,7 +9,9 @@ import { ensureRecoveryCode, logout, recoverByCode, toggleNotify } from "@/lib/a
 import { CredentialsForm } from "@/components/CredentialsForm";
 import { ChangeEmailForm, ChangePasswordForm } from "@/components/AccountSecurityForms";
 import { emailEnabled } from "@/lib/email";
-import { getViewerId } from "@/lib/identity";
+import { getSessionId, getViewerId } from "@/lib/identity";
+import { listSessions } from "@/lib/session";
+import { SessionList } from "@/components/SessionList";
 import { getViewerCat, getWorld } from "@/lib/queries";
 import { catDayOf } from "@/lib/sim/lifecycle";
 import { SITE_URL } from "@/lib/site";
@@ -18,6 +20,14 @@ import { wechatEnabled } from "@/lib/wechat/bridge";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
+
+/** 钥匙脱敏:留头尾两组,中间遮住。完整串只在验过身份后由 action 取回。 */
+function maskKey(code: string): string {
+  const parts = code.split("-");
+  return parts.length > 3
+    ? [parts[0], parts[1], ...parts.slice(2, -1).map(() => "••••"), parts[parts.length - 1]].join("-")
+    : code;
+}
 
 // 岛民册(账户页世界观翻译):不是管理账号,是保管你在猫啊岛的身份、船票和回来的路。
 // 结构:岛民身份卡 → 可以寄出的船票 → 回岛钥匙 → 留一个回岛地址 → 离岛与重新开始。
@@ -34,6 +44,16 @@ export default async function AccountPage() {
     ? await Promise.all([ensureRecoveryCode(), viewerId ? ensureBoatTickets(viewerId) : []])
     : [null, [] as Awaited<ReturnType<typeof ensureBoatTickets>>];
   const mailReady = emailEnabled();
+
+  // 在用的设备(doc/20 §八):只有设过凭证的账户才有会话可管
+  const sessions = user?.passwordHash && viewerId
+    ? (await listSessions(viewerId, await getSessionId())).map((s) => ({
+        id: s.id,
+        label: s.label,
+        lastSeen: s.lastSeenAt.toISOString().slice(5, 16).replace("T", " "),
+        current: s.current,
+      }))
+    : [];
 
   // 来岛天数(与我的猫同口径):firstTickDay 未回填的老数据退回首事件倒推
   let daysOnIsland = 0;
@@ -186,6 +206,12 @@ export default async function AccountPage() {
               )}
               <ChangeEmailForm currentEmail={user.email ?? ""} />
               <ChangePasswordForm />
+              {sessions.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-ink-faint hover:text-ink-soft">在用的设备({sessions.length})</summary>
+                  <SessionList sessions={sessions} />
+                </details>
+              )}
               <form action={logout}>
                 <SubmitButton pendingText="…" className="border border-line px-4 py-1.5 text-xs text-ink-soft hover:border-sea-deep">
                   退出这台设备的登录
@@ -212,7 +238,7 @@ export default async function AccountPage() {
               这串钥匙能帮你在新的设备上找回岛民身份。请把它放在只有自己知道的地方——拿到钥匙，就等于拿到猫。
             </p>
             <div className="mt-3">
-              <ReturnKey code={recoveryCode} />
+              <ReturnKey masked={maskKey(recoveryCode)} needsPassword={Boolean(user?.passwordHash)} />
             </div>
           </>
         ) : (

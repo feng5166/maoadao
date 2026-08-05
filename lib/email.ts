@@ -41,6 +41,17 @@ export function otpEmailHtml(code: string): string {
 </div>`;
 }
 
+/** 异常登录提醒(doc/20 §八):只在账户已有别的设备在线、且邮箱确认过归属时寄出 */
+export function newDeviceLoginEmailHtml(userAgent: string): string {
+  const os = /iPhone|iPad/i.test(userAgent) ? "iPhone/iPad" : /Android/i.test(userAgent) ? "Android" : /Mac OS X/i.test(userAgent) ? "Mac" : /Windows/i.test(userAgent) ? "Windows" : "一台设备";
+  return `<div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:24px;background:#FDF8F0;border-radius:16px">
+  <p style="font-size:20px">🏝️ 猫啊岛</p>
+  <p style="line-height:1.7">刚才有人在<b>${os}</b>上用你的邮箱和密码登录了猫啊岛。</p>
+  <p style="line-height:1.7;color:#8A7B65;font-size:13px">如果就是你,忽略这封信即可。<br/>
+  如果不是你,请立刻到<a href="${SITE_URL}/account" style="color:#B5543B">岛民册</a>换一个密码,并踢出其他设备。</p>
+</div>`;
+}
+
 /** 每日召回邮件：内容钩子，不是系统通知 */
 export function dailyEmailHtml(catName: string, hook: string): string {
   const url = `${SITE_URL}/my-cat`;

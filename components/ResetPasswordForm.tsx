@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { resetPasswordWithRecovery } from "@/lib/account-actions";
-import { ReturnKey } from "./ReturnKey";
+import { OneTimeKey } from "./ReturnKey";
 
 // 用回岛钥匙回来(doc/20):邮箱+钥匙双因子 → 设新密码;旧钥匙作废,新钥匙当场展示一次。
 export function ResetPasswordForm() {
@@ -16,7 +16,7 @@ export function ResetPasswordForm() {
         <p className="font-diary text-sm leading-relaxed text-ink">
           密码已经换好。旧钥匙同时作废了——这是你的新回岛钥匙,只在此刻展示这一次:
         </p>
-        <ReturnKey code={newKey} />
+        <OneTimeKey code={newKey} />
         <p className="text-xs text-ink-faint">抄好之后,用新密码正常登录。</p>
         <a href="/login" className="stamp-btn inline-block px-5 py-1.5 text-sm">去登录</a>
       </div>
