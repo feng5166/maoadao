@@ -14,9 +14,14 @@ export async function GET(req: NextRequest) {
   if (!qrcode) return Response.json({ ok: false, error: "missing_qrcode" }, { status: 400 });
 
   const r = await pollBind(qrcode);
-  // 激活兜底:桥回调若没打通,这里发现通道已建也算 activated
-  if (r.state !== "activated" && (await getBoundChannel(viewerId))) {
-    return Response.json({ ok: true, state: "activated" });
+  // 激活兜底:桥回调若没打通,这里发现通道已建也算 activated。
+  // 换海螺时必须带 since(发码时刻):否则第一次轮询就会把"旧海螺还在"误判成换好了
+  const since = req.nextUrl.searchParams.get("since");
+  if (r.state !== "activated") {
+    const ch = await getBoundChannel(viewerId);
+    if (ch && (!since || ch.boundAt.getTime() > Date.parse(since))) {
+      return Response.json({ ok: true, state: "activated" });
+    }
   }
   return Response.json({ ok: true, state: r.state });
 }

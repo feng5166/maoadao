@@ -4,7 +4,8 @@ import { ReturnEmailForm } from "@/components/ReturnEmailForm";
 import { ReturnKey } from "@/components/ReturnKey";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TicketWallet } from "@/components/TicketWallet";
-import { IconBoat, IconKey, IconMailbox, IconTicket } from "@/components/icons";
+import { IconBoat, IconKey, IconMailbox, IconShell, IconTicket } from "@/components/icons";
+import { WechatConnect } from "@/components/WechatConnect";
 import { ensureRecoveryCode, logout, recoverByCode, toggleNotify } from "@/lib/account-actions";
 import { CredentialsForm } from "@/components/CredentialsForm";
 import { ChangeEmailForm, ChangePasswordForm } from "@/components/AccountSecurityForms";
@@ -226,6 +227,22 @@ export default async function AccountPage() {
               <CredentialsForm />
             </>
           )}
+        </div>
+      )}
+
+      {/* 海螺(doc/11 微信通道):岛民册这处是唯一常驻入口——亮相屏那处过了头两天就收起来。
+          已连上给「换一只海螺」(换了微信/这只不响了);没连上的在这儿还能补上。 */}
+      {cat && shellConnected != null && (
+        <div>
+          <h2 className="font-title flex items-center gap-1.5 font-bold"><IconShell size={15} /> 它捎信的那只海螺</h2>
+          <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+            {shellConnected
+              ? `${cat.name}要说什么，会捎到这只海螺上。换了微信，或者这只不响了，就在这儿换一只——扫成之前，旧的照常响。`
+              : `${cat.name}有话想说的时候，还没有地方能找到你。`}
+          </p>
+          <div className="mt-3">
+            <WechatConnect userId={viewerId!} catName={cat.name} variant="settle" />
+          </div>
         </div>
       )}
 

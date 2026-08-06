@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 
 // 「让它找到你」交互层(iLink 版):点按钮 → 专属二维码 → 扫码 → 对它说第一句话 → 激活。
 // 状态文案全部世界观内,不出现"绑定/授权/登录"。
+// again=true 是换海螺(换了微信/这只不响了):同一条链路,只是发码时不被"已连上"挡回,
+// 且轮询带 since——旧通道还在,不带 since 会被兜底逻辑当场误判成换好了。
 
 type Phase = "idle" | "loading" | "qr" | "scanned" | "activated" | "error";
 
-export function WechatConnectClient({ catName }: { catName: string }) {
+export function WechatConnectClient({ catName, again = false }: { catName: string; again?: boolean }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [qrImg, setQrImg] = useState<string | null>(null);
   const qrcodeRef = useRef<string | null>(null);
+  const sinceRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -26,7 +29,7 @@ export function WechatConnectClient({ catName }: { catName: string }) {
   async function begin() {
     setPhase("loading");
     try {
-      const r = await fetch("/api/wechat/qr").then((x) => x.json());
+      const r = await fetch(again ? "/api/wechat/qr?again=1" : "/api/wechat/qr").then((x) => x.json());
       if (r.bound) {
         setPhase("activated");
         return;
@@ -36,12 +39,14 @@ export function WechatConnectClient({ catName }: { catName: string }) {
         return;
       }
       qrcodeRef.current = r.qrcode;
+      sinceRef.current = typeof r.since === "string" ? r.since : null;
       setQrImg(r.qrImg as string);
       setPhase("qr");
       timerRef.current = setInterval(async () => {
         if (!qrcodeRef.current) return;
         try {
-          const s = await fetch(`/api/wechat/qr-status?qrcode=${encodeURIComponent(qrcodeRef.current)}`).then((x) => x.json());
+          const since = again && sinceRef.current ? `&since=${encodeURIComponent(sinceRef.current)}` : "";
+          const s = await fetch(`/api/wechat/qr-status?qrcode=${encodeURIComponent(qrcodeRef.current)}${since}`).then((x) => x.json());
           if (s.state === "scanned") setPhase("scanned");
           if (s.state === "activated") {
             stopPolling();
@@ -62,16 +67,25 @@ export function WechatConnectClient({ catName }: { catName: string }) {
   }
 
   if (phase === "activated") {
-    return <p className="mt-3 text-center text-sm text-ink">✓ 它找到你了。有事它会捎信给你。</p>;
+    return (
+      <p className="mt-3 text-center text-sm text-ink">
+        {again ? "✓ 换好了。往后它捎信到这只海螺。" : "✓ 它找到你了。有事它会捎信给你。"}
+      </p>
+    );
   }
 
   return (
     <div className="mt-3 text-center">
-      {phase === "idle" && (
-        <button type="button" onClick={begin} className="stamp-btn px-6 py-2 text-sm">
-          让它找到我
-        </button>
-      )}
+      {phase === "idle" &&
+        (again ? (
+          <button type="button" onClick={begin} className="text-xs text-sea-deep hover:text-brick">
+            换一只海螺
+          </button>
+        ) : (
+          <button type="button" onClick={begin} className="stamp-btn px-6 py-2 text-sm">
+            让它找到我
+          </button>
+        ))}
       {phase === "loading" && <p className="text-sm text-ink-soft">它竖起了耳朵……</p>}
       {(phase === "qr" || phase === "scanned") && qrImg && (
         <div>
@@ -84,7 +98,11 @@ export function WechatConnectClient({ catName }: { catName: string }) {
             className="mx-auto border border-line"
           />
           {phase === "qr" ? (
-            <p className="mt-2 text-xs text-ink-soft">用海螺(微信)扫一下——扫完，对它说第一句话，它就找到你了。</p>
+            <p className="mt-2 text-xs text-ink-soft">
+              {again
+                ? "用你现在在用的海螺(微信)扫一下——扫完对它说句话，它就改捎到这只了。"
+                : "用海螺(微信)扫一下——扫完，对它说第一句话，它就找到你了。"}
+            </p>
           ) : (
             <p className="mt-2 text-sm text-ink">
               扫到了。海螺通了——对{catName}说第一句话，
