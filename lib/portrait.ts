@@ -85,22 +85,27 @@ export async function generatePortrait(
   }
 }
 
-/** 码头场景图：本地文件优先（dev/构建含 public），兜底走线上（serverless 未打包时） */
-async function loadDockScene(): Promise<Buffer> {
+// 相遇照片可用的场景(doc/21 §四:照片跟随相遇地点):白名单防路径注入
+const MEET_SCENES = new Set(["dock", "reef", "pines", "lighthouse"]);
+
+/** 场景图：本地文件优先（dev/构建含 public），兜底走线上（serverless 未打包时） */
+async function loadMeetScene(scene: string): Promise<Buffer> {
+  const name = MEET_SCENES.has(scene) ? scene : "dock";
   try {
-    return await readFile(path.join(process.cwd(), "public", "scenes", "dock.jpg"));
+    return await readFile(path.join(process.cwd(), "public", "scenes", `${name}.jpg`));
   } catch {
     const host = process.env.VERCEL_URL || "maoadao.com";
-    const res = await fetch(`https://${host}/scenes/dock.jpg`);
-    if (!res.ok) throw new Error(`拉取码头场景失败 ${res.status}`);
+    const res = await fetch(`https://${host}/scenes/${name}.jpg`);
+    if (!res.ok) throw new Error(`拉取相遇场景失败 ${res.status}`);
     return Buffer.from(await res.arrayBuffer());
   }
 }
 
-// 相遇照片（doc/10 §3 Asset 1，合成路线）：码头场景 + 定稿立绘贴纸 → 拍立得。
+// 相遇照片（doc/10 §3 Asset 1，合成路线）：相遇地点场景 + 定稿立绘贴纸 → 拍立得。
+// 场景默认码头,D1 剧本流传入相遇地点(doc/21 §四:让相遇档案只属于你的那一张)。
 // 不烙文字进图（serverless 中文字体不可控），说明文字由页面 HTML 承担。
 // 一致性 100%：照片里的猫就是立绘那只猫——必须在立绘定稿之后调用。
-export async function generateArrivalPhoto(catId: string, options: { force?: boolean } = {}): Promise<boolean> {
+export async function generateArrivalPhoto(catId: string, options: { force?: boolean; scene?: string } = {}): Promise<boolean> {
   const cat = await prisma.cat.findUnique({ where: { id: catId } });
   if (!cat || cat.isNpc) return false;
   if (cat.arrivalPhotoUrl && !options.force) return true;
@@ -118,7 +123,7 @@ export async function generateArrivalPhoto(catId: string, options: { force?: boo
     const MARGIN = 30;
     const FRAME_H = MARGIN + SCENE_H + 120; // 底部 120 留白 = 拍立得下缘
 
-    const scene = await sharp(await loadDockScene()).resize(SCENE_W, SCENE_H, { fit: "cover" }).toBuffer();
+    const scene = await sharp(await loadMeetScene(options.scene ?? "dock")).resize(SCENE_W, SCENE_H, { fit: "cover" }).toBuffer();
     // 立绘贴纸：圆角 + 白描边，像一张贴在照片上的即时贴（米白底立绘直接当"照片中的它"）
     const STICKER = 264;
     const rounded = Buffer.from(

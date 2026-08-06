@@ -129,7 +129,7 @@ export default async function HomePage() {
             {/* 已领养:自己的猫是首屏主角 */}
             <h1 className="font-title mt-6 text-2xl font-bold leading-relaxed">{heroNow}</h1>
             <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-              {night ? "今天的日记已经写好,压在门口的石头下。" : "它的一天正在进行——去看看,别错过。"}
+              {night ? "今天的日记已经写好,压在门口的石头下。" : "它的一天正在进行——这会儿过去,正赶得上。"}
             </p>
             <Link href="/my-cat" className="stamp-btn mt-6 inline-flex items-center gap-2">
               <CatAvatar id={myCat.id} size={26} portraitUrl={myCat.portraitUrl} crop="head" />

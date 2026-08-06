@@ -52,6 +52,29 @@ export function IconLighthouse(props: IconProps) {
   );
 }
 
+/** 礁石：潮线边两块挨着的歪石头，脚下一道退下去的浪 */
+export function IconReef(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5.2 17.5 7 11.8l3.1-1.6 2.4 2.9.6 4.3" />
+      <path d="M13.4 17.4l1.2-4.6 2.8-1 1.9 3-.6 2.7" />
+      <path d="M4 19.6c1.6-.9 3.2-.9 4.8-.1 1.7.8 3.3.8 5-.1 1.6-.8 3.2-.8 6.2.2" />
+      <path d="M9 13.9l1.3.8" />
+    </Svg>
+  );
+}
+
+/** 松树：三层歪松枝、一截树干和坡上的一点草 */
+export function IconPine(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3.6 8.6 8.3h2L7.4 12.6h2.2L6.4 17h11.2l-3.3-4.4h2.2l-3.4-4.3h2L12 3.6Z" />
+      <path d="M11.6 17v3.2M12.6 17v3.2" />
+      <path d="M6.8 20.4c3.4-.5 6.9-.5 10.4 0" />
+    </Svg>
+  );
+}
+
 /** 小屋：歪屋顶、烟囱和一扇门 */
 export function IconHouse(props: IconProps) {
   return (
