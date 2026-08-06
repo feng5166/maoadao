@@ -135,3 +135,10 @@ export const D0_SCREENS: D0Screen[] = [
 
 /** S1 右下唯一跳过口(doc2.0/15 状态机:ARRIVAL → D1_GATE 直通,记 d0_skip) */
 export const SKIP_LABEL = "直接去见它";
+
+/** 心流用图一律走 Next 图片优化器(2026-08-05 性能实测:s2 原图 178KB → AVIF ≈45KB;
+ *  国内到 vercel.app 只有几十 KB/s,原图直出 = 每屏多等几秒)。
+ *  固定 w=1080(方图,max-w-lg 容器 512×dpr2)/q=75(默认唯一放行档);预取共用同一 URL 才能命中缓存。 */
+export function optimizedImg(src: string): string {
+  return `/_next/image?url=${encodeURIComponent(src)}&w=1080&q=75`;
+}

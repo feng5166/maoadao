@@ -114,7 +114,7 @@ export default async function HomePage() {
           className="relative mx-auto max-w-3xl overflow-hidden rounded-lg border border-line"
         >
           {/* 夜里不压滤镜,直接换夜晚版码头图(月亮/渔火是画出来的,滤镜压暗效果差) */}
-          <Image src={night ? "/scenes/dock-night.jpg" : "/scenes/dock.jpg"} alt="猫啊岛的码头" width={1099} height={628} priority className="w-full" />
+          <Image src={night ? "/scenes/dock-night.jpg" : "/scenes/dock.jpg"} alt="猫啊岛的码头" width={1099} height={628} priority sizes="(max-width: 768px) 100vw, 768px" className="w-full" />
           {heroCat && (
             <PetCat
               id={heroCat.id}
@@ -297,7 +297,7 @@ export default async function HomePage() {
             ].map((s) => (
               <div key={s.title} className="scene-float">
                 <div className="overflow-hidden rounded-lg border border-line">
-                  <Image src={s.img} alt="" width={1099} height={628} className="w-full" />
+                  <Image src={s.img} alt="" width={1099} height={628} sizes="(max-width: 640px) 100vw, 245px" className="w-full" />
                 </div>
                 <h2 className="font-title mt-3 font-bold">{s.title}</h2>
                 <p className="mt-1 text-xs leading-relaxed text-ink-soft">{s.text}</p>

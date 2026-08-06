@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
-import { D0_SCREENS, SKIP_LABEL, TOUCH, type D0Screen } from "@/lib/d0/script";
+import { D0_SCREENS, SKIP_LABEL, TOUCH, optimizedImg, type D0Screen } from "@/lib/d0/script";
 import { IconShell } from "./icons";
 
 // D0Player(doc2.0/15 §四):五幕状态机,180 秒的认知跃迁。
@@ -33,7 +33,7 @@ function BreathingShot({ img, video, still }: { img: string; video?: string; sti
   return (
     <div className="relative aspect-square w-full overflow-hidden">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={img} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+      <img src={optimizedImg(img)} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
       {video && !still && (
         <video
           key={video}
@@ -129,10 +129,11 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen.id]);
 
-  // 预取下一两屏静帧(doc2.0/15 §四 加载策略)
+  // 预取下一两屏静帧(doc2.0/15 §四 加载策略)——走优化器 URL,和渲染同源才命中缓存
   useEffect(() => {
     for (const next of D0_SCREENS.slice(idx + 1, idx + 3)) {
-      if (next.img) new Image().src = next.img;
+      if (next.img) new Image().src = optimizedImg(next.img);
+      else if (next.scene) new Image().src = optimizedImg(next.scene);
     }
   }, [idx]);
 
@@ -221,7 +222,7 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
       return (
         <div className="relative w-full overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={screen.scene} alt="" className="w-full" draggable={false} />
+          <img src={optimizedImg(screen.scene)} alt="" className="w-full" draggable={false} />
           <Footprints />
         </div>
       );

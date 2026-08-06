@@ -3,6 +3,7 @@
 import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import { createCat } from "@/lib/actions";
+import { optimizedImg } from "@/lib/d0/script";
 import { SubmitButton } from "./SubmitButton";
 import { IconLighthouse, IconPaw, IconPine, IconReef } from "./icons";
 
@@ -170,7 +171,7 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
   }, [restored, beat, route, action, sightIdx, meowPlayed]);
 
   const r = route ? ROUTES.find((x) => x.key === route)! : null;
-  const sceneSrc = r ? `/scenes/${r.scene}-${variant}.jpg` : null;
+  const sceneSrc = r ? optimizedImg(`/scenes/${r.scene}-${variant}.jpg`) : null;
 
   // 拒绝(拍3 情感核心):画面停住,不给任何按钮——D1 唯一"正确"的操作是不操作。
   // 3 秒起(§九⑥),它自己回来;refusal_wait 记等待与有没有切走。
