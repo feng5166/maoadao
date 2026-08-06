@@ -26,15 +26,36 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
-/** 呼吸分镜:静帧立即出,循环视频 canplay 后淡入盖上(无感替换) */
-function BreathingShot({ img, video, still }: { img: string; video?: string; still: boolean }) {
+/** 慢连接判定(doc2.0/15 §五 降级梯的触发器):省流量/2g/3g/估算带宽 <1.5Mbps →
+ *  全程静图档,循环视频一字节都不下——单条 1.3-2.1MB,慢链路上永远到不了 canplay,
+ *  只会把静帧预取挤死(2026-08-05 实测国内到 vercel.app 仅 30-50KB/s)。
+ *  Safari 没有 connection API → 回退视频档(它自己的带宽管理够激进)。 */
+function slowConnection(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string; downlink?: number } }).connection;
+  if (!conn) return false;
+  if (conn.saveData) return true;
+  if (/2g|3g/.test(conn.effectiveType ?? "")) return true;
+  return typeof conn.downlink === "number" && conn.downlink < 1.5;
+}
+
+/** 呼吸分镜:静帧立即出,循环视频 canplay 后淡入盖上(无感替换)。
+ *  视频三重礼让:本屏静帧先画完(onLoad)→ 下两屏预取 settle(父级 videoGo)→ 才挂载。 */
+function BreathingShot({ img, video }: { img: string; video?: string }) {
   const [ready, setReady] = useState(false);
+  const [stillOk, setStillOk] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   useEffect(() => setReady(false), [video]);
+  useEffect(() => {
+    setStillOk(false);
+    // 预取命中缓存时 load 事件可能赶在挂载前:complete 兜底
+    if (imgRef.current?.complete) setStillOk(true);
+  }, [img]);
   return (
     <div className="relative aspect-square w-full overflow-hidden">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={optimizedImg(img)} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
-      {video && !still && (
+      <img ref={imgRef} src={optimizedImg(img)} alt="" onLoad={() => setStillOk(true)} className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+      {video && stillOk && (
         <video
           key={video}
           src={video}
@@ -101,10 +122,18 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
   const [touched, setTouched] = useState(false);
   const [touchTimeout, setTouchTimeout] = useState(false);
   const [hint, setHint] = useState(false);
+  // 媒介档位:慢连接/减少动效 → 静图档(降级梯第二级,doc2.0/15 §五)
+  const [slow, setSlow] = useState(false);
+  // 视频放行闸:下两屏静帧预取 settle(或 3.5s 兜底)之前,本屏视频不挂载
+  const [videoGo, setVideoGo] = useState(false);
+  const preloadGen = useRef(0);
   const ambientRef = useRef<HTMLAudioElement | null>(null);
   const cueRef = useRef<HTMLAudioElement | null>(null);
   const s9EnterRef = useRef<number | null>(null);
   const doneRef = useRef(false);
+
+  useEffect(() => setSlow(slowConnection()), []);
+  const tier: "video" | "still" = reduced || slow ? "still" : "video";
 
   const screen: D0Screen = D0_SCREENS[idx];
 
@@ -119,22 +148,39 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
     sessionStorage.setItem(RESUME_KEY, screen.id);
   }, [screen.id]);
 
-  // 进屏埋点(S9 特殊:出屏才知道驻留时长)
+  // 进屏埋点(S9 特殊:出屏才知道驻留时长);d0_enter 带媒介档,漏斗才分得清两种体验
   useEffect(() => {
     if (screen.id === "S9") {
       s9EnterRef.current = Date.now();
       return;
     }
-    if (screen.enterEvent) track(screen.enterEvent);
+    if (screen.enterEvent) track(screen.enterEvent, screen.enterEvent === "d0_enter" ? { tier: slowConnection() ? "still" : "video" } : undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen.id]);
 
-  // 预取下一两屏静帧(doc2.0/15 §四 加载策略)——走优化器 URL,和渲染同源才命中缓存
+  // 预取下一两屏静帧(doc2.0/15 §四 加载策略)——走优化器 URL,和渲染同源才命中缓存。
+  // 预取 settle 后才放行本屏视频(3.5s 兜底):慢链路上静帧永远赢过 1.5MB 的循环
   useEffect(() => {
+    const gen = ++preloadGen.current;
+    setVideoGo(false);
+    const jobs: Promise<unknown>[] = [];
     for (const next of D0_SCREENS.slice(idx + 1, idx + 3)) {
-      if (next.img) new Image().src = optimizedImg(next.img);
-      else if (next.scene) new Image().src = optimizedImg(next.scene);
+      const src = next.img ?? next.scene;
+      if (!src) continue;
+      jobs.push(
+        new Promise((resolve) => {
+          const im = new Image();
+          im.onload = im.onerror = resolve;
+          im.src = optimizedImg(src);
+        }),
+      );
     }
+    const go = () => {
+      if (preloadGen.current === gen) setVideoGo(true);
+    };
+    void Promise.allSettled(jobs).then(go);
+    const cap = setTimeout(go, 3500);
+    return () => clearTimeout(cap);
   }, [idx]);
 
   // 「听海」环境声:每屏换素材;S9 无 ambient = 静(设计)
@@ -220,20 +266,21 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
     if (screen.id === "S0") return <TicketStill ticket={ticket} />;
     if (screen.scene)
       return (
-        <div className="relative w-full overflow-hidden">
+        // aspect 锁死(场景图 1200×686):图未到时布局不跳
+        <div className="relative aspect-[1200/686] w-full overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={optimizedImg(screen.scene)} alt="" className="w-full" draggable={false} />
+          <img src={optimizedImg(screen.scene)} alt="" className="h-full w-full object-cover" draggable={false} />
           <Footprints />
         </div>
       );
-    if (screen.img) return <BreathingShot img={screen.img} video={showVideo ? screen.video : undefined} still={reduced} />;
+    if (screen.img) return <BreathingShot img={screen.img} video={tier === "video" && videoGo && showVideo ? screen.video : undefined} />;
     // S9 独屏一句:纸面排版屏
     return (
       <div className="flex aspect-square w-full items-center justify-center bg-paper-deep px-8">
         <p className="fx-rise font-diary text-center text-[19px] leading-[2.3] text-ink">{screen.lines?.[0]}</p>
       </div>
     );
-  }, [screen, ticket, showVideo, reduced]);
+  }, [screen, ticket, showVideo, tier, videoGo]);
 
   return (
     <div className="mx-auto max-w-lg select-none">

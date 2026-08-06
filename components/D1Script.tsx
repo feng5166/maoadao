@@ -267,9 +267,9 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
   if (beat === "approach" && r && sceneSrc) {
     return (
       <div className="mx-auto max-w-lg cursor-pointer" onClick={() => { track("first_meet_view", { route: r.key }); setBeat("encounter"); }}>
-        <div className="mt-4 overflow-hidden rounded-lg border border-line">
+        <div className="mt-4 aspect-[1200/686] overflow-hidden rounded-lg border border-line">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={sceneSrc} alt="" className="w-full" draggable={false} />
+          <img src={sceneSrc} alt="" className="h-full w-full object-cover" draggable={false} />
         </div>
         <p className="fx-rise font-diary mt-6 text-center text-[16px] leading-[2.2] text-ink">你朝{r.place}走过去。</p>
         <p className="fx-rise-2 mt-4 text-center text-xs text-ink-faint">（点一下画面，走近些。）</p>
@@ -282,9 +282,9 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
     const act = action ? ACTIONS.find((a) => a.key === action)! : null;
     return (
       <div className="mx-auto max-w-lg">
-        <div className="mt-4 overflow-hidden rounded-lg border border-line">
+        <div className="mt-4 aspect-[1200/686] overflow-hidden rounded-lg border border-line">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={sceneSrc} alt="" className="w-full" draggable={false} />
+          <img src={sceneSrc} alt="" className="h-full w-full object-cover" draggable={false} />
         </div>
         <div className="mt-6 text-center">
           <p className="font-diary text-[16px] leading-[2.2] text-ink">
