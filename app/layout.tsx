@@ -8,6 +8,7 @@ import { getViewerCat } from "@/lib/queries";
 import { beijingHour } from "@/lib/moments";
 import { HeaderCta } from "@/components/HeaderCta";
 import { NightLamp } from "@/components/NightLamp";
+import { IslandSound } from "@/components/IslandSound";
 import { FontFallback } from "@/components/FontFallback";
 // 自托管中文 webfont 不再从这里 import(2026-08-06 性能治理)：分片声明约 106KB(gz)
 // 会进每一页的渲染阻塞样式表，而 Apple/Windows 用户命中系统宋体/楷体、一个字体文件
@@ -46,6 +47,8 @@ export default async function RootLayout({
               猫啊岛
             </Link>
             <nav className="flex items-center gap-4 text-sm">
+              {/* 岛声层:页头一枚海螺,没有播放器 —— 声音属于世界不属于界面 */}
+              <IslandSound />
               {night && <NightLamp initialLit={!dark} />}
               <Link href="/island" className="text-sea-deep hover:text-brick">
                 岛上

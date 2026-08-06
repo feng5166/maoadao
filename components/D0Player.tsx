@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import { D0_SCREENS, SKIP_LABEL, TOUCH, optimizedImg, type D0Screen } from "@/lib/d0/script";
 import { cdn } from "@/lib/assets";
+import { useTapAdvance } from "./useTapAdvance";
 import { IconShell } from "./icons";
 
 // D0Player(doc2.0/15 §四):五幕状态机,180 秒的认知跃迁。
@@ -14,6 +15,9 @@ import { IconShell } from "./icons";
 
 const RESUME_KEY = "d0-screen";
 const SEA_KEY = "d0-sea";
+// 与岛声层(components/IslandSound.tsx)共用一个偏好:全站开过声音的人,
+// 进 D0 不该再被要求开一次;在 D0 里开的,出去也接着有声
+const ISLAND_KEY = "island-sound";
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -143,7 +147,7 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
     const saved = sessionStorage.getItem(RESUME_KEY);
     const savedIdx = saved ? D0_SCREENS.findIndex((s) => s.id === saved) : -1;
     if (savedIdx > 0) setIdx(savedIdx);
-    setSea(sessionStorage.getItem(SEA_KEY) === "1");
+    setSea(sessionStorage.getItem(SEA_KEY) === "1" || localStorage.getItem(ISLAND_KEY) === "on");
   }, []);
   useEffect(() => {
     sessionStorage.setItem(RESUME_KEY, screen.id);
@@ -259,6 +263,8 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
   const isS6a = screen.id === "S6a";
   const isGate = screen.id === "S10";
   const tapAdvances = !screen.button && (!isS6a || touched || touchTimeout);
+  // 热区 = 整个正文区(画面/旁白/四周留白都算),不是只有画面那一块
+  useTapAdvance(tapAdvances ? advance : null);
   // S6a 未轻触时不放旁白也不放视频——回应发生在你蹲下来之后
   const showLines = !isS6a || touched;
   const showVideo = !isS6a || touched;
@@ -293,6 +299,7 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
             const next = !sea;
             setSea(next);
             sessionStorage.setItem(SEA_KEY, next ? "1" : "0");
+            localStorage.setItem(ISLAND_KEY, next ? "on" : "off"); // 带出 D0,全站接着有声
           }}
           className={`inline-flex items-center gap-1 px-2 py-1 text-xs transition-colors ${sea ? "text-sea-deep" : "text-ink-faint"}`}
         >
@@ -301,15 +308,13 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
         </button>
       </div>
 
-      <div
-        className={`mt-2 overflow-hidden rounded-lg border border-line ${tapAdvances ? "cursor-pointer" : ""}`}
-        onClick={tapAdvances ? advance : undefined}
-      >
+      {/* 点按由 useTapAdvance 统一接管(整个正文区),这里只留手势提示 */}
+      <div className={`mt-2 overflow-hidden rounded-lg border border-line ${tapAdvances ? "cursor-pointer" : ""}`}>
         {media}
       </div>
 
       {/* 旁白区:固定最小高度,行文逐行浮现;S9 的字在画面里,这里留白 */}
-      <div className="mt-6 min-h-[7.5rem] text-center" onClick={tapAdvances ? advance : undefined}>
+      <div className={`mt-6 min-h-[7.5rem] text-center ${tapAdvances ? "cursor-pointer" : ""}`}>
         {screen.id !== "S9" && showLines && (
           <p key={`${screen.id}-lines`} className="font-diary text-[16px] leading-[2.2] text-ink">
             {screen.lines?.map((l, i) => (
