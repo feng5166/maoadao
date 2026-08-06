@@ -12,6 +12,7 @@ import { beijingHour, currentSegment, nowLine } from "@/lib/moments";
 import { factSummary } from "@/lib/sim/engine";
 import { petLine } from "@/lib/handbook";
 import { hashSeed, mulberry32, pick } from "@/lib/sim/rng";
+import { lookupTicket } from "@/lib/tickets";
 import type { Fact } from "@/lib/sim/types";
 import { prisma } from "@/lib/db";
 
@@ -24,7 +25,7 @@ export const dynamic = "force-dynamic";
 // 值班猫候选:社交型 NPC(每天换一只,明天再来是另一只——活感的最便宜来源)
 const DUTY_POOL = ["npc-mianhua", "npc-juzi", "npc-bingfen", "npc-xiaomei", "npc-heidou", "npc-lingdang"];
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ ticket?: string }> }) {
   const viewerId = await getViewerId();
   const [myCat, { world, npcs, totalCats, sampleDiary }, newsRaw, catIndex] = await Promise.all([
     getViewerCat(viewerId),
@@ -51,6 +52,13 @@ export default async function HomePage() {
   const seg = currentSegment(hour);
   const night = hour >= 19 || hour < 6;
   const raining = world.weather === "雨";
+
+  // 船票上下文:带票来的人和陌生访客是两种人——首屏必须认出来。
+  // 分流优先级:自己的猫 > 船票 > 普通访客(已经是岛民的人不再被当受邀者招呼)
+  const ticketLook = myCat ? { state: "none" as const } : await lookupTicket((await searchParams).ticket);
+  const invited = ticketLook.state === "valid" ? ticketLook : null;
+  // 用过 ≠ 查无此票:对一张根本不存在的票说"已经有人用过了"是在编造事实(doc/04)
+  const badTicket = ticketLook.state === "spent" ? "spent" : ticketLook.state === "unknown" ? "unknown" : null;
 
   // ---- 值班猫(未领养首屏的主角):今天在码头等你的那一只 ----
   const dutyPoolPresent = DUTY_POOL.filter((id) => npcs.some((n) => n.id === id));
@@ -96,7 +104,20 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-12 py-4">
-      <Track events={[{ name: "landing_view", props: { hasCat: Boolean(myCat), seg: seg ?? "night" } }]} />
+      <Track
+        events={[
+          {
+            name: "landing_view",
+            props: {
+              hasCat: Boolean(myCat),
+              seg: seg ?? "night",
+              // 船票态先上(P0);来过/看完 D0 两个信号随脚印那版补齐
+              ticket: invited ? "valid" : (badTicket ?? "none"),
+              viewerState: myCat ? "RESIDENT" : invited ? "TICKET_HOLDER" : "FIRST_VISIT",
+            },
+          },
+        ]}
+      />
       <StayTrack page="home" />
 
       {/* 岛历行:世界在走(顶部,状态色) */}
@@ -136,14 +157,44 @@ export default async function HomePage() {
               上岛找它
             </Link>
           </>
+        ) : invited ? (
+          <>
+            {/* 受邀态:有人把票寄到你手里了——先承认这件事,再谈上岛 */}
+            <h1 className="font-title mt-6 text-2xl font-bold leading-relaxed">
+              这张船票，已经寄到你手里了。
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+              {/* 猫名自带"的"时(如「阿道的猫」)不加引号会连成一串,一律用引号隔开 */}
+              {invited.inviter
+                ? `岛上「${invited.inviter}」的主人，给你留了一张。`
+                : "一张寄到你手里的船票。"}
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <Link href={`/adopt?ticket=${encodeURIComponent(invited.code)}`} className="stamp-btn inline-block">
+                带着它登岛
+              </Link>
+              <a href="#now" className="text-sm text-sea-deep hover:text-brick">
+                先看看岛上 ↓
+              </a>
+            </div>
+            <p className="mt-3 font-mono text-xs tracking-wider text-ink-faint">{invited.code}</p>
+          </>
         ) : (
           <>
             {/* 未领养:短句 + 场景动作,不再念产品定义 */}
             <h1 className="font-title mt-6 text-2xl font-bold leading-relaxed">
-              有一只猫，正在岛上等你。
+              {badTicket === "spent"
+                ? "这张船票，已经有人用过了。"
+                : badTicket === "unknown"
+                  ? "这张船票，登记处查不到。"
+                  : "有一只猫，正在岛上等你。"}
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-              它会记住你，也会在你离开后继续生活。
+              {badTicket === "spent"
+                ? "一张票只带得动一个人。想上岛，找个岛上的人再要一张。"
+                : badTicket === "unknown"
+                  ? "老章翻了两遍册子，没有这个号。找给你票的人再要一次。"
+                  : "它会记住你，也会在你离开后继续生活。"}
             </p>
             <div className="mt-6 flex items-center justify-center gap-4">
               <Link href="/adopt" className="stamp-btn inline-block">
@@ -153,11 +204,11 @@ export default async function HomePage() {
                 先看看岛上 ↓
               </a>
             </div>
-            {dutyCat && (
+            {dutyCat && !badTicket && (
               <p className="mt-3 text-xs text-ink-faint">今天在码头值班的是{dutyCat.name}——摸摸它试试。</p>
             )}
             <p className="mt-2 text-xs text-ink-faint">
-              在别处上过岛?<Link href="/login" className="text-sea-deep hover:text-brick">用邮箱和密码回来</Link>
+              已经来过?<Link href="/login" className="text-sea-deep hover:text-brick">回到岛上</Link>
             </p>
           </>
         )}
