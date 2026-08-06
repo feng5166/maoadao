@@ -8,11 +8,11 @@ import { getViewerCat } from "@/lib/queries";
 import { beijingHour } from "@/lib/moments";
 import { HeaderCta } from "@/components/HeaderCta";
 import { NightLamp } from "@/components/NightLamp";
-// 自托管中文 webfont（unicode-range 分片，按需下载）：Apple 设备命中系统宋体/楷体
-// 不会下载；Android/Windows 缺字库时兜底，避免手账感退化成默认黑体。
-import "@fontsource/noto-serif-sc/400.css";
-import "@fontsource/noto-serif-sc/700.css";
-import "lxgw-wenkai-lite-webfont/lxgwwenkailite-regular.css";
+import { FontFallback } from "@/components/FontFallback";
+// 自托管中文 webfont 不再从这里 import(2026-08-06 性能治理)：分片声明约 106KB(gz)
+// 会进每一页的渲染阻塞样式表，而 Apple/Windows 用户命中系统宋体/楷体、一个字体文件
+// 都不下。改由 FontFallback 探测系统字体后按需挂载 public/fonts/ 下的声明；
+// 资产由 scripts/fonts-publish.ts 生成（升级字体包后重跑）。
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -78,6 +78,7 @@ export default async function RootLayout({
             </a>
           </p>
         </footer>
+        <FontFallback />
         <Analytics />
       </body>
     </html>
