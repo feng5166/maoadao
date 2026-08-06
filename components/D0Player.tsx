@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import { D0_SCREENS, SKIP_LABEL, TOUCH, optimizedImg, type D0Screen } from "@/lib/d0/script";
+import { cdn } from "@/lib/assets";
 import { IconShell } from "./icons";
 
 // D0Player(doc2.0/15 §四):五幕状态机,180 秒的认知跃迁。
@@ -58,7 +59,7 @@ function BreathingShot({ img, video }: { img: string; video?: string }) {
       {video && stillOk && (
         <video
           key={video}
-          src={video}
+          src={cdn(video)}
           muted
           loop
           playsInline
@@ -191,7 +192,7 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
       a.pause();
       return;
     }
-    const src = `/sounds/D0/${screen.ambient}`;
+    const src = cdn(`/sounds/D0/${screen.ambient}`);
     if (!a.src.endsWith(src)) a.src = src;
     a.loop = true;
     a.volume = 0.45;
@@ -201,7 +202,7 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
   // 进屏一次性音效(听海开启时);S6 的「呣」在轻触时刻单独触发
   useEffect(() => {
     if (!sea || !screen.cue || !cueRef.current) return;
-    cueRef.current.src = `/sounds/D0/${screen.cue}`;
+    cueRef.current.src = cdn(`/sounds/D0/${screen.cue}`);
     cueRef.current.volume = 0.6;
     cueRef.current.play().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,7 +250,7 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
     setTouched(true);
     track("d0_touch");
     if (sea && cueRef.current) {
-      cueRef.current.src = `/sounds/D0/${TOUCH.cue}`;
+      cueRef.current.src = cdn(`/sounds/D0/${TOUCH.cue}`);
       cueRef.current.volume = 0.5;
       cueRef.current.play().catch(() => {});
     }

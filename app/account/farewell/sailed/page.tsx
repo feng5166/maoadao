@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { SceneImage } from "@/components/SceneImage";
 import Link from "next/link";
 import { AutoToDock } from "@/components/AutoToDock";
 
@@ -9,7 +9,7 @@ export default function SailedPage() {
   return (
     <div className="mx-auto max-w-lg text-center">
       <div className="relative mt-6 overflow-hidden rounded-lg border border-line">
-        <Image
+        <SceneImage
           src="/scenes/sailed.jpg"
           alt="黄昏渐深的海面，船只剩海平线上的一个小点"
           width={1200} height={686} priority className="w-full"

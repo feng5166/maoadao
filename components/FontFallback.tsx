@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { cdn } from "@/lib/assets";
 
 // 中文 webfont 按需兜底(2026-08-06 性能治理)。
 //
@@ -18,9 +19,11 @@ import { useEffect } from "react";
 //     真有 Songti SC 也测出"宽度相同"= 假阴性(会给所有人白塞 100KB)。
 // 宋体/楷体都自带拉丁字形,与 monospace/sans-serif 的字宽差异稳定可测。
 
+// 走 cdn():字体分片对缺字库的设备是几百 KB 起步,最该走国内直连。
+// CSS 里的 url(./files/...) 是相对路径,跟着 CSS 所在域一起走,不用另行改写
 const CSS = {
-  serif: ["/fonts/noto-serif-sc-400.css", "/fonts/noto-serif-sc-700.css"],
-  kai: ["/fonts/lxgw-wenkai-lite.css"],
+  serif: [cdn("/fonts/noto-serif-sc-400.css"), cdn("/fonts/noto-serif-sc-700.css")],
+  kai: [cdn("/fonts/lxgw-wenkai-lite.css")],
 };
 
 /** 系统里是否装着这个字体族 */

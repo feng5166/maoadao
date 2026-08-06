@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { SceneImage } from "@/components/SceneImage";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CatAvatar } from "@/components/CatAvatar";
@@ -25,7 +25,7 @@ export default async function FarewellPage() {
       </div>
 
       <div className="relative mt-4 overflow-hidden rounded-lg border border-line">
-        <Image
+        <SceneImage
           src="/scenes/farewell.jpg"
           alt="黄昏的码头，一艘小船正驶向海平线"
           width={1200} height={686} priority className="w-full"

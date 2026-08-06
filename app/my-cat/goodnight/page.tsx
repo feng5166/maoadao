@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { SceneImage } from "@/components/SceneImage";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
@@ -51,7 +51,7 @@ export default async function GoodnightPage() {
       <Track events={[{ name: "leave_for_tomorrow" }, { name: "first_departure_created" }]} />
 
       <div className="relative mt-8 overflow-hidden rounded-lg border border-line">
-        <Image src="/scenes/home.jpg" alt="" width={1200} height={686} priority className="w-full" />
+        <SceneImage src="/scenes/home.jpg" width={1200} height={686} priority className="w-full" />
         {/* 夜色：入夜的滤镜盖在白天的小屋上 */}
         <div className="absolute inset-0 bg-[#1c2733]/55" />
         <p className="absolute bottom-3 left-0 right-0 text-center text-xs tracking-widest text-[#fdf9f2]/80">

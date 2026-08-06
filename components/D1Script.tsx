@@ -4,6 +4,7 @@ import { useActionState, useCallback, useEffect, useMemo, useRef, useState } fro
 import { track } from "@vercel/analytics";
 import { createCat } from "@/lib/actions";
 import { optimizedImg } from "@/lib/d0/script";
+import { cdn } from "@/lib/assets";
 import { SubmitButton } from "./SubmitButton";
 import { IconLighthouse, IconPaw, IconPine, IconReef } from "./icons";
 
@@ -102,7 +103,7 @@ function firstMeow(route: Route, action: Action, sightIdx: number) {
   const variant = (sightIdx % 2) + 1;
   const volume = action === "reach" ? 0.85 : action === "wait" ? 0.6 : 0.3;
   const text = action === "reach" ? "咪！" : action === "wait" ? "喵……" : "……喵。";
-  return { assetId: `${type}_${timbre}_${variant}`, file: `/sounds/${type}/${timbre}-${variant}.mp3`, volume, text };
+  return { assetId: `${type}_${timbre}_${variant}`, file: cdn(`/sounds/${type}/${timbre}-${variant}.mp3`), volume, text };
 }
 
 /** 北京时间时段 → 场景变体(与站点夜里的岛同一时钟) */
