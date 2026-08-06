@@ -5,6 +5,7 @@ import { track } from "@vercel/analytics";
 import { createCat } from "@/lib/actions";
 import { optimizedImg } from "@/lib/d0/script";
 import { cdn } from "@/lib/assets";
+import { useTapAdvance } from "./useTapAdvance";
 import { SubmitButton } from "./SubmitButton";
 import { IconLighthouse, IconPaw, IconPine, IconReef } from "./icons";
 
@@ -208,7 +209,11 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
 
   const chooseSight = useCallback(
     (i: number) => {
-      if (sightIdx !== null) return;
+      // 选过就不改了(不给重试,doc/21 §八):此时再点这四张牌 = 接着看,不是死区
+      if (sightIdx !== null) {
+        setBeat("name");
+        return;
+      }
       setSightIdx(i);
       // 第一声猫语(拍4):它停下的那一刻。自动播放被拦就静默跳过——允许不发声
       if (route && action) {
@@ -233,6 +238,31 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
   }, [route, action, sightIdx]);
 
   const meow = route && action && sightIdx !== null ? firstMeow(route, action, sightIdx) : null;
+
+  // 整拍可点:只需"点一下"的拍,热区是整个正文区(见 useTapAdvance)。
+  // 选择拍(岔路/动作/第一眼)与登记拍不在此列——那些要落到具体那一项上;
+  // 拒绝拍更不给点:画面停住,不操作才是它的内容(doc/21 §九⑥)。
+  const tap = useMemo(() => {
+    if (beat === "approach" && r)
+      return () => {
+        track("first_meet_view", { route: r.key });
+        setBeat("encounter");
+      };
+    if (beat === "return") return () => setBeat("sight");
+    if (beat === "sight" && sightIdx !== null) return () => setBeat("name");
+    if (beat === "name" && catName)
+      return () => {
+        track("island_step", { step: 5, name: catName });
+        setBeat("gift");
+      };
+    if (beat === "gift" && route)
+      return () => {
+        track("keepsake_received", { route });
+        setBeat("register");
+      };
+    return null;
+  }, [beat, r, sightIdx, catName, route]);
+  useTapAdvance(tap);
 
   // —— 各拍画面 ——
 
@@ -267,7 +297,7 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
 
   if (beat === "approach" && r && sceneSrc) {
     return (
-      <div className="mx-auto max-w-lg cursor-pointer" onClick={() => { track("first_meet_view", { route: r.key }); setBeat("encounter"); }}>
+      <div className="mx-auto max-w-lg cursor-pointer">
         <div className="mt-4 aspect-[1200/686] overflow-hidden rounded-lg border border-line">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={sceneSrc} alt="" className="h-full w-full object-cover" draggable={false} />
@@ -319,7 +349,7 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
           )}
 
           {beat === "return" && (
-            <div className="mt-6 cursor-pointer" onClick={() => setBeat("sight")}>
+            <div className="mt-6 cursor-pointer">
               <p className="fx-rise font-diary text-[16px] leading-[2.2] text-ink">
                 过了一会儿，它自己走了回来，
                 <br />
@@ -350,7 +380,7 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
           ))}
         </div>
         {sightIdx !== null && meow && (
-          <div className="mt-7 cursor-pointer text-center" onClick={() => setBeat("name")}>
+          <div className="mt-7 cursor-pointer text-center">
             <p className="fx-rise font-diary text-[17px] text-ink">「{meow.text}」</p>
             <p className="fx-rise mt-1 text-xs text-ink-faint">它朝你叫了一声——这是它对你说的第一声。</p>
             <p className="fx-rise-2 mt-4 text-xs text-ink-faint">（点一下，接着看。）</p>
@@ -362,7 +392,7 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
 
   if (beat === "name" && catName) {
     return (
-      <div className="mx-auto max-w-lg cursor-pointer" onClick={() => { track("island_step", { step: 5, name: catName }); setBeat("gift"); }}>
+      <div className="mx-auto max-w-lg cursor-pointer">
         <div className="mt-8 text-center">
           <p className="font-diary text-[16px] leading-[2.2] text-ink">
             <span className="fx-rise block">它脖子上挂着一块褪色的小牌子。</span>
@@ -380,13 +410,7 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
   if (beat === "gift" && route) {
     const gift = GIFTS[route];
     return (
-      <div
-        className="mx-auto max-w-lg cursor-pointer"
-        onClick={() => {
-          track("keepsake_received", { route });
-          setBeat("register");
-        }}
-      >
+      <div className="mx-auto max-w-lg cursor-pointer">
         <div className="mt-8 text-center">
           <p className="font-diary text-[16px] leading-[2.3] text-ink">
             {gift.arc.map((l, i) => (
