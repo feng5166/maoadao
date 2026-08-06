@@ -85,14 +85,22 @@ export async function generatePortrait(
   }
 }
 
-// 相遇照片可用的场景(doc/21 §四:照片跟随相遇地点):白名单防路径注入
-const MEET_SCENES = new Set(["dock", "reef", "pines", "lighthouse"]);
+// 相遇照片可用的场景(doc/21 §四:照片跟随相遇地点)。
+// 每个分支的 readFile 路径必须保持**全字面量**——动态拼接(`${name}.jpg`)会让
+// Next 文件追踪器放弃解析,把 process.cwd() 整个项目打进函数包
+//(2026-08-05 事故:/adopt 函数 339MB、冷启动秒级,全站打开变慢)。
+const MEET_SCENE_FILES: Record<string, () => Promise<Buffer>> = {
+  dock: () => readFile(path.join(process.cwd(), "public", "scenes", "dock.jpg")),
+  reef: () => readFile(path.join(process.cwd(), "public", "scenes", "reef.jpg")),
+  pines: () => readFile(path.join(process.cwd(), "public", "scenes", "pines.jpg")),
+  lighthouse: () => readFile(path.join(process.cwd(), "public", "scenes", "lighthouse.jpg")),
+};
 
 /** 场景图：本地文件优先（dev/构建含 public），兜底走线上（serverless 未打包时） */
 async function loadMeetScene(scene: string): Promise<Buffer> {
-  const name = MEET_SCENES.has(scene) ? scene : "dock";
+  const name = MEET_SCENE_FILES[scene] ? scene : "dock";
   try {
-    return await readFile(path.join(process.cwd(), "public", "scenes", `${name}.jpg`));
+    return await MEET_SCENE_FILES[name]();
   } catch {
     const host = process.env.VERCEL_URL || "maoadao.com";
     const res = await fetch(`https://${host}/scenes/${name}.jpg`);

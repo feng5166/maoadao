@@ -1,8 +1,6 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -16,6 +14,7 @@ import { generateArrivalDay } from "./firstday";
 import { ensureViewerId, getViewerId } from "./identity";
 import { catDayOf } from "./sim/lifecycle";
 import { cookies } from "next/headers";
+import { SITE_URL } from "./site";
 import soundCatalog from "./voice/sound-catalog.json";
 
 const GOALS = new Set(["earn", "friends", "explore", "chill"]);
@@ -29,19 +28,15 @@ const MEET_ROUTES: Record<string, { scene: string; keepsake: (nick: string) => s
 };
 
 /** 第一声猫语存进海螺留声位(doc/21 拍4:唯一能被听见的 D1 资产,相遇档案可回放)。
- *  素材是静态 mp3:本地读优先,serverless 未打包时走线上兜底(与相遇场景同一套路)。 */
+ *  素材是静态 mp3,一律走自家 CDN 取——**不要用 fs 读**:动态路径的 readFile 会让
+ *  Next 追踪器把整个项目打进函数包(2026-08-05 事故,详见 lib/portrait.ts 注)。 */
 async function saveFirstMeow(catId: string, assetId: string, text: string): Promise<void> {
   const entry = (soundCatalog as { assetId: string; file: string; durationMs: number }[]).find((e) => e.assetId === assetId);
   if (!entry) return;
-  let mp3: Buffer;
-  try {
-    mp3 = await readFile(path.join(process.cwd(), "public", entry.file));
-  } catch {
-    const host = process.env.VERCEL_URL || "maoadao.com";
-    const res = await fetch(`https://${host}${entry.file}`);
-    if (!res.ok) return;
-    mp3 = Buffer.from(await res.arrayBuffer());
-  }
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : SITE_URL;
+  const res = await fetch(`${base}${entry.file}`);
+  if (!res.ok) return;
+  const mp3 = Buffer.from(await res.arrayBuffer());
   await prisma.catVoiceNote.upsert({
     where: { catId },
     update: {}, // 已有留声不覆盖——第一声只有一次
