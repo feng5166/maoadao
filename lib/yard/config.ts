@@ -67,6 +67,13 @@ export const PREF = {
   trace: { base: 0.2, shortStay: 0.25, longStay: -0.15, cap: 0.75 }, // Disclosure；稀缺档不得进入本公式（22 修订②）
 };
 
+// ---------- 结算运维参数 ----------
+export const SETTLEMENT = {
+  // 单次页面加载最多补算多少个窗（长离线防一次补数百窗；最旧优先，余量下次加载续补——
+  // 确定性种子保证晚补结果不变）。实施参数，登记于此（22 §零：禁散落 magic number）。
+  maxBackfillWindowsPerLoad: 64,
+};
+
 // ---------- 天气（22 §六 WorldScenarioProfile 的 v0）----------
 // v0 由 dayKey 确定性派生（保证结算可复现）；批次二接世界模拟的天气史后替换。
 export const WEATHER_DIST: Array<{ key: string; p: number }> = [

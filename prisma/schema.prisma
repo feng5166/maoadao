@@ -540,6 +540,7 @@ model CatVisit {
   traces       Json // string[]
   visibility   String // FULL_RECORD | TRACE_ONLY（暴露度折叠列；LIVE 属 Observation）
   rulesVersion String // 护栏②
+  collectedAt  DateTime? // 收下时刻：collect 只确认/转移 CatVisit 已产生的 entitlement，永不创造资源（19「资源是往来」的代码面）；条件更新 null→时刻 = 幂等防重复入账
   settlement   WindowSettlement @relation(fields: [settlementId], references: [id])
   observations Observation[]
 
