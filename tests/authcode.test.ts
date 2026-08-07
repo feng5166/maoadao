@@ -1,10 +1,9 @@
-import { config } from "dotenv";
-config({ path: [".env.local", ".env"], override: true });
+import { TEST_DB_READY } from "./db-guard";
 
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = TEST_DB_READY; // 见 tests/db-guard.ts:没有 TEST_DATABASE_URL 就整体跳过,绝不误写生产库
 const EMAIL = "brute-test@example.com";
 
 describe.skipIf(!hasDb)("验证码防爆破（真实数据库，自清理）", () => {

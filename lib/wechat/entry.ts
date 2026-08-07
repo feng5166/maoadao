@@ -7,8 +7,16 @@ import { SITE_URL } from "../site";
 
 const TTL_MS = 72 * 3600_000;
 
+// 生产上密钥缺失必须硬失败(2026-08-07 review P2):原先回退空串——
+// 签名密钥是空的,等于任何人都能自己造一个"以某某身份回岛"的令牌,配置一时疏忽
+// 就演变成账号接管。开发环境允许弱回退,方便本地跑通链路。
 function secret(): string {
-  return process.env.AUTH_SECRET ?? process.env.WECHAT_BRIDGE_SECRET ?? "";
+  const s = process.env.AUTH_SECRET ?? process.env.WECHAT_BRIDGE_SECRET ?? "";
+  if (s.length >= 16) return s;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[wechat/entry] AUTH_SECRET 缺失或过短:拒绝签发/校验深链令牌");
+  }
+  return s || "dev-only-entry-secret";
 }
 
 function sign(payload: string): string {

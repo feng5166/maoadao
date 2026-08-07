@@ -1,12 +1,11 @@
-import { config } from "dotenv";
-config({ path: [".env.local", ".env"], override: true });
+import { TEST_DB_READY } from "./db-guard";
 // 让叙事 LLM 快速失败走兜底：测试关注的是数据一致性，不是文案质量
 process.env.ANTHROPIC_AUTH_TOKEN = "invalid-for-test";
 process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = TEST_DB_READY; // 见 tests/db-guard.ts:没有 TEST_DATABASE_URL 就整体跳过,绝不误写生产库
 const TEST_OWNER = "u-test-reliability";
 const TEST_CATS = ["cat-test-rel-a", "cat-test-rel-b", "cat-test-firstday"];
 

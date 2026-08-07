@@ -168,11 +168,30 @@ export async function dispatchOutbound(): Promise<{ sent: number; windowClosed: 
   const world = await prisma.worldState.findUnique({ where: { id: 1 } });
   if (world?.wechatPaused) return { sent: 0, windowClosed: 0, failed: 0, halted: true };
 
-  const due = await prisma.outboundMessage.findMany({
+  // 原子领取(2026-08-07 review P1):原先是"查出 queued → 发 → 再改状态",
+  // 并发 cron / 人工重放 / 发出去但响应超时,都会让同一条消息发两遍——
+  // 猫在微信里把同一句话说两次,是最伤"它是活的"这件事的 bug。
+  // 现在先用条件更新把这一批打上 sending 抢下来:抢不到的实例自然拿不到活儿。
+  // 卡单回收:进程在 sending 上挂掉的,10 分钟后放回队列(没有这一步就是永久卡住)
+  await prisma.outboundMessage.updateMany({
+    where: { status: "sending", claimedAt: { lt: new Date(Date.now() - 10 * 60_000) } },
+    data: { status: "queued", claimId: null, claimedAt: null },
+  });
+
+  const claimId = randomUUID();
+  const candidates = await prisma.outboundMessage.findMany({
     where: { status: "queued", sendAfter: { lte: new Date() } },
     orderBy: { sendAfter: "asc" },
+    select: { id: true },
     take: 50,
   });
+  if (candidates.length === 0) return { sent: 0, windowClosed: 0, failed: 0, halted: false };
+  // 只认自己抢到的:where 里带 status:"queued",输家的 updateMany 影响 0 行
+  await prisma.outboundMessage.updateMany({
+    where: { id: { in: candidates.map((c) => c.id) }, status: "queued" },
+    data: { status: "sending", claimedAt: new Date(), claimId },
+  });
+  const due = await prisma.outboundMessage.findMany({ where: { claimId, status: "sending" }, orderBy: { sendAfter: "asc" } });
   let sent = 0, windowClosed = 0, failed = 0;
 
   for (const msg of due) {
@@ -188,7 +207,8 @@ export async function dispatchOutbound(): Promise<{ sent: number; windowClosed: 
       windowClosed++;
       continue;
     }
-    const r = await sendWechat(ch.externalId, msg.content);
+    // 幂等键用消息 id:重试到桥那边也只会落一条
+    const r = await sendWechat(ch.externalId, msg.content, false, msg.id);
     await prisma.outboundMessage.update({
       where: { id: msg.id },
       data: { status: r.ok ? "sent" : "failed", sentAt: r.ok ? new Date() : null },

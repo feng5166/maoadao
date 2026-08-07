@@ -11,7 +11,8 @@
     "seed": "tsx scripts/seed.ts",
     "tick": "tsx scripts/tick.ts",
     "postinstall": "prisma generate",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:db:setup": "tsx scripts/test-db-setup.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

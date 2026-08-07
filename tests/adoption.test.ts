@@ -1,5 +1,4 @@
-import { config } from "dotenv";
-config({ path: [".env.local", ".env"], override: true });
+import { TEST_DB_READY } from "./db-guard";
 // 审核 LLM 快速失败走词表兜底（词表命中仍然拦截）——测试关注核销时序，不是文案
 process.env.ANTHROPIC_AUTH_TOKEN = "invalid-for-test";
 process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
@@ -8,7 +7,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 const T = 60_000;
 
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = TEST_DB_READY; // 见 tests/db-guard.ts:没有 TEST_DATABASE_URL 就整体跳过,绝不误写生产库
 const U1 = "u-test-adopt-1";
 const U2 = "u-test-adopt-2";
 const U3 = "u-test-adopt-3";

@@ -1,5 +1,4 @@
-import { config } from "dotenv";
-config({ path: [".env.local", ".env"], override: true });
+import { TEST_DB_READY } from "./db-guard";
 
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
@@ -8,7 +7,7 @@ import { afterAll, describe, expect, it } from "vitest";
 // 三条重置路径(改密码/邮件验证码/回岛钥匙)共用 revokeAllSessions,这里直接测它的语义——
 // Server Action 本体依赖 cookies()/headers() 请求上下文,单测里不可用。
 // 用真库(自清理);跑不到库时整体跳过。
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = TEST_DB_READY; // 见 tests/db-guard.ts:没有 TEST_DATABASE_URL 就整体跳过,绝不误写生产库
 
 describe.skipIf(!hasDb)("密码变更后旧会话失效(review P1)", () => {
   const users: string[] = [];

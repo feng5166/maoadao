@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import QRCode from "qrcode";
 import { getViewerId } from "@/lib/identity";
 import { getBoundChannel } from "@/lib/wechat/service";
 import { startBind, wechatEnabled } from "@/lib/wechat/bridge";
@@ -21,6 +22,14 @@ export async function GET(req: NextRequest) {
 
   const r = await startBind(viewerId);
   if (!r) return Response.json({ ok: false, error: "bridge_unavailable" }, { status: 502 });
+  // 二维码在服务端渲成 data URI 再下发(2026-08-07 review P1)。
+  // 原先把载荷交给 api.qrserver.com 画 —— 那串东西就是这个用户的绑定凭据,
+  // 谁先拿到谁先扫谁就绑上了,不该出我们这台机器。qrcode 依赖本来就在(分享卡在用)。
+  const qrDataUrl = await QRCode.toDataURL(r.qrImg, { width: 440, margin: 1, color: { dark: "#4a4237", light: "#fffdf6" } }).catch(
+    () => null,
+  );
+  if (!qrDataUrl) return Response.json({ ok: false, error: "qr_render_failed" }, { status: 500 });
   // since:换海螺时轮询要能分辨"新通道建好了"与"旧通道本来就在"(见 qr-status 兜底)
-  return Response.json({ ok: true, bound: false, qrcode: r.qrcode, qrImg: r.qrImg, since: new Date().toISOString() });
+  // qrImg 原文不再下发给前端:前端只需要那张图
+  return Response.json({ ok: true, bound: false, qrcode: r.qrcode, qrDataUrl, since: new Date().toISOString() });
 }

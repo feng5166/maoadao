@@ -1,5 +1,4 @@
-import { config } from "dotenv";
-config({ path: [".env.local", ".env"], override: true });
+import { TEST_DB_READY } from "./db-guard";
 // 审核 LLM 快速失败走词表兜底——测试关注通道协议,不是文案
 process.env.ANTHROPIC_AUTH_TOKEN = "invalid-for-test";
 process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
@@ -7,7 +6,7 @@ process.env.ANTHROPIC_BASE_URL = "http://127.0.0.1:1";
 import { afterAll, describe, expect, it } from "vitest";
 
 const T = 60_000;
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = TEST_DB_READY; // 见 tests/db-guard.ts:没有 TEST_DATABASE_URL 就整体跳过,绝不误写生产库
 
 const U = "u-test-wx-1";
 const WXID = "wxid-test-0001"; // iLink 侧 openId
@@ -112,7 +111,10 @@ describe.skipIf(!hasDb)("微信通道(iLink):激活绑定/窗口/频控/留言�
     const pending = await prisma.ownerNudge.findMany({ where: { catId: cat.id, consumedDay: null } });
     expect(pending.length).toBe(1); // 合并为最新
     expect(pending[0].message).toBe("还有,记得吃饭");
-    expect(pending[0].isPublic).toBe(true);
+    // 微信留言默认**私密**(2026-08-07 review P1)。原先硬编码 true,而微信侧
+    // 根本没有公开/私密的选择——用户以为是"对猫说句话",原文却可能被编进公开日记、
+    // 挂在公开猫主页上。被猫回应 ≠ 被公开引用,这条断言守住的是后者。
+    expect(pending[0].isPublic).toBe(false);
 
     const stranger = await handleInbound("wxid-nobody", "你好");
     expect(stranger.matched).toBe("unknown");

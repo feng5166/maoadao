@@ -39,11 +39,14 @@ async function logWechatMessage(
   matched: string,
 ): Promise<void> {
   if (!text) return;
+  // 全文只进库(WechatMessageLog),要看原文去 /admin —— 那后面有鉴权
   await prisma.wechatMessageLog
     .create({ data: { id: randomUUID(), openId, userId, catName, text: text.slice(0, 500), matched, createdAt: new Date() } })
     .catch((e) => console.error("[wechat-log]", e instanceof Error ? e.message.slice(0, 120) : e));
+  // 飞书只发脱敏元数据(2026-08-07 review P1):群里原先能看到用户原话 + 主人 ID + 猫名,
+  // 那是把私信抄送到一个多人群。留下"有没有人说话、说的哪类、多长",够运营盯健康度了。
   await sendFeishu(
-    `🐱 猫啊岛·微信留言\n${catName ? `猫:${catName}` : "未绑定用户"}${userId ? `(主人 ${userId.slice(0, 10)}…)` : ""}\n分类:${matched}\n「${text.slice(0, 200)}」`,
+    `猫啊岛·微信留言\n绑定:${userId ? "已绑定" : "未绑定"}\n分类:${matched}\n长度:${text.length} 字\n原文在 /admin`,
   ).catch(() => {});
 }
 
@@ -64,7 +67,12 @@ async function saveWechatNudge(catId: string, text: string): Promise<{ ok: boole
       catId,
       message: clipped,
       suggestion: null,
-      isPublic: true, // 微信里对猫说的话,预期被猫回应
+      // 默认私密(2026-08-07 review P1)。原先硬编码 true —— 微信侧根本没有公开/私密的
+      // 选择(Web 端有勾选框),用户以为是"对猫说句话",结果原文可能被编进公开日记、
+      // 挂在公开猫主页上。**被猫回应 ≠ 被公开引用**:私密留言照样触发回应
+      //(lib/sim/renarrate.ts 走 ownerVisited 那条),只是不把原话晒出去。
+      // 将来要给微信侧公开能力,得是显式的用户动作,不能靠默认值替人做主。
+      isPublic: false,
       createdAt: new Date(),
     },
   });

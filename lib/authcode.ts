@@ -9,7 +9,13 @@ const FAIL_WINDOW_MS = 15 * 60_000;
 const MAX_FAILS_PER_WINDOW = 10;
 
 export function hashCode(email: string, code: string): string {
-  const secret = process.env.AUTH_SECRET ?? "dev-secret";
+  // 生产上不许回退到固定的 "dev-secret"(2026-08-07 review P2):
+  // 那等于验证码哈希的密钥是公开常量,拿到库就能反推/伪造任何人的码。
+  const secret = process.env.AUTH_SECRET ?? "";
+  if (secret.length < 16) {
+    if (process.env.NODE_ENV === "production") throw new Error("[authcode] AUTH_SECRET 缺失或过短:拒绝生成验证码哈希");
+    return createHmac("sha256", secret || "dev-secret").update(`${email}:${code}`).digest("hex");
+  }
   return createHmac("sha256", secret).update(`${email}:${code}`).digest("hex");
 }
 

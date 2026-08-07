@@ -1,10 +1,9 @@
-import { config } from "dotenv";
-config({ path: [".env.local", ".env"], override: true });
+import { TEST_DB_READY, fx } from "./db-guard";
 
 import { describe, expect, it } from "vitest";
 
 // 并发推进安全性（集成测试，需要 DATABASE_URL；对库只读——全部在回滚事务里验证）
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = TEST_DB_READY; // 见 tests/db-guard.ts:没有 TEST_DATABASE_URL 就整体跳过,绝不误写生产库
 
 describe.skipIf(!hasDb)("每日推进并发安全（真实数据库，验证后回滚）", () => {
   it("advisory 事务锁：第二个并发事务拿不到推进权", async () => {
@@ -65,9 +64,16 @@ describe.skipIf(!hasDb)("每日推进并发安全（真实数据库，验证后�
 
   it("日记 upsert 幂等：同 (catId, day) 重复写不撞唯一约束（回滚验证）", async () => {
     const { prisma } = await import("../lib/db");
-    // upsert 语义由 Prisma 保证；这里验证唯一约束存在且 upsert 两次不抛错
-    const cat = await prisma.cat.findFirst();
-    if (!cat) return;
+    // upsert 语义由 Prisma 保证；这里验证唯一约束存在且 upsert 两次不抛错。
+    // ⚠️ 不许再用 prisma.cat.findFirst() 抓库里第一只猫往上写(2026-08-07 review P1):
+    // 那在生产库上就是往真实用户的猫身上写测试日记。自己造一只带唯一前缀的。
+    const catId = fx("tick-diary-cat");
+    const cat = await prisma.cat.create({
+      data: {
+        id: catId, name: "并发测试猫", isNpc: false, boldness: 50, sociability: 50, diligence: 50,
+        personaTags: ["测试"], appearance: "测试", bio: "测试", createdAt: new Date(),
+      },
+    });
     const day = 99999; // 不可能与真实数据冲突的测试日
     try {
       for (let i = 0; i < 2; i++) {
@@ -80,7 +86,9 @@ describe.skipIf(!hasDb)("每日推进并发安全（真实数据库，验证后�
       const row = await prisma.diaryEntry.findUnique({ where: { catId_day: { catId: cat.id, day } } });
       expect(row?.content).toBe("test-1");
     } finally {
-      await prisma.diaryEntry.deleteMany({ where: { day } });
+      // 只清自己造的那只,别按 day 全库删(以前那句会波及同日的任何数据)
+      await prisma.diaryEntry.deleteMany({ where: { catId } });
+      await prisma.cat.deleteMany({ where: { id: catId } });
     }
   }, 30_000);
 });

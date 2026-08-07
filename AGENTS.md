@@ -18,3 +18,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 协作者高频直推 main：push 前必须 `git fetch` + rebase，冲突按"保上游功能、叠视觉约束"解。
 - push main = Vercel 自动部署。上游改了 `prisma/schema.prisma` 后本地要重跑 `npx prisma generate`。
 - 本地 `.env.local` 的 DATABASE_URL 若指旧 us-east-1 库（生产已迁新加坡），连真库的测试会挂——那是环境问题，别对旧库 db:push。
+
+# 测试与数据库(2026-08-07 起)
+
+- **连库测试只认 `TEST_DATABASE_URL`**,且库名必须含 `test`(闸门在 `tests/db-guard.ts`)。不给就整体跳过——`npm test` 默认只跑纯逻辑,几秒完事。曾经的写法是"看到 `DATABASE_URL` 就开写",而那一串指向生产库,误跑一次就往真实用户数据里写。
+- 起一个测试库:在同一个 Neon 实例上 `CREATE DATABASE maoadao_test`,然后
+  `TEST_DATABASE_URL="postgresql://…/maoadao_test" npm run test:db:setup`(建表+播种 NPC+worldState),之后 `TEST_DATABASE_URL="…" npm test` 跑全量。
+- **别用 `DATABASE_URL=… npx tsx scripts/xxx.ts` 给测试库做事**:`scripts/_env.ts` 是 `override: true`,会把命令行传的地址覆盖回 `.env.local` 的生产串。要指定库就像 `scripts/test-db-setup.ts` 那样给 PrismaClient 显式 datasource。
+- 测试 fixture 用 `fx()` 前缀(每次运行唯一),不许拿库里的真实数据往上写(`prisma.cat.findFirst()` 这类)。

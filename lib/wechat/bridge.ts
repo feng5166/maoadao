@@ -41,10 +41,18 @@ export interface SendResult {
 }
 
 /** 发一条文本(typing=true 时桥先发"正在输入"600ms——猫在想) */
-export async function sendWechat(openId: string, text: string, typing = false): Promise<SendResult> {
-  const r = await bridgeCall<{ ok?: boolean; ret?: number; http?: number }>("/send", { openId, text, typing });
+/** 发一条文本。idempotencyKey:桥侧据此去重——"发出去了但响应超时"的重试不会变成两条
+ *  (2026-08-07 review P1;队列侧的原子领取见 lib/wechat/daily.ts)。 */
+export async function sendWechat(openId: string, text: string, typing = false, idempotencyKey?: string): Promise<SendResult> {
+  const r = await bridgeCall<{ ok?: boolean; ret?: number; http?: number; duplicate?: boolean }>("/send", {
+    openId,
+    text,
+    typing,
+    idempotencyKey,
+  });
   if (!r) return { ok: false, detail: "bridge_unreachable" };
-  return { ok: !!r.ok, detail: r.ok ? undefined : `ret=${r.ret} http=${r.http}` };
+  // duplicate:桥说这条已经发过了——当成成功,别再重投
+  return { ok: !!r.ok || !!r.duplicate, detail: r.ok || r.duplicate ? undefined : `ret=${r.ret} http=${r.http}` };
 }
 
 /** 寄一张图(base64 jpeg;caption 会作为单独一条文本先发)。桥侧要走 CDN 上传,给 40s */

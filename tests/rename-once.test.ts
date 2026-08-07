@@ -1,5 +1,4 @@
-import { config } from "dotenv";
-config({ path: [".env.local", ".env"], override: true });
+import { TEST_DB_READY } from "./db-guard";
 
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
@@ -9,7 +8,7 @@ import { afterAll, describe, expect, it } from "vitest";
 // 现改为 updateMany + where renamedAt:null,用影响行数判决。
 // renameCat 本体依赖 cookies(),单测跑不了;这里测数据库层的那把锁。
 // 用真库(自清理);跑不到库时整体跳过。
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = TEST_DB_READY; // 见 tests/db-guard.ts:没有 TEST_DATABASE_URL 就整体跳过,绝不误写生产库
 
 describe.skipIf(!hasDb)("改名机会只有一次(review P2)", () => {
   const uids: string[] = [];

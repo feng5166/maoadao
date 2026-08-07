@@ -40,10 +40,58 @@ const FAIL_THRESHOLD = Number(process.env.FAIL_THRESHOLD || 3);
 // 持久化:每个微信用户的凭证(botToken/contextToken),0600 防同机读取
 const CREDS_FILE = new URL("./creds.json", import.meta.url).pathname;
 let creds = fs.existsSync(CREDS_FILE) ? JSON.parse(fs.readFileSync(CREDS_FILE, "utf8")) : {};
+// 原子落盘(2026-08-07 review P2):先写临时文件再 rename —— 直接覆写时进程被杀
+// 会留下截断的 JSON,那等于所有用户的凭据一起没了。旧文件另存一份 .bak 兜底。
 const saveCreds = () => {
-  fs.writeFileSync(CREDS_FILE, JSON.stringify(creds, null, 2), { mode: 0o600 });
+  const tmp = `${CREDS_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(creds, null, 2), { mode: 0o600 });
+  try { if (fs.existsSync(CREDS_FILE)) fs.copyFileSync(CREDS_FILE, `${CREDS_FILE}.bak`); } catch { /* 备份失败不挡主流程 */ }
+  fs.renameSync(tmp, CREDS_FILE);
   try { fs.chmodSync(CREDS_FILE, 0o600); } catch { /* 兜底改权限 */ }
 };
+
+// 游标持久化(2026-08-07 review P1):get_updates_buf 原先只在内存里,
+// 且在业务回调成功之前就被推进 —— 回调失败两次后循环继续,那条消息**永远丢了**;
+// 进程重启又会从头回放旧消息。现在:游标随 creds 落盘,且**只在业务确认后提交**。
+const CURSOR_FILE = new URL("./cursors.json", import.meta.url).pathname;
+let cursors = fs.existsSync(CURSOR_FILE) ? JSON.parse(fs.readFileSync(CURSOR_FILE, "utf8")) : {};
+const saveCursors = () => {
+  const tmp = `${CURSOR_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(cursors, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, CURSOR_FILE);
+};
+// 已处理过的消息 id(按 openId 存最近 200 条):重启回放/服务端重投时不重复消费
+const seen = fs.existsSync(new URL("./seen.json", import.meta.url).pathname)
+  ? JSON.parse(fs.readFileSync(new URL("./seen.json", import.meta.url).pathname, "utf8"))
+  : {};
+const SEEN_FILE = new URL("./seen.json", import.meta.url).pathname;
+const saveSeen = () => {
+  const tmp = `${SEEN_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(seen, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, SEEN_FILE);
+};
+function alreadyHandled(openId, msgId) {
+  if (!msgId) return false;
+  return (seen[openId] || []).includes(msgId);
+}
+function markHandled(openId, msgId) {
+  if (!msgId) return;
+  const list = seen[openId] || (seen[openId] = []);
+  list.push(msgId);
+  if (list.length > 200) list.splice(0, list.length - 200);
+  saveSeen();
+}
+
+// 出站幂等键:记住最近发成功的 key(24h),重试不会变成两条消息。
+// 只在内存 —— 进程重启后最坏是重发一条,比把键写盘再引一套一致性问题划算。
+const sentKeys = new Map(); // key -> 时间戳
+function rememberSentKey(key) {
+  sentKeys.set(key, Date.now());
+  if (sentKeys.size > 5000) {
+    const cutoff = Date.now() - 24 * 3600_000;
+    for (const [k, t] of sentKeys) if (t < cutoff) sentKeys.delete(k);
+  }
+}
 
 const pending = new Map(); // qrcode -> {userId, state, openId, createdAt}
 const workers = new Map(); // openId -> {stop}
@@ -214,7 +262,8 @@ function startWorker(openId) {
   if (existing) existing.stop = true;
   const w = { stop: false };
   workers.set(openId, w);
-  let buf = "";
+  // 从落盘游标接着拉(重启不回放已确认的消息)
+  let buf = cursors[openId] || "";
   // 长轮询超时跟随服务端建议(longpolling_timeout_ms + 5s 余量,15~90s 夹逼);拿到建议前用 40s
   let pollMs = 40_000;
   console.log(`[bridge] worker 启动 ${openId}`);
@@ -231,12 +280,18 @@ function startWorker(openId) {
         }
         continue;
       }
-      if (r.data.get_updates_buf) buf = r.data.get_updates_buf;
+      // ⚠️ 只更新内存游标,**先不落盘**:这一批全部交付业务侧之后才提交(见循环末尾)。
+      // 提前提交 = 回调失败的那条消息永远拿不回来了。
+      const nextBuf = r.data.get_updates_buf || buf;
       const hint = Number(r.data.longpolling_timeout_ms);
       if (hint > 0) pollMs = Math.min(90_000, Math.max(15_000, hint + 5_000));
+      let batchOk = true; // 本批是否全部交付成功——有一条没成,游标就不往前走
       for (const m of r.data.msgs || []) {
         if (m.message_type === 2) continue; // bot 自己的消息
         if (m.from_user_id?.endsWith?.("@im.bot")) continue;
+        // 幂等:服务端重投 / 游标回退时,同一条消息不会被消费两次
+        const msgId = m.msg_id || m.msgid || m.message_id || null;
+        if (alreadyHandled(openId, msgId)) continue;
         const c = creds[openId];
         if (!c) break;
         if (m.context_token) {
@@ -268,17 +323,36 @@ function startWorker(openId) {
               recordSendResult(openId, await ilinkSend(c.botToken, openId, c.contextToken, res.replyText));
             }
           } else {
-            console.error(`[bridge] bind 回调两次失败 ${openId},等下一条消息重试`);
+            // 游标不前进:这条消息下轮还会再来,不会像原先那样被静默吞掉
+            console.error(`[bridge] bind 回调两次失败 ${openId},保留游标,下轮重试`);
+            batchOk = false;
+            break;
           }
+          markHandled(openId, msgId);
           continue;
         }
         if (!text && !media) continue;
         // 全量转发:留言/退订/媒体旁白全部由猫啊岛决定,桥只送话
         const res = await maoadao("/api/wechat/inbound", { from: openId, text, media });
-        if (res?.replyText) {
+        if (!res) {
+          // 业务侧没收到 = 这条还没算数:保留游标,下轮重来(原先直接往下走 = 消息永久丢失)
+          console.error(`[bridge] inbound 回调失败 ${openId},保留游标,下轮重试`);
+          batchOk = false;
+          break;
+        }
+        markHandled(openId, msgId);
+        if (res.replyText) {
           await tryTyping(c.botToken, openId, c.contextToken);
           recordSendResult(openId, await ilinkSend(c.botToken, openId, c.contextToken, res.replyText));
         }
+      }
+      // 全批交付成功才提交游标并落盘;有失败就原地不动,下轮重拉
+      if (batchOk) {
+        buf = nextBuf;
+        cursors[openId] = buf;
+        saveCursors();
+      } else {
+        await new Promise((s2) => setTimeout(s2, 3000));
       }
     }
     console.log(`[bridge] worker 退出 ${openId}`);
@@ -372,13 +446,19 @@ http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, state: p.state, openId: p.openId });
   }
   if (req.method === "POST" && url.pathname === "/send") {
-    const { openId, text, typing } = await readBody(req);
+    const { openId, text, typing, idempotencyKey } = await readBody(req);
     const c = creds[openId];
     if (!c) return json(res, 404, { ok: false, error: "not_bound" });
     if (!c.contextToken) return json(res, 200, { ok: false, error: "no_context_token" });
+    // 幂等(2026-08-07 review P1):业务侧"发出去了但响应超时"会重试同一个 key,
+    // 那不该让猫在微信里把同一句话说两遍。答 duplicate,业务侧当成功处理。
+    if (idempotencyKey && sentKeys.has(idempotencyKey)) {
+      return json(res, 200, { ok: true, duplicate: true });
+    }
     if (typing) await tryTyping(c.botToken, openId, c.contextToken);
     const r = await ilinkSend(c.botToken, openId, c.contextToken, String(text ?? "").slice(0, 4000));
     recordSendResult(openId, r);
+    if (idempotencyKey && r.ok) rememberSentKey(idempotencyKey);
     return json(res, 200, { ok: r.ok, ret: r.data?.ret, http: r.http });
   }
   // 寄图:image=base64;caption 作为单独一条文本先发(对齐插件的 caption 行为)

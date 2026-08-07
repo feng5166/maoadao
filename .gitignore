@@ -53,3 +53,13 @@ tmp-assets/
 /assets/qizai-master-raw/
 /assets/qizai-sheet-raw/
 /assets/qizai-shots-raw/
+
+# 微信桥的运行时状态(2026-08-07 review):凭据/游标/幂等记录都不进库。
+# creds.json 是所有用户的会话凭证——泄露等于替所有人收发消息。
+/wechat-bridge/creds.json
+/wechat-bridge/creds.json.bak
+/wechat-bridge/creds.json.tmp
+/wechat-bridge/cursors.json
+/wechat-bridge/cursors.json.tmp
+/wechat-bridge/seen.json
+/wechat-bridge/seen.json.tmp

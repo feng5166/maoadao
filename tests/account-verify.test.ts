@@ -1,12 +1,11 @@
-import { config } from "dotenv";
-config({ path: [".env.local", ".env"], override: true });
+import { TEST_DB_READY } from "./db-guard";
 
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 
 // doc/20 §八 铁律的回归测试:验证码只证明邮箱归属,永远不能用来登录或接管账户。
 // 用真库(自清理);跑不到库时整体跳过。
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = TEST_DB_READY; // 见 tests/db-guard.ts:没有 TEST_DATABASE_URL 就整体跳过,绝不误写生产库
 const VICTIM = "victim-verify-test@example.com";
 const OTHER = "other-verify-test@example.com";
 

@@ -274,12 +274,30 @@ export async function loginWithPassword(formData: FormData): Promise<{ ok: boole
   const confirmSwitch = formData.get("confirmSwitch") === "on";
   if (!email || !pw) return { ok: false, err: UNIFORM_LOGIN_ERR };
 
+  // uid 仍用于"切换保护"(判断这台设备上是不是已经住着另一只猫),但**不再参与限流键**
   const uid = (await getViewerId()) ?? "anon";
-  if ((await failsInWindow("login_fail", `${uid}:${email}`)) >= 8) {
+  // 限流键不能只挂在匿名 cookie 上(2026-08-07 review P2):uid 来自客户端,
+  // 清一下 cookie 就换到新的八次窗口,等于没限。改为**账号维度 + 来源 IP 维度**
+  // 双闸:账号闸挡"盯着一个邮箱撞",IP 闸挡"换着邮箱撞"。
+  const ip =
+    (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    (await headers()).get("x-real-ip") ||
+    "noip";
+  const acctKey = `email:${email}`;
+  const ipKey = `ip:${ip}`;
+  if ((await failsInWindow("login_fail", acctKey)) >= 8 || (await failsInWindow("login_fail", ipKey)) >= 30) {
     return { ok: false, err: "尝试次数过多,15 分钟后再试" };
   }
   const fail = async () => {
-    await prisma.authAttempt.create({ data: { id: randomUUID(), kind: "login_fail", key: `${uid}:${email}`, createdAt: new Date() } }).catch(() => {});
+    // 两个维度各记一次:任一超阈值都拦
+    await prisma.authAttempt
+      .createMany({
+        data: [
+          { id: randomUUID(), kind: "login_fail", key: acctKey, createdAt: new Date() },
+          { id: randomUUID(), kind: "login_fail", key: ipKey, createdAt: new Date() },
+        ],
+      })
+      .catch(() => {});
     return { ok: false as const, err: UNIFORM_LOGIN_ERR };
   };
 

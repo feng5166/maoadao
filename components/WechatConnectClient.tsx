@@ -13,7 +13,8 @@ type Phase = "idle" | "loading" | "qr" | "scanned" | "activated" | "error";
 export function WechatConnectClient({ catName, again = false }: { catName: string; again?: boolean }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
-  const [qrImg, setQrImg] = useState<string | null>(null);
+  // 存的是服务端渲好的 data URI,不是二维码载荷——绑定凭据不出服务端
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const qrcodeRef = useRef<string | null>(null);
   const sinceRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -34,13 +35,13 @@ export function WechatConnectClient({ catName, again = false }: { catName: strin
         setPhase("activated");
         return;
       }
-      if (!r.ok || !r.qrImg) {
+      if (!r.ok || !r.qrDataUrl) {
         setPhase("error");
         return;
       }
       qrcodeRef.current = r.qrcode;
       sinceRef.current = typeof r.since === "string" ? r.since : null;
-      setQrImg(r.qrImg as string);
+      setQrDataUrl(r.qrDataUrl as string);
       setPhase("qr");
       timerRef.current = setInterval(async () => {
         if (!qrcodeRef.current) return;
@@ -87,11 +88,11 @@ export function WechatConnectClient({ catName, again = false }: { catName: strin
           </button>
         ))}
       {phase === "loading" && <p className="text-sm text-ink-soft">它竖起了耳朵……</p>}
-      {(phase === "qr" || phase === "scanned") && qrImg && (
+      {(phase === "qr" || phase === "scanned") && qrDataUrl && (
         <div>
-          {/* eslint-disable-next-line @next/next/no-img-element -- 二维码由公共服务渲染(内容是微信认的 URL) */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- data URI,不走图片优化管线 */}
           <img
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrImg)}`}
+            src={qrDataUrl}
             alt="用海螺(微信)扫一扫"
             width={220}
             height={220}

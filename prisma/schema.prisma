@@ -178,6 +178,9 @@ model Channel {
   repliesInDay    Int       @default(0)
 
   @@unique([kind, externalId])
+  // 一人一微信也要库级兜底（2026-08-07 review P2）：原先只约束了"一个微信只能绑一个人"，
+  // 没约束"一个人只能有一个微信通道"——并发扫码能给同一用户建出两条,消息就发两遍。
+  @@unique([userId, kind])
   @@index([userId])
 }
 
@@ -215,13 +218,19 @@ model OutboundMessage {
   kind      String // handshake | d2_promise | event | absence
   content   String
   link      String?
-  status    String    @default("queued") // queued | sent | window_closed | failed
+  status    String    @default("queued") // queued | sending | sent | window_closed | failed
   sendAfter DateTime // 8:00-8:40 随机打散（防群发特征）
   sentAt    DateTime?
   createdAt DateTime
+  // 原子领取（2026-08-07 review P1）：先条件更新抢成 sending 再发，
+  // 并发 cron / 重放 / 发出去但响应超时都不会让猫把同一句话说两遍。
+  // claimedAt 兼作卡单回收依据：sending 超过 10 分钟视为进程挂了，放回 queued。
+  claimedAt DateTime?
+  claimId   String?
 
   @@index([status, sendAfter])
   @@index([userId, day])
+  @@index([claimId])
 }
 
 // 双层记忆的主观层：观察/关系/情节/语义（客观事实由上面的结构化表维护）
