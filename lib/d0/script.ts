@@ -26,6 +26,9 @@ export interface D0Screen {
   enterEvent?: string;
 }
 
+/** 心流版本:以后 D0 再调整改这里,分析不必再靠提交时间切数据 */
+export const FLOW_VERSION = "d0_v2";
+
 /** S6 轻触(D0 唯一交互)的配置:不点则 8s 后浮现下一步点按区(可被略过,不强制) */
 export const TOUCH = {
   button: "蹲下来看看",
@@ -129,7 +132,9 @@ export const D0_SCREENS: D0Screen[] = [
     lines: ["它往回走，经过空小屋时停了一下，朝门口那枚瓶盖看了一眼。", "然后回头看了看你，往码头去了。", "岛的另一头，有一只猫还不知道会遇见你。"],
     button: "去见它",
     ambient: "sea-gulls.mp3",
-    enterEvent: "d0_complete",
+    // 到达闸门 ≠ 完成:d0_complete 归「去见它」那一下(D0Player.finish),
+    // 这里只记"走到了最后一屏"——两者之差就是站在门口没进去的人
+    enterEvent: "d0_gate_view",
   },
 ];
 

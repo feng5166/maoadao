@@ -14,6 +14,7 @@ import { petLine } from "@/lib/handbook";
 import { hashSeed, mulberry32, pick } from "@/lib/sim/rng";
 import { lookupTicket } from "@/lib/tickets";
 import { readVisitState } from "@/lib/visit";
+import { FLOW_VERSION } from "@/lib/d0/script";
 import { MarkIslandVisit } from "@/components/MarkIslandVisit";
 import type { Fact } from "@/lib/sim/types";
 import { prisma } from "@/lib/db";
@@ -145,6 +146,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               d0Disposition: d0 ? d0.toUpperCase() : "NONE",
               visitFootprint: visited,
               ticketState,
+              flowVersion: FLOW_VERSION,
             },
           },
         ]}
@@ -231,6 +233,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 先看看岛上 ↓
               </a>
             </div>
+            {badTicket && (
+              <p className="mt-3 text-xs text-ink-faint">
+                {badTicket === "spent" ? "（你带来的那张船票，已经有人用过了。）" : "（你带来的那张船票，登记处查不到。）"}
+              </p>
+            )}
             <p className="mt-3 text-xs text-ink-faint">
               <Link href="/adopt?d0=1" className="text-sea-deep hover:text-brick">重新看看那只猫怎么带路的</Link>
             </p>
@@ -251,6 +258,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 先看看岛上 ↓
               </a>
             </div>
+            {badTicket && (
+              <p className="mt-3 text-xs text-ink-faint">
+                {badTicket === "spent" ? "（你带来的那张船票，已经有人用过了。）" : "（你带来的那张船票，登记处查不到。）"}
+              </p>
+            )}
             <p className="mt-2 text-xs text-ink-faint">
               已经有猫?<Link href="/login" className="text-sea-deep hover:text-brick">回到岛上</Link>
             </p>

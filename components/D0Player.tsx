@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
-import { D0_SCREENS, SKIP_LABEL, TOUCH, optimizedImg, type D0Screen } from "@/lib/d0/script";
+import { D0_SCREENS, FLOW_VERSION, SKIP_LABEL, TOUCH, optimizedImg, type D0Screen } from "@/lib/d0/script";
 import { cdn } from "@/lib/assets";
 import { useTapAdvance } from "./useTapAdvance";
 import { IconShell } from "./icons";
@@ -121,7 +121,16 @@ function TicketStill({ ticket }: { ticket?: string }) {
   );
 }
 
-export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "complete" | "skip") => void }) {
+export function D0Player({
+  ticket,
+  replay = false,
+  onDone,
+}: {
+  ticket?: string;
+  /** ?d0=1 重看引路:纯叙事重放——不落 disposition、不进业务漏斗(否则重复计数) */
+  replay?: boolean;
+  onDone: (mode: "complete" | "skip") => void;
+}) {
   const reduced = useReducedMotion();
   const [idx, setIdx] = useState(0);
   const [sea, setSea] = useState(false);
@@ -149,7 +158,7 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
     const savedIdx = saved ? D0_SCREENS.findIndex((s) => s.id === saved) : -1;
     if (savedIdx > 0) {
       setIdx(savedIdx);
-      track("d0_resume", { screen: saved! });
+      track("d0_resume", { screen: saved!, flowVersion: FLOW_VERSION });
     }
     setSea(sessionStorage.getItem(SEA_KEY) === "1" || localStorage.getItem(ISLAND_KEY) === "on");
   }, []);
@@ -160,12 +169,23 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
   // 进屏埋点(S9 特殊:出屏才知道驻留时长);d0_enter 带媒介档,漏斗才分得清两种体验
   useEffect(() => {
     if (screen.id === "S9") {
-      s9EnterRef.current = Date.now();
+      s9EnterRef.current = replay ? null : Date.now(); // 重看的驻留不混进首看的 aha 指标
       return;
     }
-    if (screen.enterEvent) track(screen.enterEvent, screen.enterEvent === "d0_enter" ? { tier: slowConnection() ? "still" : "video" } : undefined);
+    if (replay) return; // 重放不进漏斗:各幕进屏事件只统计第一次走这条路的人
+    if (screen.enterEvent)
+      track(screen.enterEvent, {
+        flowVersion: FLOW_VERSION,
+        ...(screen.enterEvent === "d0_enter" ? { tier: slowConnection() ? "still" : "video" } : {}),
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen.id]);
+
+  // 重看引路:开场记一次,与首次观看彻底分开
+  useEffect(() => {
+    if (replay) track("d0_replay_start", { flowVersion: FLOW_VERSION });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 预取下一两屏静帧(doc2.0/15 §四 加载策略)——走优化器 URL,和渲染同源才命中缓存。
   // 预取 settle 后才放行本屏视频(3.5s 兜底):慢链路上静帧永远赢过 1.5MB 的循环
@@ -235,7 +255,7 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
 
   const advance = useCallback(() => {
     if (screen.id === "S9" && s9EnterRef.current) {
-      track("d0_aha_dwell", { ms: Date.now() - s9EnterRef.current });
+      track("d0_aha_dwell", { ms: Date.now() - s9EnterRef.current, flowVersion: FLOW_VERSION });
       s9EnterRef.current = null;
     }
     if (idx < D0_SCREENS.length - 1) setIdx(idx + 1);
@@ -246,7 +266,17 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
       if (doneRef.current) return;
       doneRef.current = true;
       sessionStorage.removeItem(RESUME_KEY);
-      track(mode === "skip" ? "d0_skip" : "d0_complete");
+      if (replay) {
+        // 重看只是叙事重放:不重报业务完成事件,也不动 disposition——
+        // 否则漏斗重复计数,且"当初是不是跳过的"这条分析被抹掉
+        track("d0_replay_complete", { mode, flowVersion: FLOW_VERSION });
+        onDone(mode);
+        return;
+      }
+      track(mode === "skip" ? "d0_skip" : "d0_complete", { flowVersion: FLOW_VERSION });
+      // 改名兼容(保留一个版本周期):旧看板统计的是 d0_to_d1,断掉会让 D0 完成率
+      // 在上线当天凭空归零。两个名字都发,取其一即可,不要相加
+      if (mode === "complete") track("d0_to_d1", { flowVersion: FLOW_VERSION, legacyAliasOf: "d0_complete" });
       // D0 的去向落成长效标记:下次不再重播(走完与跳过都不播,但数据分得开)。
       // 失败静默——大不了下次再看一遍 D0,不该挡住去见猫
       void fetch("/api/d0/complete", {
@@ -258,20 +288,20 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
       }).catch(() => {});
       onDone(mode);
     },
-    [onDone],
+    [onDone, replay],
   );
 
   // S6a 轻触:D0 唯一交互——一次、无反应池、无任何奖励(doc2.0/14 §五)
   const onTouch = useCallback(() => {
     if (touched) return;
     setTouched(true);
-    track("d0_touch");
+    if (!replay) track("d0_touch", { flowVersion: FLOW_VERSION }); // 重看的轻触不计入轻触率
     if (sea && cueRef.current) {
       cueRef.current.src = cdn(`/sounds/D0/${TOUCH.cue}`);
       cueRef.current.volume = 0.5;
       cueRef.current.play().catch(() => {});
     }
-  }, [touched, sea]);
+  }, [touched, sea, replay]);
 
   const isS6a = screen.id === "S6a";
   const isGate = screen.id === "S10";

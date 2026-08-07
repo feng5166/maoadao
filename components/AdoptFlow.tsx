@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { track } from "@vercel/analytics";
 import { D0Player, D0_RESUME_KEY } from "./D0Player";
+import { FLOW_VERSION } from "@/lib/d0/script";
 import { D1Script } from "./D1Script";
 
 // 入岛心流总装(doc2.0/14 §四):D0(千人一面的认知跃迁)→〔去见它〕→ D1(千人千面的相遇)。
@@ -36,7 +37,7 @@ export function AdoptFlow({
       return;
     }
     if (seenD0) {
-      track(d0Disposition === "skipped" ? "d1_enter_after_d0_skip" : "d1_enter_after_d0_complete");
+      track(d0Disposition === "skipped" ? "d1_enter_after_d0_skip" : "d1_enter_after_d0_complete", { flowVersion: FLOW_VERSION });
       return;
     }
     if (sessionStorage.getItem(STAGE_KEY) === "d1") setStage("d1");
@@ -47,6 +48,7 @@ export function AdoptFlow({
     return (
       <D0Player
         ticket={ticket}
+        replay={forceD0}
         onDone={(mode) => {
           setSkipped(mode === "skip");
           sessionStorage.setItem(STAGE_KEY, "d1");
