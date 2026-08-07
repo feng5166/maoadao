@@ -50,6 +50,17 @@ export async function resolveSession(): Promise<{ userId: string; sessionId: str
   return { userId: row.userId, sessionId: row.id };
 }
 
+/** 作废这个账户的全部会话(可留一个)。
+ *  密码变更/重置后必须调用:凭证换了,旧令牌就不该还能用——
+ *  否则被盗会话在改密码之后依然畅通(2026-08-06 review P1)。 */
+export async function revokeAllSessions(userId: string, exceptSessionId?: string): Promise<number> {
+  const r = await prisma.session.updateMany({
+    where: { userId, revokedAt: null, ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}) },
+    data: { revokedAt: new Date() },
+  });
+  return r.count;
+}
+
 /** 作废当前设备的会话(退出登录) */
 export async function endCurrentSession(): Promise<void> {
   const jar = await cookies();

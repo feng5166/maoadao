@@ -1,6 +1,6 @@
 // 微信消息文案层(doc/11 §六、doc/13 T4-T6):全部确定性生成,不调 LLM。
 // 世界观:这个渠道是"海螺"(传声海螺)——猫偶尔路过说一句,你的话它替猫记下;
-// 猫的话里永远不出现"微信"二字。规范:每条以「🐱 {猫名}：」开头(1:1 直连,账号档案中性);事实先行——
+// 猫的话里永远不出现"微信"二字。规范:每条以「{猫名}：」开头(1:1 直连,账号档案中性);事实先行——
 // 消息内容只允许来自事实(factSummary/回执摘句),不允许在这里编任何情节。
 
 import { hashSeed, mulberry32, pick } from "../sim/rng";
@@ -15,7 +15,14 @@ interface MsgCat {
   personaTags: string[];
 }
 
-const header = (name: string) => `🐱 ${name}：`;
+// 用户侧禁 emoji(AGENTS.md §1):原先是「🐱 {名字}：」——微信也是用户触点,
+// 一样受约束。名字加冒号已经足够标明是谁在说话(2026-08-06 review P3)。
+const header = (name: string) => `${name}：`;
+
+/** 这一行是不是消息抬头(取正文时要跳过它)。与 header 同源,改一处不会漏另一处 */
+export function isHeaderLine(line: string, catName: string): boolean {
+  return line.startsWith(header(catName));
+}
 
 // ============ T4 握手:按性格主轴分池 + 昼夜变体(doc/12 §三.6)============
 const HANDSHAKE_BOLD_LOW = [

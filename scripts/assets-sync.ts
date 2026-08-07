@@ -8,7 +8,7 @@ import "./_env";
 // 幂等:同名同大小跳过;改了资源就把 lib/assets.ts 的 ASSET_VERSION 加一再跑
 //(版本目录隔离 + 长缓存,老版本继续服务旧页面,不会撕裂)。
 //
-// 用法:npx tsx scripts/assets-sync.ts [--force]
+// 用法:npx tsx scripts/assets-sync.ts(始终整目录覆盖上传,同名直接替换)
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -55,7 +55,6 @@ const TYPES: Record<string, string> = {
 };
 
 async function main() {
-  const force = process.argv.includes("--force");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "maoadao-assets-"));
   let n = 0;
   let bytes = 0;

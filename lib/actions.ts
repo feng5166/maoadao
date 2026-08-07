@@ -277,6 +277,12 @@ export async function renameCat(formData: FormData) {
   if (cat.renamedAt) throw new Error("改名机会只有一次，已经用过了");
   const mod = await moderateTexts([newName]);
   if (!mod.ok) throw new Error(mod.reason ?? "名字未通过审核");
-  await prisma.cat.update({ where: { id: cat.id }, data: { name: newName, renamedAt: new Date() } });
+  // 机会只有一次 = 必须原子消费:先读后写有 TOCTOU 竞态,两个并发请求都能读到
+  // renamedAt 为空,第二次把第一次覆盖掉。把条件塞进 where,用影响行数判决。
+  const claimed = await prisma.cat.updateMany({
+    where: { id: cat.id, renamedAt: null },
+    data: { name: newName, renamedAt: new Date() },
+  });
+  if (claimed.count === 0) throw new Error("改名机会只有一次，已经用过了");
   revalidatePath("/my-cat");
 }

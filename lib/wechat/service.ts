@@ -9,7 +9,7 @@ import { sendFeishu } from "../feishu";
 import { track } from "@vercel/analytics/server";
 import { beijingHour, currentSegment, nowLine, sameBeijingDay } from "../moments";
 import { shortEntryLink } from "./entry";
-import { closeReply, handshakeMessage, islandGlanceReply, mediaReply, presenceReply, receiptReply, returnGreeting, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
+import { closeReply, handshakeMessage, islandGlanceReply, isHeaderLine, mediaReply, presenceReply, receiptReply, returnGreeting, statusReply, UNSUBSCRIBE_WORDS, unsubscribeAck } from "./messages";
 import { rankHeadlines } from "../headline";
 import { factSummary as factSummaryFn } from "../sim/engine";
 import type { Fact as FactType } from "../sim/types";
@@ -203,7 +203,7 @@ async function handleInboundCore(externalId: string, rawText: string, media: str
       take: 5,
     });
     if (unsent.length > 0) {
-      const latestLine = unsent[0].content.split("\n").filter((l) => l && !l.includes("http") && !l.startsWith("🐱"))[0] ?? null;
+      const latestLine = unsent[0].content.split("\n").filter((l) => l && !l.includes("http") && !isHeaderLine(l, cat.name))[0] ?? null;
       if (!FIND_CAT_PATTERNS.some((p) => p.test(text))) await saveWechatNudge(cat.id, text);
       await prisma.channel.update({ where: { id: channel.id }, data: { replyDay: today, repliesInDay: replies + 1 } });
       await safeTrack("wechat_return_after_gap", { unsent: unsent.length });

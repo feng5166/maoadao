@@ -34,7 +34,7 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
 
 export function otpEmailHtml(code: string): string {
   return `<div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:24px;background:#FDF8F0;border-radius:16px">
-  <p style="font-size:20px">🏝️ 猫啊岛</p>
+  <p style="font-size:20px;letter-spacing:0.12em;color:#4A4237">猫啊岛</p>
   <p>你的验证码是：</p>
   <p style="font-size:32px;font-weight:bold;letter-spacing:6px;color:#E08E0B">${code}</p>
   <p style="color:#8A7B65;font-size:13px">10 分钟内有效。如果不是你在操作，忽略这封邮件即可。</p>
@@ -45,7 +45,7 @@ export function otpEmailHtml(code: string): string {
 export function newDeviceLoginEmailHtml(userAgent: string): string {
   const os = /iPhone|iPad/i.test(userAgent) ? "iPhone/iPad" : /Android/i.test(userAgent) ? "Android" : /Mac OS X/i.test(userAgent) ? "Mac" : /Windows/i.test(userAgent) ? "Windows" : "一台设备";
   return `<div style="font-family:sans-serif;max-width:420px;margin:0 auto;padding:24px;background:#FDF8F0;border-radius:16px">
-  <p style="font-size:20px">🏝️ 猫啊岛</p>
+  <p style="font-size:20px;letter-spacing:0.12em;color:#4A4237">猫啊岛</p>
   <p style="line-height:1.7">刚才有人在<b>${os}</b>上用你的邮箱和密码登录了猫啊岛。</p>
   <p style="line-height:1.7;color:#8A7B65;font-size:13px">如果就是你,忽略这封信即可。<br/>
   如果不是你,请立刻到<a href="${SITE_URL}/account" style="color:#B5543B">岛民册</a>换一个密码,并踢出其他设备。</p>

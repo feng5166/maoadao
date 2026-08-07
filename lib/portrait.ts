@@ -1,8 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import sharp from "sharp";
 import { prisma } from "./db";
 import { generateImage } from "./imagegen";
+import { ASSET_VERSION } from "./assets";
+import { SITE_URL } from "./site";
 
 // 定稿立绘：创建时生成一次，之后所有页面和分享卡复用——绝不每天重生成（定义·十三）。
 
@@ -39,10 +39,12 @@ async function styleAnchors(excludeCatId: string): Promise<{ data: Buffer; mime:
 }
 
 /** 生成立绘并入库；幂等（已有立绘直接返回）。耗时 10~30 秒。
- *  archiveDir：脚本环境下把 API 原图落盘归档（serverless 无持久盘，线上调用不传）。 */
+ *  onRaw：拿到 API 原图时回调（脚本用它落盘归档）。**这里不碰 fs**——
+ *  本文件被 /my-cat 等页面间接引入，任何文件系统调用都会让 Next 追踪器
+ *  把整个项目打进函数包(见下方 loadMeetScene 的事故说明)。归档留给调用方做。 */
 export async function generatePortrait(
   catId: string,
-  options: { force?: boolean; archiveDir?: string } = {},
+  options: { force?: boolean; onRaw?: (raw: Buffer, ext: "png" | "jpg") => Promise<void> } = {},
 ): Promise<boolean> {
   const cat = await prisma.cat.findUnique({ where: { id: catId } });
   if (!cat) return false;
@@ -57,11 +59,7 @@ export async function generatePortrait(
     });
     if (!raw) return false;
 
-    if (options.archiveDir) {
-      await mkdir(options.archiveDir, { recursive: true });
-      const ext = raw[0] === 0x89 ? "png" : "jpg";
-      await writeFile(path.join(options.archiveDir, `${catId}.${ext}`), raw);
-    }
+    if (options.onRaw) await options.onRaw(raw, raw[0] === 0x89 ? "png" : "jpg");
 
     // 入库主图 1600：展示全走 ?s= 缩略图路由，页面重量不受影响；
     // 主图同时是分享卡/相遇照片/未来周边的母版，768 太小（原图只在归档盘里有）。
@@ -85,28 +83,27 @@ export async function generatePortrait(
   }
 }
 
-// 相遇照片可用的场景(doc/21 §四:照片跟随相遇地点)。
-// 每个分支的 readFile 路径必须保持**全字面量**——动态拼接(`${name}.jpg`)会让
-// Next 文件追踪器放弃解析,把 process.cwd() 整个项目打进函数包
-//(2026-08-05 事故:/adopt 函数 339MB、冷启动秒级,全站打开变慢)。
-const MEET_SCENE_FILES: Record<string, () => Promise<Buffer>> = {
-  dock: () => readFile(path.join(process.cwd(), "public", "scenes", "dock.jpg")),
-  reef: () => readFile(path.join(process.cwd(), "public", "scenes", "reef.jpg")),
-  pines: () => readFile(path.join(process.cwd(), "public", "scenes", "pines.jpg")),
-  lighthouse: () => readFile(path.join(process.cwd(), "public", "scenes", "lighthouse.jpg")),
-};
+// 相遇照片可用的场景(doc/21 §四:照片跟随相遇地点):白名单防路径注入
+const MEET_SCENES = new Set(["dock", "reef", "pines", "lighthouse"]);
 
-/** 场景图：本地文件优先（dev/构建含 public），兜底走线上（serverless 未打包时） */
+/** 场景图一律走 HTTP 取,**不碰文件系统**。
+ *
+ *  2026-08-05 那次事故的根因是这里的 `readFile(path.join(process.cwd(), …))`:
+ *  Next 的文件追踪器一见 process.cwd() 就放弃静态解析,把整个项目(含 .git 与素材母版)
+ *  打进函数包 —— /adopt /my-cat 等四个日常页曾达 339MB、冷启动以秒计。
+ *  改成字面量路径能把体积压回来,但构建告警仍在(追踪器依旧无法确定边界)。
+ *  彻底的解法是这条路根本不存在:图本来就在 OSS/自家域名上,合成是 after() 里的
+ *  后台活儿,多一次 ~150ms 的取图完全不心疼。**别再把 fs 读加回来。** */
 async function loadMeetScene(scene: string): Promise<Buffer> {
-  const name = MEET_SCENE_FILES[scene] ? scene : "dock";
-  try {
-    return await MEET_SCENE_FILES[name]();
-  } catch {
-    const host = process.env.VERCEL_URL || "maoadao.com";
-    const res = await fetch(`https://${host}/scenes/${name}.jpg`);
-    if (!res.ok) throw new Error(`拉取相遇场景失败 ${res.status}`);
-    return Buffer.from(await res.arrayBuffer());
-  }
+  const name = MEET_SCENES.has(scene) ? scene : "dock";
+  // 开了国内 CDN 取 OSS 上那份(同步脚本转好的 webp,sharp 直接吃);否则回自家域名的原图
+  const host = (process.env.NEXT_PUBLIC_ASSET_HOST ?? "").replace(/\/$/, "");
+  const url = host
+    ? `${host}/assets/${ASSET_VERSION}/scenes/${name}.webp`
+    : `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : SITE_URL}/scenes/${name}.jpg`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`拉取相遇场景失败 ${res.status} ${url}`);
+  return Buffer.from(await res.arrayBuffer());
 }
 
 // 相遇照片（doc/10 §3 Asset 1，合成路线）：相遇地点场景 + 定稿立绘贴纸 → 拍立得。

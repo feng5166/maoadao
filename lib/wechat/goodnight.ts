@@ -6,8 +6,6 @@
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { prisma } from "../db";
-import { factSummary } from "../sim/engine";
-import type { Fact } from "../sim/types";
 import { leftBehindFor, sceneFor } from "../handbook";
 import { SITE_URL } from "../site";
 import { sendWechat, sendWechatImage } from "./bridge";

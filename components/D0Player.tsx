@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { track } from "@vercel/analytics";
 import { D0_SCREENS, FLOW_VERSION, SKIP_LABEL, TOUCH, optimizedImg, type D0Screen } from "@/lib/d0/script";
 import { cdn } from "@/lib/assets";
@@ -20,16 +20,32 @@ const SEA_KEY = "d0-sea";
 // 进 D0 不该再被要求开一次;在 D0 里开的,出去也接着有声
 const ISLAND_KEY = "island-sound";
 
+// 系统偏好与网络状况都是**外部状态**,不该先 useState(false) 再在 effect 里改一次
+//(那会多一轮渲染,也正是 react-hooks/set-state-in-effect 要拦的写法)。
+// useSyncExternalStore 直接订阅:服务端渲染用第三个参数给保守值。
 function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const on = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return reduced;
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    () => false,
+  );
+}
+
+/** 慢连接:同理订阅 connection 变化(切 wifi/蜂窝时档位跟着变) */
+function useSlowConnection(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const conn = (navigator as Navigator & { connection?: EventTarget }).connection;
+      conn?.addEventListener("change", cb);
+      return () => conn?.removeEventListener("change", cb);
+    },
+    slowConnection,
+    () => false,
+  );
 }
 
 /** 慢连接判定(doc2.0/15 §五 降级梯的触发器):省流量/2g/3g/估算带宽 <1.5Mbps →
@@ -47,20 +63,25 @@ function slowConnection(): boolean {
 
 /** 呼吸分镜:静帧立即出,循环视频 canplay 后淡入盖上(无感替换)。
  *  视频三重礼让:本屏静帧先画完(onLoad)→ 下两屏预取 settle(父级 videoGo)→ 才挂载。 */
+// 换屏靠调用处的 key= 重挂本组件,不靠 effect 把状态改回去——
+// 后者是"用渲染修正渲染",多一轮且正是 set-state-in-effect 要拦的。
 function BreathingShot({ img, video }: { img: string; video?: string }) {
   const [ready, setReady] = useState(false);
   const [stillOk, setStillOk] = useState(false);
-  const imgRef = useRef<HTMLImageElement>(null);
-  useEffect(() => setReady(false), [video]);
-  useEffect(() => {
-    setStillOk(false);
-    // 预取命中缓存时 load 事件可能赶在挂载前:complete 兜底
-    if (imgRef.current?.complete) setStillOk(true);
-  }, [img]);
   return (
     <div className="relative aspect-square w-full overflow-hidden">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img ref={imgRef} src={optimizedImg(img)} alt="" onLoad={() => setStillOk(true)} className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+      <img
+        // 预取命中缓存时 onLoad 可能赶在挂载前:ref 回调里补一次 complete 判定
+        ref={(el) => {
+          if (el?.complete) setStillOk(true);
+        }}
+        src={optimizedImg(img)}
+        alt=""
+        onLoad={() => setStillOk(true)}
+        className="absolute inset-0 h-full w-full object-cover"
+        draggable={false}
+      />
       {video && stillOk && (
         <video
           key={video}
@@ -134,25 +155,31 @@ export function D0Player({
   const reduced = useReducedMotion();
   const [idx, setIdx] = useState(0);
   const [sea, setSea] = useState(false);
-  const [touched, setTouched] = useState(false);
-  const [touchTimeout, setTouchTimeout] = useState(false);
-  const [hint, setHint] = useState(false);
+  // 这三样都是"只对当前这一屏成立"的临时态。存屏 id 而不是布尔值,
+  // 换屏时靠比对自然失效——不必再用 effect 把它们回写成 false
+  //(那种写法多一轮渲染,也正是 react-hooks/set-state-in-effect 要拦的)。
+  const [touchedOn, setTouchedOn] = useState<string | null>(null);
+  const [timeoutOn, setTimeoutOn] = useState<string | null>(null);
+  const [hintOn, setHintOn] = useState<string | null>(null);
   // 媒介档位:慢连接/减少动效 → 静图档(降级梯第二级,doc2.0/15 §五)
-  const [slow, setSlow] = useState(false);
-  // 视频放行闸:下两屏静帧预取 settle(或 3.5s 兜底)之前,本屏视频不挂载
-  const [videoGo, setVideoGo] = useState(false);
+  const slow = useSlowConnection();
+  // 视频放行闸:下两屏静帧预取 settle(或 3.5s 兜底)之前,本屏视频不挂载。
+  // 同样存屏 id——放行的是"哪一屏",换屏即自动收回
+  const [videoGoOn, setVideoGoOn] = useState<string | null>(null);
   const preloadGen = useRef(0);
   const ambientRef = useRef<HTMLAudioElement | null>(null);
   const cueRef = useRef<HTMLAudioElement | null>(null);
   const s9EnterRef = useRef<number | null>(null);
   const doneRef = useRef(false);
 
-  useEffect(() => setSlow(slowConnection()), []);
   const tier: "video" | "still" = reduced || slow ? "still" : "video";
 
   const screen: D0Screen = D0_SCREENS[idx];
 
-  // 刷新续播:回到离开时的那一屏(心流单向,不支持回退)
+  /* eslint-disable react-hooks/set-state-in-effect --
+     storage 只在客户端存在:放进 useState 惰性初值会让服务端渲一屏、客户端渲另一屏
+     (水合不一致)。挂载后再落座是这类"客户端专有初值"的正确位置,别改成初值读取。 */
+  // 刷新续播:回到离开时的那一屏(心流单向,不支持回退)。
   useEffect(() => {
     const saved = sessionStorage.getItem(RESUME_KEY);
     const savedIdx = saved ? D0_SCREENS.findIndex((s) => s.id === saved) : -1;
@@ -162,6 +189,7 @@ export function D0Player({
     }
     setSea(sessionStorage.getItem(SEA_KEY) === "1" || localStorage.getItem(ISLAND_KEY) === "on");
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
   useEffect(() => {
     sessionStorage.setItem(RESUME_KEY, screen.id);
   }, [screen.id]);
@@ -191,7 +219,6 @@ export function D0Player({
   // 预取 settle 后才放行本屏视频(3.5s 兜底):慢链路上静帧永远赢过 1.5MB 的循环
   useEffect(() => {
     const gen = ++preloadGen.current;
-    setVideoGo(false);
     const jobs: Promise<unknown>[] = [];
     for (const next of D0_SCREENS.slice(idx + 1, idx + 3)) {
       const src = next.img ?? next.scene;
@@ -204,8 +231,9 @@ export function D0Player({
         }),
       );
     }
+    const id = D0_SCREENS[idx].id;
     const go = () => {
-      if (preloadGen.current === gen) setVideoGo(true);
+      if (preloadGen.current === gen) setVideoGoOn(id);
     };
     void Promise.allSettled(jobs).then(go);
     const cap = setTimeout(go, 3500);
@@ -239,17 +267,15 @@ export function D0Player({
   // S6a:8 秒不轻触则浮现下一步点按区(轻触可被略过,不强制——doc2.0/15 §四)
   useEffect(() => {
     if (screen.id !== "S6a") return;
-    setTouched(false);
-    setTouchTimeout(false);
-    const t = setTimeout(() => setTouchTimeout(true), TOUCH.timeoutMs);
+    const t = setTimeout(() => setTimeoutOn("S6a"), TOUCH.timeoutMs);
     return () => clearTimeout(t);
   }, [screen.id]);
 
   // 点按屏停 3 秒还没动作,浮出一行小字(不宣布,只轻轻提一句)
   useEffect(() => {
-    setHint(false);
     if (screen.button || screen.id === "S6a") return;
-    const t = setTimeout(() => setHint(true), 3000);
+    const id = screen.id;
+    const t = setTimeout(() => setHintOn(id), 3000);
     return () => clearTimeout(t);
   }, [screen.id, screen.button]);
 
@@ -293,18 +319,23 @@ export function D0Player({
 
   // S6a 轻触:D0 唯一交互——一次、无反应池、无任何奖励(doc2.0/14 §五)
   const onTouch = useCallback(() => {
-    if (touched) return;
-    setTouched(true);
+    if (touchedOn === "S6a") return;
+    setTouchedOn("S6a");
     if (!replay) track("d0_touch", { flowVersion: FLOW_VERSION }); // 重看的轻触不计入轻触率
     if (sea && cueRef.current) {
       cueRef.current.src = cdn(`/sounds/D0/${TOUCH.cue}`);
       cueRef.current.volume = 0.5;
       cueRef.current.play().catch(() => {});
     }
-  }, [touched, sea, replay]);
+  }, [touchedOn, sea, replay]);
 
   const isS6a = screen.id === "S6a";
   const isGate = screen.id === "S10";
+  // 三个"本屏才成立"的派生量:与当前屏比对得出,不存布尔也就不必回写
+  const touched = touchedOn === screen.id;
+  const touchTimeout = timeoutOn === screen.id;
+  const hint = hintOn === screen.id;
+  const videoGo = videoGoOn === screen.id;
   const tapAdvances = !screen.button && (!isS6a || touched || touchTimeout);
   // 热区 = 整个正文区(画面/旁白/四周留白都算),不是只有画面那一块
   useTapAdvance(tapAdvances ? advance : null);
@@ -323,7 +354,8 @@ export function D0Player({
           <Footprints />
         </div>
       );
-    if (screen.img) return <BreathingShot img={screen.img} video={tier === "video" && videoGo && showVideo ? screen.video : undefined} />;
+    // key=屏 id:换屏即重挂,静帧/视频的就绪态自然归零(不靠 effect 回写)
+    if (screen.img) return <BreathingShot key={screen.id} img={screen.img} video={tier === "video" && videoGo && showVideo ? screen.video : undefined} />;
     // S9 独屏一句:纸面排版屏
     return (
       <div className="flex aspect-square w-full items-center justify-center bg-paper-deep px-8">

@@ -136,9 +136,13 @@ export function IslandSound() {
   );
 
   // 偏好恢复
+  /* eslint-disable react-hooks/set-state-in-effect --
+     storage 只在客户端存在:放进 useState 惰性初值会让服务端渲一屏、客户端渲另一屏
+     (水合不一致)。挂载后再落座是这类"客户端专有初值"的正确位置,别改成初值读取。 */
   useEffect(() => {
     if (localStorage.getItem(KEY) === "on") setOn(true);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // 开着就跟着路由走;放不出来(还没手势)就挂一次性重试
   useEffect(() => {

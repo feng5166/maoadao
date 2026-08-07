@@ -134,7 +134,9 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
   const refusalHidden = useRef(false);
   // 第一声用即建即播的 Audio(不挂 JSX:多拍共用,元素随拍卸载会哑掉)
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const variant = useMemo(sceneVariant, []);
+  // 内联箭头而不是直接传函数引用:lint 要求 useMemo 第一参是内联表达式,
+  // 这样依赖数组才和函数体在同一处可读(直接传 sceneVariant 也能跑,但规则拦)
+  const variant = useMemo(() => sceneVariant(), []);
   const night = variant === "night";
 
   const [state, formAction] = useActionState(createCat, null);
@@ -143,6 +145,9 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
     if (state?.err) errRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [state?.n, state?.err]);
 
+  /* eslint-disable react-hooks/set-state-in-effect --
+     storage 只在客户端存在:放进 useState 惰性初值会让服务端渲一屏、客户端渲另一屏
+     (水合不一致)。挂载后再落座是这类"客户端专有初值"的正确位置,别改成初值读取。 */
   useEffect(() => {
     track("adopt_start", { skippedD0: Boolean(skipped) });
     // 刷新续播:恢复已收的选择;中间态回落到最近的稳定拍
@@ -166,6 +171,7 @@ export function D1Script({ ticket, skipped }: { ticket?: string; skipped?: boole
     setRestored(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!restored) return;

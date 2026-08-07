@@ -5,6 +5,8 @@ import "./_env";
 //   --npc    只处理 NPC（去水印/统一画风的安全批量入口）
 //   --id     只处理这一只（可多次出现）
 // API 原图归档到 assets/portraits-raw/（gitignore，母版备份在本机）。
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { prisma } from "../lib/db";
 import { generatePortrait } from "../lib/portrait";
 
@@ -28,7 +30,15 @@ async function main() {
   let ok = 0;
   for (const cat of cats) {
     process.stdout.write(`${cat.name}（${cat.id}） ... `);
-    const success = await generatePortrait(cat.id, { force, archiveDir: ARCHIVE_DIR });
+    // 归档落盘留在脚本这一侧:lib/portrait.ts 被页面间接引入,那里不能碰 fs
+    // (会让 Next 追踪器把整个项目打进函数包,详见该文件 loadMeetScene 的注释)
+    const success = await generatePortrait(cat.id, {
+      force,
+      onRaw: async (raw, ext) => {
+        await mkdir(ARCHIVE_DIR, { recursive: true });
+        await writeFile(path.join(ARCHIVE_DIR, `${cat.id}.${ext}`), raw);
+      },
+    });
     console.log(success ? "✓" : "✗");
     if (success) ok++;
   }

@@ -29,6 +29,9 @@ export function AdoptFlow({
   const [stage, setStage] = useState<"d0" | "d1">(seenD0 ? "d1" : "d0");
   const [skipped, setSkipped] = useState(d0Disposition === "skipped");
 
+  /* eslint-disable react-hooks/set-state-in-effect --
+     storage 只在客户端存在:放进 useState 惰性初值会让服务端渲一屏、客户端渲另一屏
+     (水合不一致)。挂载后再落座是这类"客户端专有初值"的正确位置,别改成初值读取。 */
   useEffect(() => {
     // 主动要求重看:先把上一轮的续播记号清掉,否则 adopt-stage=d1 会把 ?d0=1 盖回去
     if (forceD0) {
@@ -43,6 +46,7 @@ export function AdoptFlow({
     if (sessionStorage.getItem(STAGE_KEY) === "d1") setStage("d1");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (stage === "d0") {
     return (

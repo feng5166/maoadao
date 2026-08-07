@@ -8,7 +8,7 @@ import { cookies, headers } from "next/headers";
 import { track } from "@vercel/analytics/server";
 import { prisma } from "./db";
 import { getViewerId, getSessionId, ensureViewerId } from "./identity";
-import { endCurrentSession, startSession } from "./session";
+import { endCurrentSession, revokeAllSessions, startSession } from "./session";
 import { otpEmailHtml, sendEmail, emailEnabled } from "./email";
 import { consumeLoginCode, hashCode, failsInWindow } from "./authcode";
 
@@ -176,7 +176,11 @@ export async function changePassword(formData: FormData): Promise<{ ok: boolean;
   if (policyErr) return { ok: false, err: policyErr };
 
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(pw) } });
-  await track("password_changed", {});
+  // 换了密码,旧令牌一律作废——包括可能被盗的那一个。全踢之后给这台设备换发新会话:
+  // 本人无感,别处(含窃取者)当场掉线(2026-08-06 review P1)。
+  const revoked = await revokeAllSessions(user.id);
+  await startSession(user.id);
+  await track("password_changed", { revokedSessions: revoked });
   revalidatePath("/account");
   return { ok: true };
 }
@@ -191,7 +195,10 @@ export async function requestPasswordResetEmail(formData: FormData): Promise<{ o
   // 只有"已确认归属 + 已设密码"的账户才真的寄信;其余情况静默走过,对外表现一致
   if (user?.emailVerifiedAt && user.passwordHash) {
     const r = await issueCode(email, "RESET_PASSWORD", user.id);
-    if (!r.ok) return r;
+    // ⚠️ 失败原因**绝不外抛**:限频("一分钟后再试")或发信失败一旦回给前台,
+    // 连点两次就能分辨"这个邮箱存在且已验证",中性响应形同虚设(review P2)。
+    // 只写内部日志——真实用户没收到信会自己再试或走回岛钥匙。
+    if (!r.ok) console.warn("[reset-email] 未寄出(对外仍中性):", r.err);
   }
   return { ok: true };
 }
@@ -215,7 +222,9 @@ export async function resetPasswordWithEmailCode(formData: FormData): Promise<{ 
   if (err) return { ok: false, err };
 
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(pw) } });
-  await track("password_reset", { method: "email" });
+  // 重置路径上人还没登录:全部旧会话作废,不换发——让他用新密码正常登录一次
+  const revoked = await revokeAllSessions(user.id);
+  await track("password_reset", { method: "email", revokedSessions: revoked });
   return { ok: true };
 }
 
@@ -369,7 +378,9 @@ export async function resetPasswordWithRecovery(formData: FormData): Promise<{ o
     where: { id: user.id },
     data: { passwordHash: hashPassword(pw), recoveryCode: newKey },
   });
-  await track("password_reset", { method: "recovery_key" });
+  // 钥匙路径同理:密码换了,旧会话一律作废(能拿钥匙重置的人,不该继续背着旧令牌)
+  const revoked = await revokeAllSessions(user.id);
+  await track("password_reset", { method: "recovery_key", revokedSessions: revoked });
   // 不自动登录(doc/20):让用户走一次正常登录;新钥匙当场展示,这是唯一一次
   return { ok: true, newKey };
 }
@@ -417,6 +428,11 @@ export async function releaseCat(formData: FormData) {
       await tx.memoryEntry.deleteMany({ where: { catId: cat.id } });
       await tx.ownerNudge.deleteMany({ where: { catId: cat.id } });
       await tx.portrait.deleteMany({ where: { catId: cat.id } });
+      await tx.catPose.deleteMany({ where: { catId: cat.id } });
+      // 留声也要删:/api/voice/[catId] 是公开接口,留着等于旧猫的声音还能被放出来
+      await tx.catVoiceNote.deleteMany({ where: { catId: cat.id } });
+      // 已排队未发的旧猫消息:不删的话,猫都离岛了微信还会替它说话
+      await tx.outboundMessage.deleteMany({ where: { catId: cat.id } });
       await tx.arrivalPhoto.deleteMany({ where: { catId: cat.id } });
       await tx.arrivalNote.deleteMany({ where: { catId: cat.id } });
       await tx.weekBook.deleteMany({ where: { catId: cat.id } });
