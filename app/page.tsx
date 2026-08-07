@@ -13,6 +13,8 @@ import { factSummary } from "@/lib/sim/engine";
 import { petLine } from "@/lib/handbook";
 import { hashSeed, mulberry32, pick } from "@/lib/sim/rng";
 import { lookupTicket } from "@/lib/tickets";
+import { readVisitState } from "@/lib/visit";
+import { MarkIslandVisit } from "@/components/MarkIslandVisit";
 import type { Fact } from "@/lib/sim/types";
 import { prisma } from "@/lib/db";
 
@@ -59,6 +61,34 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const invited = ticketLook.state === "valid" ? ticketLook : null;
   // 用过 ≠ 查无此票:对一张根本不存在的票说"已经有人用过了"是在编造事实(doc/04)
   const badTicket = ticketLook.state === "spent" ? "spent" : ticketLook.state === "unknown" ? "unknown" : null;
+
+  // 三个信号拆开(2026-08-06 拍板):来过 / 看完 D0 / 有猫。五态判定,四种表现——
+  // 看完与主动跳过在页面上是同一屏,只在埋点里分得开。
+  // 优先级:自己的猫 > 船票 > 看完/跳过 D0 > 来过 > 第一次。
+  // 船票高于 D0 态只管首屏怎么招呼;要不要重播 D0 由 /adopt 自己读 disposition 决定。
+  const { visited, d0 } = await readVisitState();
+  const landingState = myCat
+    ? "RESIDENT"
+    : invited
+      ? "VALID_TICKET"
+      : d0 === "completed"
+        ? "D0_COMPLETED_NO_CAT"
+        : d0 === "skipped"
+          ? "D0_SKIPPED_NO_CAT"
+          : visited
+            ? "RETURNED_D0_INCOMPLETE"
+            : "FIRST_VISIT";
+  const seenD0 = landingState === "D0_COMPLETED_NO_CAT" || landingState === "D0_SKIPPED_NO_CAT";
+  const returning = landingState === "RETURNED_D0_INCOMPLETE";
+  const ticketState = invited
+    ? invited.fromIslander
+      ? "VALID_RESIDENT"
+      : "VALID_OFFICIAL"
+    : badTicket === "spent"
+      ? "SPENT"
+      : badTicket === "unknown"
+        ? "UNKNOWN"
+        : "NONE";
 
   // ---- 值班猫(未领养首屏的主角):今天在码头等你的那一只 ----
   const dutyPoolPresent = DUTY_POOL.filter((id) => npcs.some((n) => n.id === id));
@@ -111,14 +141,18 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             props: {
               hasCat: Boolean(myCat),
               seg: seg ?? "night",
-              // 船票态先上(P0);来过/看完 D0 两个信号随脚印那版补齐
-              ticket: invited ? "valid" : (badTicket ?? "none"),
-              viewerState: myCat ? "RESIDENT" : invited ? "TICKET_HOLDER" : "FIRST_VISIT",
+              viewerState: landingState,
+              d0Disposition: d0 ? d0.toUpperCase() : "NONE",
+              visitFootprint: visited,
+              ticketState,
             },
           },
         ]}
       />
       <StayTrack page="home" />
+      {/* 留下"来过"的痕迹(RSC 渲染期写不了 cookie,挂载后打一次 /api/visit)。
+          首访当次照常是新人态,cookie 对下一次生效——正是想要的 */}
+      <MarkIslandVisit />
 
       {/* 岛历行:世界在走(顶部,状态色) */}
       {world.day > 0 && (
@@ -178,6 +212,48 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               </a>
             </div>
             <p className="mt-3 font-mono text-xs tracking-wider text-ink-faint">{invited.code}</p>
+          </>
+        ) : seenD0 ? (
+          <>
+            {/* 状态 3:走完(或主动跳过)D0,还没接猫。文案严格接 S10 的冻结事实——
+                七仔是自己回码头了,没有"送你到村口";也不说"属于你的猫"(关系还没建立) */}
+            <h1 className="font-title mt-6 text-2xl font-bold leading-relaxed">
+              那只带路的猫，已经回码头去了。
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+              岛的另一头，那只猫还不知道会遇见你。
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <Link href="/adopt" className="stamp-btn inline-block">
+                继续往岛里走
+              </Link>
+              <a href="#now" className="text-sm text-sea-deep hover:text-brick">
+                先看看岛上 ↓
+              </a>
+            </div>
+            <p className="mt-3 text-xs text-ink-faint">
+              <Link href="/adopt?d0=1" className="text-sea-deep hover:text-brick">重新看看那只猫怎么带路的</Link>
+            </p>
+          </>
+        ) : returning ? (
+          <>
+            {/* 状态 2:来过,但 D0 没走完。岛承认有一丝痕迹,但不宣布"欢迎回来",
+                也不制造具体未发生的事(没说你上次走到过哪儿) */}
+            <h1 className="font-title mt-6 text-2xl font-bold leading-relaxed">
+              码头边那只猫看了你一眼，像是见过。
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-ink-soft">前面的路，还没有走完。</p>
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <Link href="/adopt" className="stamp-btn inline-block">
+                继续往码头走
+              </Link>
+              <a href="#now" className="text-sm text-sea-deep hover:text-brick">
+                先看看岛上 ↓
+              </a>
+            </div>
+            <p className="mt-2 text-xs text-ink-faint">
+              已经有猫?<Link href="/login" className="text-sea-deep hover:text-brick">回到岛上</Link>
+            </p>
           </>
         ) : (
           <>

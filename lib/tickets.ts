@@ -31,8 +31,10 @@ export async function grantBoatTickets(tx: Prisma.TransactionClient, uid: string
 
 export type TicketLook =
   | { state: "none" }
-  /** 有效票：inviter = 寄票岛民的猫名（官方票为 null——没有邀请人就不编一个） */
-  | { state: "valid"; code: string; inviter: string | null }
+  /** 有效票：inviter = 寄票岛民的猫名（官方票为 null——没有邀请人就不编一个）。
+   *  fromIslander 独立于 inviter：岛民票的寄票人可能已经没有猫，那时报不出名字，
+   *  但它仍然是一张岛民票，埋点不能把它算成官方票。 */
+  | { state: "valid"; code: string; inviter: string | null; fromIslander: boolean }
   | { state: "spent"; code: string }
   | { state: "unknown" };
 
@@ -53,7 +55,7 @@ export async function lookupTicket(raw: string | undefined | null): Promise<Tick
     const cat = await prisma.cat.findFirst({ where: { ownerId: row.issuedTo }, select: { name: true } }).catch(() => null);
     inviter = cat?.name ?? null;
   }
-  return { state: "valid", code, inviter };
+  return { state: "valid", code, inviter, fromIslander: Boolean(row.issuedTo) };
 }
 
 /** 读取岛民的船票；老岛民（发票功能上线前领养）第一次查看时补发 */

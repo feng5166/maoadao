@@ -13,7 +13,8 @@ import { IconShell } from "./icons";
 // 媒介三级降级(§五):静图秒开 → 呼吸循环就绪后无感替换;减少动效偏好下只出静图。
 // 「听海」声音层默认关;S9 的静是设计(沉默声部),开着听海也没有声音。
 
-const RESUME_KEY = "d0-screen";
+export const D0_RESUME_KEY = "d0-screen";
+const RESUME_KEY = D0_RESUME_KEY;
 const SEA_KEY = "d0-sea";
 // 与岛声层(components/IslandSound.tsx)共用一个偏好:全站开过声音的人,
 // 进 D0 不该再被要求开一次;在 D0 里开的,出去也接着有声
@@ -146,7 +147,10 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
   useEffect(() => {
     const saved = sessionStorage.getItem(RESUME_KEY);
     const savedIdx = saved ? D0_SCREENS.findIndex((s) => s.id === saved) : -1;
-    if (savedIdx > 0) setIdx(savedIdx);
+    if (savedIdx > 0) {
+      setIdx(savedIdx);
+      track("d0_resume", { screen: saved! });
+    }
     setSea(sessionStorage.getItem(SEA_KEY) === "1" || localStorage.getItem(ISLAND_KEY) === "on");
   }, []);
   useEffect(() => {
@@ -242,7 +246,16 @@ export function D0Player({ ticket, onDone }: { ticket?: string; onDone: (mode: "
       if (doneRef.current) return;
       doneRef.current = true;
       sessionStorage.removeItem(RESUME_KEY);
-      track(mode === "skip" ? "d0_skip" : "d0_to_d1");
+      track(mode === "skip" ? "d0_skip" : "d0_complete");
+      // D0 的去向落成长效标记:下次不再重播(走完与跳过都不播,但数据分得开)。
+      // 失败静默——大不了下次再看一遍 D0,不该挡住去见猫
+      void fetch("/api/d0/complete", {
+        method: "POST",
+        credentials: "same-origin",
+        keepalive: true,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode }),
+      }).catch(() => {});
       onDone(mode);
     },
     [onDone],
