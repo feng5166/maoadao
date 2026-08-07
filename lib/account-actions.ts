@@ -457,6 +457,14 @@ export async function releaseCat(formData: FormData) {
       await tx.newsTip.deleteMany({ where: { catId: cat.id } });
       await tx.islandNews.deleteMany({ where: { catId: cat.id } });
       await tx.item.deleteMany({ where: { catId: cat.id } });
+      // 2.1 院子事实（用户猫理论上不进来访池，但"清干净"不变量按 schema 全覆盖）：
+      // 先删观察（外键挂来访），再删来访与机会累积
+      const visits = await tx.catVisit.findMany({ where: { catId: cat.id }, select: { id: true } });
+      if (visits.length > 0) {
+        await tx.observation.deleteMany({ where: { visitId: { in: visits.map((v) => v.id) } } });
+      }
+      await tx.catVisit.deleteMany({ where: { catId: cat.id } });
+      await tx.catOpportunityState.deleteMany({ where: { catId: cat.id } });
       // 有外键约束的子表先删，最后删猫
       await tx.diaryEntry.deleteMany({ where: { catId: cat.id } });
       await tx.storyline.deleteMany({ where: { catId: cat.id } });

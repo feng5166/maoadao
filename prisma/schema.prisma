@@ -24,6 +24,7 @@ model User {
   inviteBatch     String? // 来源批次：team | friends | strangers
   lastSeenDay     Int? // 最后一次看 /my-cat 时的世界天数（未回摘要用）
   visitDays       Int       @default(0) // 累计回访天数（纪念册"你来过 N 次"）
+  yardAccess      Boolean   @default(false) // 2.1 院子玩法 Capability Flag（14 §九 护栏③）：默认关，内部账号先开；全量开关走 YARD_GAMEPLAY_ENABLED，切换与 D0 尾部同一提交
   createdAt       DateTime
   lastActiveAt    DateTime?
   cats            Cat[]
@@ -438,4 +439,134 @@ model WeekBook {
   createdAt DateTime
 
   @@unique([catId, weekIndex])
+}
+
+// ============================================================
+// 2.1 院子玩法·事实骨架（doc2.0/16-22，开工第一刀 2026-08-07）
+// 三层分离（16）：CatVisit=世界事实（永不残缺）；visibility 列=暴露度
+// （Disclosure 的 MVP 折叠实现，语义独立）；Observation=观察事实。
+// 历史事实锁两样：输入快照（placementSnapshot）+ 规则版本（rulesVersion）——
+// 晚算不晚取，昨天的世界永不被今天的数值重算（14 §九 护栏②）。
+
+model Home {
+  id        String      @id
+  userId    String      @unique // 幂等闩：一人一 Home 由数据库兜底（护栏①）
+  fish      Int         @default(0) // 小鱼干账户（19：资源可计数）
+  createdAt DateTime
+  yard      Yard?
+  grants    HomeGrant[]
+  items     OwnedItem[]
+}
+
+model Yard {
+  id         String      @id
+  homeId     String      @unique // 一 Home 一 Yard（护栏①）
+  createdAt  DateTime
+  home       Home        @relation(fields: [homeId], references: [id])
+  slots      YardSlot[]
+  placements Placement[]
+}
+
+model YardSlot {
+  id      String @id
+  yardId  String
+  slotKey String // 配置键（lib/yard/config.ts 单一数据源）：eaves | tree | clearing
+  yard    Yard   @relation(fields: [yardId], references: [id])
+
+  @@unique([yardId, slotKey]) // 同院同位不重复建（护栏①）
+}
+
+model Placement {
+  id        String    @id
+  yardId    String
+  slotKey   String
+  itemKey   String
+  placedAt  DateTime
+  removedAt DateTime? // null=仍在摆；历史保留，窗口快照由 [placedAt, removedAt) 重建
+  yard      Yard      @relation(fields: [yardId], references: [id])
+
+  @@index([yardId, placedAt])
+}
+
+model OwnedItem {
+  id         String   @id
+  homeId     String
+  itemKey    String
+  source     String // initial | purchase | exchange
+  acquiredAt DateTime
+  home       Home     @relation(fields: [homeId], references: [id])
+
+  @@index([homeId])
+}
+
+// 发放批次哨兵（护栏①）：初始资产恰好一份——不靠先查再插，靠唯一冲突收敛
+model HomeGrant {
+  homeId    String
+  batchKey  String // "initial" …
+  grantedAt DateTime
+  home      Home     @relation(fields: [homeId], references: [id])
+
+  @@id([homeId, batchKey])
+}
+
+// 窗口结算事实（16）：确定性种子 + 窗口起点快照 + 规则版本
+model WindowSettlement {
+  id                String     @id
+  yardId            String
+  dayKey            String // 北京日 yyyymmdd（v0：窗口时间轴独立于 WorldState.day，映射可替换）
+  windowIndex       Int // 0..12（lib/yard/config.ts）
+  rulesVersion      String // 当时按哪一版规则算的（护栏②）
+  placementSnapshot Json // 窗口起点布置快照 [{slotKey,itemKey}]
+  weather           String // 结算时的天气快照（v0 由 dayKey 确定性派生，实现可替换）
+  settledAt         DateTime
+  visits            CatVisit[]
+
+  @@unique([yardId, dayKey, windowIndex]) // 一窗一结算：lazy settlement 的幂等收敛点
+}
+
+model CatVisit {
+  id           String           @id
+  settlementId String
+  yardId       String
+  catId        String
+  dayKey       String
+  windowIndex  Int
+  slotKey      String?
+  itemKey      String?
+  arriveAt     DateTime
+  leaveAt      DateTime
+  behaviors    Json // string[]（含无用行为——L3 保留地）
+  leftBehind   Json // { fish: number }（纪念物另表，19 P0：不可逆记忆不入经济）
+  traces       Json // string[]
+  visibility   String // FULL_RECORD | TRACE_ONLY（暴露度折叠列；LIVE 属 Observation）
+  rulesVersion String // 护栏②
+  settlement   WindowSettlement @relation(fields: [settlementId], references: [id])
+  observations Observation[]
+
+  @@index([yardId, dayKey])
+  @@index([catId, dayKey])
+}
+
+// 观察事实（16 三层之三）：开门只产生观察，永不改写世界；观察无收益差
+model Observation {
+  id         String   @id
+  viewerId   String
+  visitId    String
+  type       String // LIVE | RECORD | TRACE | PHOTO
+  observedAt DateTime
+  visit      CatVisit @relation(fields: [visitId], references: [id])
+
+  @@unique([viewerId, visitId, type])
+  @@index([viewerId])
+}
+
+// 机会累积（22 §四）：Cat×Yard 的 eligible miss streak——
+// 压随机长尾的系统公平机制，与"用户目标"概念无关；本刀只建表，累积逻辑随来访引擎落
+model CatOpportunityState {
+  catId                     String
+  yardId                    String
+  consecutiveEligibleMisses Int      @default(0)
+  updatedAt                 DateTime
+
+  @@id([catId, yardId])
 }
