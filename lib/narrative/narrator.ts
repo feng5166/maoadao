@@ -3,7 +3,8 @@ import type { Fact, SimCat } from "../sim/types";
 import { SEGMENT_CN } from "../sim/types";
 import { factSummary } from "../sim/engine";
 import { FORM_RULES, THEME_NARRATION_RULES, type ContentForm, type WeekTheme } from "../sim/firstweek";
-import { voiceLine } from "./voice";
+import { voiceFor, voiceLine } from "./voice";
+import { passesLanguageFirewall } from "./lexicon";
 
 const client = new Anthropic();
 const MODEL = process.env.NARRATOR_MODEL ?? "claude-opus-4-8";
@@ -192,24 +193,70 @@ ${suggestionBlock}${ownerBlock}${threadBlock}${memoryBlock}`;
 
   const text = opts.fallbackOnly ? null : await callLLM(system, user, 600);
   if (text) {
-    try {
-      const jsonStr = text.replace(/^```json?\s*/i, "").replace(/```\s*$/, "");
-      const parsed = JSON.parse(jsonStr) as OwnerDaySummary;
-      if (parsed.narrative && parsed.headline) {
-        return { summary: { ...parsed, interventionResponse: parsed.interventionResponse || null, tomorrowHook: parsed.tomorrowHook || null }, generatedBy: "llm" };
-      }
-    } catch {
-      // fall through
+    const parsed = parseOwnerDay(text);
+    if (parsed) return { summary: parsed, generatedBy: "llm" };
+  }
+  return { summary: fallbackOwnerDay(input), generatedBy: "fallback" };
+}
+
+/** LLM 产出的校验(2026-08-07 review P2):原先只看两个字段非空就直接送到用户眼前。
+ *  模型现编的句子同样要过 04 语言防火墙——写死的文案有 lang-scan 管,它没人管。 */
+function parseOwnerDay(text: string): OwnerDaySummary | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text.replace(/^```json?\s*/i, "").replace(/```\s*$/, ""));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const p = parsed as Record<string, unknown>;
+  const str = (v: unknown, max: number): string | null =>
+    typeof v === "string" && v.trim().length > 0 && v.length <= max ? v.trim() : null;
+
+  const headline = str(p.headline, 30);
+  const narrative = str(p.narrative, 1200);
+  if (!headline || !narrative) return null;
+  // 可选字段:类型不对就当没有,不让脏值流下去
+  const interventionResponse = str(p.interventionResponse, 200);
+  const tomorrowHook = str(p.tomorrowHook, 120);
+
+  for (const [field, v] of [["headline", headline], ["narrative", narrative], ["interventionResponse", interventionResponse], ["tomorrowHook", tomorrowHook]] as const) {
+    if (!v) continue;
+    const gate = passesLanguageFirewall(v);
+    if (!gate.ok) {
+      console.warn(`[narrator] ${field} 未过语言防火墙(${gate.reason}),落兜底`);
+      return null;
     }
   }
+  return { headline, narrative, interventionResponse, tomorrowHook };
+}
+
+/** 兜底:也必须是**猫在说话**,不是系统在播报(2026-08-07 review P2)。
+ *  原先直出「第 N 天，天气X。今天:1. …」——系统口径 + 编号清单 + "你建议"这个设计词,
+ *  三条都踩 04 的红线;my-cat 页面甚至专门写了正则把它藏起来,那本身就是它不合格的证据。
+ *  现在按猫的自称与当日事实拼一段第一人称观察日志,读起来和正常日记同一个声部。 */
+function fallbackOwnerDay(input: OwnerDayInput): OwnerDaySummary {
+  const { selfRef } = voiceFor(input.cat);
+  const lines = input.facts.map((f) => factSummary(f, input.catById));
+  const main = input.mainFact ? factSummary(input.mainFact, input.catById) : lines[0];
+  // 标题取当天最要紧那件事的短句(不带日编号)
+  const headline = main ? main.slice(0, 18) : "今天没什么事";
+
+  const body = lines.length
+    ? `${selfRef}今天${lines.slice(0, 3).join("；")}。` + (lines.length > 3 ? `\n剩下的时间就那么过去了。` : "")
+    : `${selfRef}今天什么也没做。风一直在吹。`;
+  const weatherLine = input.weather ? `外面${input.weather}。` : "";
+
   return {
-    summary: {
-      headline: `第 ${input.day} 天`,
-      narrative: `第 ${input.day} 天，天气${input.weather}。今天：\n${factLines}`,
-      interventionResponse: input.suggestion ? `你建议「${input.suggestion.label}」，它${input.suggestion.followed ? "照做了" : "这次没听"}。` : null,
-      tomorrowHook: input.activeThreads.find((t) => !t.done) ? `${input.activeThreads.find((t) => !t.done)!.label}还在继续。` : null,
-    },
-    generatedBy: "fallback",
+    headline,
+    narrative: `${weatherLine}${body}`,
+    // 「你建议」是设计词(AGENTS.md §4 禁系统词):猫只说自己做了什么,不复述机制
+    interventionResponse: input.suggestion
+      ? input.suggestion.followed
+        ? `你说的那件事，${selfRef}去做了。`
+        : `你说的那件事，${selfRef}今天没去。`
+      : null,
+    tomorrowHook: input.activeThreads.find((t) => !t.done) ? `${input.activeThreads.find((t) => !t.done)!.label}的事还没完。` : null,
   };
 }
 

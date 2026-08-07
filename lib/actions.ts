@@ -203,18 +203,17 @@ export async function saveNudge(formData: FormData) {
     if (!mod.ok) throw new Error(mod.reason ?? "留言未通过审核");
   }
 
-  // 未消费的旧干预直接覆盖（每天只认最新一条）
-  await prisma.ownerNudge.deleteMany({ where: { catId, consumedDay: null } });
-  await prisma.ownerNudge.create({
-    data: {
-      id: randomUUID(),
-      catId,
-      message: message || null,
-      suggestion,
-      isPublic,
-      createdAt: new Date(),
-    },
-  });
+  // 未消费的旧干预直接覆盖（每天只认最新一条）。
+  // 删+插放进同一个事务(2026-08-07 review P2):原先是两条独立语句,并发下
+  // 两个请求可能都删完再各插一条,留下两条待消费记录,模拟器当天读到哪条全看运气。
+  // 真正的保证在库里——部分唯一索引 OwnerNudge_catId_pending_key
+  //(见 prisma/migrations/20260807000000_pending_nudge_slot),事务只是让这一对不被拆开。
+  await prisma.$transaction([
+    prisma.ownerNudge.deleteMany({ where: { catId, consumedDay: null } }),
+    prisma.ownerNudge.create({
+      data: { id: randomUUID(), catId, message: message || null, suggestion, isPublic, createdAt: new Date() },
+    }),
+  ]);
 
   const priorCount = await prisma.ownerNudge.count({ where: { catId, consumedDay: { not: null } } });
   await track("intervention_submit", { hasMessage: Boolean(message), suggestion: suggestion ?? "none", first: priorCount === 0 });

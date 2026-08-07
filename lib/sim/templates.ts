@@ -28,6 +28,11 @@ export interface ResolveResult {
   outcome: Outcome;
   data: Record<string, unknown>;
   deltas: { coins?: number; energy?: number };
+  /** 对**别的猫**的增减(2026-08-07 review P2)。
+   *  借钱/还钱是转账,不是凭空生灭:原先只记行动猫那一侧——借方到手 20 币,债主分文未少;
+   *  还钱时借方扣了钱,债主也没收到。岛上的鱼币总量就这么飘了。
+   *  凡是"一方给另一方"的事件,都要在这里写上对方那一侧。 */
+  otherDeltas?: { catId: string; coins?: number; energy?: number }[];
   affinityChanges?: AffinityChange[];
   newThreads?: NewThread[];
   threadUpdates?: ThreadUpdate[];
@@ -625,6 +630,8 @@ export const TEMPLATES: EventTemplate[] = [
           outcome: "success",
           data: { targetId: target.id, targetName: target.name, asked: ask, got: ask },
           deltas: { coins: ask, energy: -8 },
+          otherDeltas: [{ catId: target.id, coins: -ask }], // 借出去的钱从债主那儿走
+
           newThreads: [{ key: "debt", catId: ctx.cat.id, step: 1, data: { creditorId: target.id, creditorName: target.name, amount: ask }, startDay: ctx.world.day }],
           affinityChanges: [{ catAId: ctx.cat.id, catBId: target.id, delta: 4, reason: "慷慨相助" }],
           cvBonus: 1,
@@ -636,6 +643,8 @@ export const TEMPLATES: EventTemplate[] = [
           outcome: "partial",
           data: { targetId: target.id, targetName: target.name, asked: ask, got },
           deltas: { coins: got, energy: -8 },
+          otherDeltas: [{ catId: target.id, coins: -got }], // 借出多少,债主就少多少
+
           newThreads: [{ key: "debt", catId: ctx.cat.id, step: 1, data: { creditorId: target.id, creditorName: target.name, amount: got }, startDay: ctx.world.day }],
           cvBonus: 2,
         };

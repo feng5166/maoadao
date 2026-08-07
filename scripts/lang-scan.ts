@@ -3,16 +3,12 @@
 // 用法:npx tsx scripts/lang-scan.ts [文件...](缺省扫用户侧组件/页面/文案配置)
 import fs from "node:fs";
 import path from "node:path";
+import { BANNED_WORDS } from "../lib/narrative/lexicon";
 
 // doc2.0/04 §六 五词系 + doc/05 用户侧禁系统词(AGENTS.md §4)
-const BANNED: [string, string][] = [
-  ...["任务", "成就", "等级", "积分", "签到", "奖励", "解锁", "VIP", "存档", "读档"].map((w): [string, string] => [w, "系统/游戏词"]),
-  ...["活动", "福利", "限时", "错过", "立即", "点击领取", "新版本", "更新公告", "上新"].map((w): [string, string] => [w, "运营/FOMO 词"]),
-  ...["CP", "搭档", "官宣", "粉丝", "人设", "塌房"].map((w): [string, string] => [w, "人类社交词"]),
-  ...["优化", "提升", "管理", "打卡", "复盘"].map((w): [string, string] => [w, "效率词"]),
-  ...["想你了", "等你好久", "你怎么才来"].map((w): [string, string] => [w, "情感绑架词"]),
-  ...["AI", "Agent", "智能体", "大模型", "算法"].map((w): [string, string] => [w, "系统词(doc/05)"]),
-];
+// 词表已抽到 lib/narrative/lexicon.ts —— 构建期扫源码与运行期校验 LLM 产出共用一份,
+// 免得两边各维护一张、慢慢长歪(2026-08-07)
+const BANNED: [string, string][] = BANNED_WORDS.map((b) => [b.word, b.family]);
 // 「开启」在词典里属产品发布语系;白名单场景词(听海开启时=设置态描述,非运营话术)单独裁决
 
 const DEFAULT_TARGETS = [

@@ -61,6 +61,15 @@ export function runDay(world: WorldSnapshot): DayResult {
     const st = states.get(catId)!;
     st.coins = Math.max(0, st.coins + (res.deltas.coins ?? 0));
     st.energy = Math.max(0, Math.min(100, st.energy + (res.deltas.energy ?? 0)));
+    // 他方增减:转账类事件的另一侧(借钱的债主、还钱的收款方)。
+    // 不落这一步,鱼币就是凭空生出来又凭空消失(2026-08-07 review P2)。
+    // 对方不在本次模拟范围内(states 里没有)就跳过——不为它凭空建状态
+    for (const od of res.otherDeltas ?? []) {
+      const other = states.get(od.catId);
+      if (!other) continue;
+      other.coins = Math.max(0, other.coins + (od.coins ?? 0));
+      other.energy = Math.max(0, Math.min(100, other.energy + (od.energy ?? 0)));
+    }
     for (const ac of res.affinityChanges ?? []) {
       affinityChanges.push(ac);
       const rel = relationships.find(

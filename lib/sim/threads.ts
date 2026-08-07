@@ -158,6 +158,8 @@ export const THREAD_SYSTEMS: Record<string, ThreadSystem> = {
           outcome: "success",
           data: { creditorId: thread.data.creditorId, creditorName: thread.data.creditorName, amount },
           deltas: { coins: -amount, energy: -5 },
+          otherDeltas: [{ catId: String(thread.data.creditorId), coins: amount }], // 还的钱要真的到债主手里
+
           affinityChanges: [{ catAId: thread.catId, catBId: String(thread.data.creditorId), delta: 8, reason: "有借有还" }],
           threadUpdates: [{ threadId: thread.id, status: "resolved" }],
           cvBonus: 2,

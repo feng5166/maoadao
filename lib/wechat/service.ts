@@ -60,22 +60,27 @@ async function saveWechatNudge(catId: string, text: string): Promise<{ ok: boole
   const mod = await moderateTexts([clipped]);
   if (!mod.ok) return { ok: false, hadPending: false };
   const hadPending = (await prisma.ownerNudge.count({ where: { catId, consumedDay: null } })) > 0;
-  await prisma.ownerNudge.deleteMany({ where: { catId, consumedDay: null } });
-  await prisma.ownerNudge.create({
-    data: {
-      id: randomUUID(),
-      catId,
-      message: clipped,
-      suggestion: null,
-      // 默认私密(2026-08-07 review P1)。原先硬编码 true —— 微信侧根本没有公开/私密的
-      // 选择(Web 端有勾选框),用户以为是"对猫说句话",结果原文可能被编进公开日记、
-      // 挂在公开猫主页上。**被猫回应 ≠ 被公开引用**:私密留言照样触发回应
-      //(lib/sim/renarrate.ts 走 ownerVisited 那条),只是不把原话晒出去。
-      // 将来要给微信侧公开能力,得是显式的用户动作,不能靠默认值替人做主。
-      isPublic: false,
-      createdAt: new Date(),
-    },
-  });
+  // 删+插同一事务(2026-08-07 review P2):两条独立语句在并发下会留下多条待消费记录。
+  // 真正的保证在库里——部分唯一索引 OwnerNudge_catId_pending_key
+  //(见 prisma/migrations/20260807000000_pending_nudge_slot)
+  await prisma.$transaction([
+    prisma.ownerNudge.deleteMany({ where: { catId, consumedDay: null } }),
+    prisma.ownerNudge.create({
+      data: {
+        id: randomUUID(),
+        catId,
+        message: clipped,
+        suggestion: null,
+        // 默认私密(2026-08-07 review P1)。原先硬编码 true —— 微信侧根本没有公开/私密的
+        // 选择(Web 端有勾选框),用户以为是"对猫说句话",结果原文可能被编进公开日记、
+        // 挂在公开猫主页上。**被猫回应 ≠ 被公开引用**:私密留言照样触发回应
+        //(lib/sim/renarrate.ts 走 ownerVisited 那条),只是不把原话晒出去。
+        // 将来要给微信侧公开能力,得是显式的用户动作,不能靠默认值替人做主。
+        isPublic: false,
+        createdAt: new Date(),
+      },
+    }),
+  ]);
   return { ok: true, hadPending };
 }
 

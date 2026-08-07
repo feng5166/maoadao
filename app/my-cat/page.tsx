@@ -198,8 +198,10 @@ export default async function MyCatPage({ searchParams }: { searchParams: Promis
 
   // 日记严格按世界时间(P2 去重复):白天不回放昨天的日记(那是生活册的事),晚上六点后才展开今天的
   const displayed = showTodayStory ? summary : null;
-  // 兜底日记是"第 N 天,天气X。今天:清单"——和上面"三件小事"完全重复(P2 合并),
-  // 只在展示当天且时间轴齐全时压掉正文,批注/回应/悬念照留;昨日日记不压(时间轴是今天的)
+  // 曾经的兜底日记是"第 N 天,天气X。今天:编号清单"——系统口径直出、与时间轴重复,
+  // 所以这里写过一段正则把它藏起来。2026-08-07 兜底已重写成猫的第一人称观察日志
+  //(lib/narrative/narrator.ts fallbackOwnerDay),不再需要遮丑;旧格式的历史日记还在库里,
+  // 认出来仍然压掉正文,批注/回应/悬念照留。
   const isFallbackDiary =
     showTodayStory && dayComplete && displayed != null && /^第 \d+ 天，天气/.test(displayed.narrative);
   const displayedDiary = displayed
