@@ -154,6 +154,8 @@ export function settleWindowPure(input: SettleInput): SettleResult {
       Math.min(PREF.trace.cap, PREF.trace.base + cat.traceBias + (shortStay ? PREF.trace.shortStay : 0) + (stay > 60 ? PREF.trace.longStay : 0)),
     );
     const visibility = rng() < traceP ? "TRACE_ONLY" : "FULL_RECORD";
+    // 难确认型的研究素材（17 §六：TRACE_ONLY 是素材不是惩罚；06 §九：线索可推理不点名）
+    if (visibility === "TRACE_ONLY") traces.push(cat.furTrace);
     visits.push({ catId: cat.catId, slotKey: spot?.slotKey ?? null, itemKey: spot?.itemKey ?? null, arriveMin, leaveMin, behaviors, fish, traces, visibility });
   }
   return { seed, visits };

@@ -151,6 +151,10 @@ export default async function YardPage() {
       {uncollected.length === 0 && view.present.length === 0 && view.records.length === 0 && view.traceMarks.length === 0 && (
         <p className="mt-6 border-t border-line pt-4 text-sm opacity-60">摆点什么，等等看谁会来。</p>
       )}
+
+      <p className="mt-8 border-t border-line pt-4 text-sm">
+        <a href="/yard/book" className="underline underline-offset-4 opacity-70">翻翻岛猫册</a>
+      </p>
     </main>
   );
 }
