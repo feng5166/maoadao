@@ -1,5 +1,7 @@
 import fs from "node:fs";
-import sharp from "sharp";
+// sharp 0.35 起改为 ESM 双出口(.d.mts),不再是 `export = sharp` 的命名空间——
+// `sharp.OverlayOptions` 这种写法失效,类型要具名导入(2026-08-07 随 libvips CVE 升级)
+import sharp, { type OverlayOptions } from "sharp";
 import { SCENE_CAT_ANCHOR, SCENE_CAT_SCALE, sceneFile, TIME_TINTS, type SceneTime } from "./assets";
 import type { CompositionSpec } from "./director";
 
@@ -171,7 +173,7 @@ export async function composeMoment(
   const { file, needsTint } = sceneFile(spec.scene, spec.time);
   if (!fs.existsSync(file)) throw new Error(`场景资产缺失: ${spec.scene}`);
 
-  const layers: sharp.OverlayOptions[] = [];
+  const layers: OverlayOptions[] = [];
 
   if (poseImage) {
     // 比例关系:按场景景别缩放(远景猫小、室内猫大),再做时段光照匹配。
