@@ -57,7 +57,6 @@ async function injectVisits(yardId: string, now: Date) {
   const traceOnly = await prisma.catVisit.create({ data: mk("npc-wuya", { visibility: "TRACE_ONLY", leftBehind: { fish: 3 }, traces: ["地上有一撮深色的毛"] }) });
   // 当前窗里"还没发生"的来访（arriveAt 在未来）：对观察者不可见
   const cw = windowAt(now);
-  const cwStart = (await import("../lib/yard/time")).windowStart(cw.dayKey, cw.windowIndex);
   const futureSettlement = await prisma.windowSettlement.upsert({
     where: { yardId_dayKey_windowIndex: { yardId, dayKey: cw.dayKey, windowIndex: cw.windowIndex } },
     update: {},
