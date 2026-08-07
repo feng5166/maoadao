@@ -52,13 +52,14 @@ Layer 3  AI 生命世界   记忆、习惯、关系、事件、痕迹和长期�
 - **推进条件 = 事件完成 + 认知成立**，永不用 `worldDay == N` 触发。Director 侧用完成旗标：
 
 ```
-first_item_placed + first_wait_completed + first_cat_visit_observed → D1_COMPLETE
-observed_multiple_outcomes 或 changed_item_and_received_different_result → D2_COMPLETE
-遇见未知猫 + collection_surface_seen + unresolved_cat_target_exists → D3_COMPLETE
+D1_SIGNAL：first_item_placed + first_wait_completed + first_visit_result_observed
+D2_SIGNAL：observed_multiple_outcomes（只证"结果不固定"）
+D3_SIGNAL：看见未知/传闻 + 翻过岛猫册 + 随后发生布置变更
+Reached Dx = D1..Dx SIGNAL 全部在场——事件可乱序，认知不跳级
 ```
 
 旗标是"认知成立"的**代理条件**，本表只定结构；一切阈值与判定参数归 22——
-**README 永不做数值规范**。完整旗标定义在 20。
+**README 永不做数值规范**。Signal/Reached 双层与完整旗标定义在 20（正典）。
 
 - **七日留存仍然测**，但它属于 Analytics 时间窗口，不是 D7；
   Dx 反而成为漏斗分层——例如"达到 D5 的用户，Day7 留存是否显著高于只达到 D2 的"。
@@ -67,7 +68,7 @@ observed_multiple_outcomes 或 changed_item_and_received_different_result → D2
 | --- | --- | --- |
 | D0 进入世界 | 这里是什么？为什么值得留下？ | "原来这是一个会自己生活的猫岛，而我在这里有一个地方。" |
 | D1 操作认知 | 我在这里能做什么？ | "我放的东西真的会影响谁来。" |
-| D2 概率认知 | 是不是每次都一样？ | "我可以影响概率，但不能控制结果。" |
+| D2 不确定性认知 | 是不是每次都一样？ | "同样的院子，不一定每次来同样的猫。" |
 | D3 收集目标 | 猫与猫一样吗？ | "还有很多猫我没见过。" |
 | D4 经济循环 | 来访还给我什么？ | "遇到猫，让我获得更多尝试的条件。" |
 | D5 规律研究 | 怎样让它再来？ | "我好像摸到它的规律了。" |
@@ -150,7 +151,7 @@ E · 范围与制作（现在做什么？）      12 → 15 → 21
 ## 六、执行批次
 
 ```
-批次一 · 把"游戏到底是什么"写清楚：README ✅ → 08 ✅（v2.1 冻结）→ 16 ✅（v1 冻结）→ A01 ✅（建档）→ 17 ✅（v1 冻结）→ 18 ✅（v1 冻结）→ 19 ✅（v1 冻结）→ 12 ✅（v2.1 冻结）→ 20（立稿）→ 22（数值首版：**结构与初始假设冻结，数值实施期滚动、调参留实验记录**）
+批次一 · 把"游戏到底是什么"写清楚：README ✅ → 08 ✅（v2.1 冻结）→ 16 ✅（v1 冻结）→ A01 ✅（建档）→ 17 ✅（v1 冻结）→ 18 ✅（v1 冻结）→ 19 ✅（v1 冻结）→ 12 ✅（v2.1 冻结）→ 20 ✅（v1 冻结）→ 22（首版立稿：**结构与初始假设冻结，数值实施期滚动、调参留实验记录**）
 批次二 · 让原 AI 世界适配玩法：      01 → 05 → 06 → 09 → 02 → 10
 批次三 · 表现与社会：                11 → 04 → 03 → 21 → 14 → 15
 ```
