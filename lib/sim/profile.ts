@@ -15,7 +15,7 @@
 import { NPC_CATS } from "./npcs";
 import { hashSeed, mulberry32 } from "./rng";
 
-export const PROFILE_VERSION = "profile-v0.1.0";
+export const PROFILE_VERSION = "profile-v0.2.0"; // v0.2.0：Gate C 终审四调（冰粉/铃铛/老怪/糯米）
 
 export type Rarity = "COMMON" | "UNCOMMON" | "RARE" | "VERY_RARE" | "SPECIAL";
 
@@ -37,6 +37,8 @@ export interface DerivedProfile {
   behaviorSignature: string[];
   socialSeed: { friends: string[]; avoids: string[]; note: string };
   leaveStyle: { freq: "high" | "mid" | "low"; min: number; max: number; material: boolean };
+  solitary: boolean;
+  requiresItemTag?: string;
   overrides: Override[];
 }
 
@@ -82,6 +84,8 @@ interface CanonEntry {
   signature: string[];
   socialSeed: DerivedProfile["socialSeed"];
   leaveStyle: DerivedProfile["leaveStyle"];
+  solitary?: boolean; // Composition 层（22 §四）
+  requiresItemTag?: string; // Eligibility 硬条件：窗口起点院内需存在该标签物件（01 §九 YardWorldFacts）
 }
 
 const ov = (path: string, value: unknown, source: string, reason: string): Override => ({ path, value, source, reason });
@@ -123,7 +127,7 @@ export const CANON: Record<string, CanonEntry> = {
     rarity: "COMMON",
     overrides: [
       ov("favor.quiet", 2, "canon.persona", "害羞、细心"),
-      ov("traceBias", 0.15, "canon.persona", "害羞——常常你只看到她画过的痕迹"),
+      ov("traceBias", 0.28, "canon.persona", "害羞——常见但难确认（Gate C 拍板：COMMON 的 Discovery 难型，正交'不稀有但难确认'由她承担）"),
       ov("windows", [3, 4, 5, 6], "canon.bio", "在溪流边写生的下午猫"),
     ],
     signature: ["蹲在角落把一样东西看很久", "爪子蘸了水，在石板上画着什么"],
@@ -136,6 +140,7 @@ export const CANON: Record<string, CanonEntry> = {
       ov("windows", [7, 8, 9], "canon.bio", "每天黄昏在灯塔坡唱歌——黄昏后才有空"),
       ov("favor.sun", 2, "canon.persona", "浪漫的猫喜欢晚霞的方向"),
       ov("traceBias", -0.05, "canon.bio", "唱着歌来的，听得见"),
+      ov("favor.playful", 2, "canon.persona", "毛线球是她的第二层怪癖（Gate C 拍板：×3 降级——第一身份永远是黄昏与声音）"),
     ],
     signature: ["黄昏时小声哼哼", "对着晚霞的方向坐很久"],
     socialSeed: { friends: ["npc-nuomi"], avoids: [], note: "听众时多时少，不介意" },
@@ -158,6 +163,7 @@ export const CANON: Record<string, CanonEntry> = {
       ov("favor.open", 2, "canon.persona", "爱凑热闹、人来疯——要显眼的位置"),
       ov("traceBias", -0.1, "canon.persona", "时髦的猫不屑于没被看见"),
       ov("windows", [4, 5, 6, 7, 8], "canon.persona", "下午与傍晚的社交时段"),
+      ov("avoid.remove", "social_visible", "canon.persona", "爱凑热闹的猫不躲显眼处（Gate C 拍板：采样冲突人设，删）"),
     ],
     signature: ["理毛理得一丝不苟", "挑全院最显眼的地方坐下"],
     socialSeed: { friends: ["npc-juzi", "npc-heidou"], avoids: ["npc-laoguai"], note: "梦想开咖啡馆——爱一切新东西" },
@@ -263,10 +269,13 @@ export const CANON: Record<string, CanonEntry> = {
       ov("leave", { freq: "low", min: 0, max: 1 }, "canon.persona", "他的价值不在鱼干——在行为与他留下的谜（特殊猫主价值=行为/信息/记忆）"),
       ov("traceBias", 0.25, "canon.persona", "见过的人不多，说法不一"),
       ov("eligibilityNote", "院内需有 old 标签物件在场（旧木箱/旧雨伞类）", "canon.persona", "收藏癖的硬条件——谜面走岛闻投放（17）"),
+      ov("favor.sun", 0, "canon.persona", "统计噪声会摧毁第一层可学习人格（Gate C 拍板删除）——他的主规律是 old/enclosed/quiet/夜"),
     ],
     signature: ["把每样东西看很久，像在鉴定", "他碰过的东西会被摆成奇怪的角度"],
     socialSeed: { friends: [], avoids: ["npc-bingfen", "npc-juzi"], note: "据说见过岛的第一天——OpenMystery，档案只记'据说'" },
     leaveStyle: { freq: "low", min: 0, max: 1, material: false },
+    solitary: true,
+    requiresItemTag: "old",
   },
 };
 
@@ -276,10 +285,12 @@ function applyOverrides(p: DerivedProfile, entry: CanonEntry): void {
     if (!o.source.startsWith("canon.")) throw new Error(`override 无正典依据: ${o.path}`);
     if (o.path.startsWith("favor.")) {
       const tag = o.path.slice(6);
-      p.corePreference.favor[tag] = o.value as number;
+      if ((o.value as number) === 0) delete p.corePreference.favor[tag]; // 置 0 = 终审删除
+      else p.corePreference.favor[tag] = o.value as number;
       // 正典优先于统计：采样出的同名 AVOID 让位（favor/avoid 永不重合）
       p.corePreference.avoid = p.corePreference.avoid.filter((t) => t !== tag);
     }
+    else if (o.path === "avoid.remove") p.corePreference.avoid = p.corePreference.avoid.filter((t) => t !== (o.value as string));
     else if (o.path === "avoid.add") { const t = o.value as string; if (!p.corePreference.avoid.includes(t)) p.corePreference.avoid.push(t); delete p.corePreference.favor[t]; }
     else if (o.path === "windows") p.lifePatternSeed.windows = o.value as number[];
     else if (o.path === "traceBias") p.discoveryTrait.traceBias = o.value as number;
@@ -328,6 +339,8 @@ export function deriveProfile(catId: string, version: string = PROFILE_VERSION):
     behaviorSignature: canon.signature,
     socialSeed: canon.socialSeed,
     leaveStyle: { ...canon.leaveStyle },
+    solitary: canon.solitary ?? false,
+    requiresItemTag: canon.requiresItemTag,
     overrides: canon.overrides,
   };
 
@@ -360,7 +373,7 @@ export function checkPoolComposition(profiles: DerivedProfile[]): CompositionRep
     ["稀有且少留", (ps) => ps.some((p) => rarePlus(p) && p.leaveStyle.max <= 3)],
     ["特殊猫主价值在行为", (ps) => ps.some((p) => p.rarity === "SPECIAL" && p.leaveStyle.max <= 1)],
     ["不起眼但偶留好东西", (ps) => ps.some((p) => (p.rarity === "COMMON" || p.rarity === "UNCOMMON") && p.leaveStyle.freq === "low" && p.leaveStyle.material)],
-    ["不稀有但难确认", (ps) => ps.some((p) => !rarePlus(p) && p.discoveryTrait.traceBias >= 0.1) || ps.some((p) => p.discoveryTrait.traceBias >= 0.3)],
+    ["不稀有但难确认", (ps) => ps.some((p) => !rarePlus(p) && p.discoveryTrait.traceBias >= 0.25)], // Gate C 修洞：乌鸦(RARE)不得顶班,由糯米(COMMON,+0.28)承担
     ["稀有但显眼", (ps) => ps.some((p) => rarePlus(p) && p.discoveryTrait.traceBias <= -0.05)],
   ];
   for (const [name, fn] of checks) if (!fn(profiles)) missing.push(`正交缺位：${name}`);

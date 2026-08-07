@@ -9,9 +9,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { hashSeed, mulberry32, pick, weightedPick } from "../sim/rng";
 import {
-  DEFAULT_TRACE, IDLE_BEHAVIORS, ITEMS, ITEM_TRACES, POOL_V0, PREF, RULES_VERSION, SLOTS,
-  WEATHER_DIST, type PoolCatDef,
+  DEFAULT_TRACE, IDLE_BEHAVIORS, ITEMS, ITEM_TRACES, PREF, RULES_VERSION, SLOTS,
+  WEATHER_DIST,
 } from "./config";
+import { VISIT_POOL, type VisitPoolCat } from "./pool";
 import { windowLenMin, windowStart } from "./time";
 
 export interface SnapshotEntry {
@@ -74,12 +75,13 @@ function tagWeights(snapshot: SnapshotEntry[]): Map<string, number> {
 }
 
 /** Preference（17 §一 三语义区）：AVOID 强冲突=硬 0，惊喜采样永不触碰 */
-function preferenceWeight(cat: PoolCatDef, tags: Map<string, number>): number {
+function preferenceWeight(cat: VisitPoolCat, tags: Map<string, number>): number {
   let avoidHits = 0;
   for (const t of cat.avoid) if (tags.has(t)) avoidHits++;
   if (avoidHits >= 2) return 0; // 讨厌不是低（17 红线）
   let w = PREF.base;
-  for (const t of cat.favor) {
+  // v0 只看命中；favor 强度参与权重的公式归 22 校准
+  for (const t of Object.keys(cat.favor)) {
     const s = tags.get(t);
     if (s) w += PREF.favorPerPoint * Math.min(s, 3);
   }
@@ -88,13 +90,13 @@ function preferenceWeight(cat: PoolCatDef, tags: Map<string, number>): number {
 }
 
 /** 它用哪个位置：偏好重合越多越可能；也可能只是路过 */
-function pickSpot(rng: () => number, cat: PoolCatDef, snapshot: SnapshotEntry[]): SnapshotEntry | null {
+function pickSpot(rng: () => number, cat: VisitPoolCat, snapshot: SnapshotEntry[]): SnapshotEntry | null {
   if (snapshot.length === 0 || rng() < PREF.passByP) return null;
   const itemTags = new Map(ITEMS.map((i) => [i.key, i.tags]));
   const weights = snapshot.map((p) => {
     const tags = itemTags.get(p.itemKey) ?? {};
     let overlap = 0;
-    for (const t of cat.favor) overlap += tags[t] ?? 0;
+    for (const t of Object.keys(cat.favor)) overlap += tags[t] ?? 0;
     return 1 + overlap;
   });
   return weightedPick(rng, snapshot, weights);
@@ -107,13 +109,21 @@ export function settleWindowPure(input: SettleInput): SettleResult {
   const lenMin = windowLenMin(input.windowIndex);
   const visits: VisitDraft[] = [];
 
-  for (const cat of POOL_V0) {
+  const snapshotTags = new Set<string>();
+  {
+    const itemTags = new Map(ITEMS.map((i) => [i.key, i.tags]));
+    for (const pl of input.snapshot) for (const t of Object.keys(itemTags.get(pl.itemKey) ?? {})) snapshotTags.add(t);
+  }
+  for (const cat of VISIT_POOL) {
     if (visits.length >= PREF.maxVisitsPerWindow) break;
-    // Eligibility v0（可替换）：活跃窗；世界侧完整裁决（时间/天气/state/社会/硬条件）接批次二
-    if (!cat.windows.includes(input.windowIndex)) continue;
+    // Eligibility（01 §九 v0.2）：活跃窗（行程近似）+ YardWorldFacts 硬条件——
+    // 读的是"窗口起点院内客观存在的物件标签"，不是用户操作流；
+    // Ineligible 有世界理由，Eligible 未命中不补理由（01 冻结）。
+    if (!cat.windows.includes(input.windowIndex)) continue; // reason: 行程不在此窗
+    if (cat.requiresItemTag && !snapshotTags.has(cat.requiresItemTag)) continue; // reason: 硬条件不满足
     // Composition 层（22 §四）：solitary 猫独占本窗
     if (cat.solitary && visits.length > 0) continue;
-    if (visits.some((v) => POOL_V0.find((p) => p.catId === v.catId)?.solitary)) continue;
+    if (visits.some((v) => VISIT_POOL.find((p) => p.catId === v.catId)?.solitary)) continue;
 
     const w = preferenceWeight(cat, tags);
     let p = 0;

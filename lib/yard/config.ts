@@ -3,7 +3,7 @@
 // 改数值 = 改这里 + 在 22 §八 留实验记录。任何数值/规则变更必须递增 RULES_VERSION——
 // 历史结算事实带着当时的版本（14 §九 护栏②），昨天的世界永不被今天的数值重算。
 
-export const RULES_VERSION = "yard-v0.1.0";
+export const RULES_VERSION = "yard-v0.2.0"; // v0.2.0：POOL_V0 退役→Birth Canon 正式池 + YardWorldFacts 硬条件（22 §八 已留记录）
 
 // ---------- 时间结构（22 §一）：13 窗/日 ----------
 // 06:00 起每 90 分钟 ×12（index 0-11）+ 深夜长窗 00:00–06:00（index 12，夜行猫主场）
@@ -96,50 +96,4 @@ export const DEFAULT_TRACE = "地上留了一串浅浅的爪印";
 // L3 无用层（16 §五 红线：behaviors 必须允许无用行为——结算之外的生命）
 export const IDLE_BEHAVIORS = ["打了个哈欠", "对着墙角发了会儿呆", "把院里的东西轻轻挪歪了一点", "盯着一片叶子看了很久"];
 
-// ---------- 猫池 v0（REPLACEABLE） ----------
-// 12 §七 并行边界：CatProfile/Preference 派生规则归批次二 09——此处为可替换实现，
-// 沿用既有 NPC（lib/sim/npcs.ts），偏好为手写占位；09 冻结后由三轴+档案派生替换。
-// traceBias 与稀缺无函数关系（22 修订②：Discovery 差异是每猫属性，不是档位属性）。
-export interface PoolCatDef {
-  catId: string; // 既有 NPC id
-  name: string;
-  favor: string[]; // Core 偏好（v0 手写）
-  avoid: string[];
-  windows: number[]; // 活跃窗 index（Eligibility v0：世界侧完整裁决接批次二）
-  leaveChance: number; // 留下概率（往来，19：与稀缺档正交）
-  leaveMin: number;
-  leaveMax: number;
-  traceBias: number; // Discovery 差异（正交轴）
-  solitary: boolean; // Composition 层（22 §四）
-  behaviors: string[];
-}
-export const POOL_V0: PoolCatDef[] = [
-  {
-    catId: "npc-mianhua", name: "棉花",
-    favor: ["soft", "sun", "quiet"], avoid: [],
-    windows: [1, 2, 3, 4, 5, 6, 7],
-    leaveChance: 0.8, leaveMin: 2, leaveMax: 4, traceBias: -0.1, solitary: false,
-    behaviors: ["在垫子上睡着了", "把下巴搁在爪子上晒太阳"],
-  },
-  {
-    catId: "npc-jiangjun", name: "将军",
-    favor: ["open", "sun"], avoid: [],
-    windows: [0, 1, 2, 3],
-    leaveChance: 0.6, leaveMin: 2, leaveMax: 5, traceBias: -0.05, solitary: false,
-    behaviors: ["端端正正地坐了一会儿", "沿着院墙巡了一圈"],
-  },
-  {
-    catId: "npc-wuya", name: "乌鸦",
-    favor: ["enclosed", "shelter", "quiet"], avoid: ["social_visible"],
-    windows: [10, 11, 12],
-    leaveChance: 0.5, leaveMin: 1, leaveMax: 3, traceBias: 0.35, solitary: false,
-    behaviors: ["在阴影里停了停", "从墙头跳下来，又跳了上去"],
-  },
-  {
-    catId: "npc-laoguai", name: "老怪",
-    favor: ["enclosed", "old", "quiet"], avoid: ["social_visible", "open"],
-    windows: [8, 9, 10, 11],
-    leaveChance: 0.7, leaveMin: 4, leaveMax: 9, traceBias: 0.15, solitary: true,
-    behaviors: ["把院里的东西挨个看了一遍", "叼起一样小东西端详了半天，又放回去了"],
-  },
-];
+// ---------- 猫池：POOL_V0 已退役（2026-08-08 Gate C 过审）——正式池见 lib/yard/pool.ts ----------

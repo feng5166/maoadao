@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { settleWindowPure, weatherOf, type SettleInput } from "../lib/yard/settle";
-import { POOL_V0, RULES_VERSION, WINDOWS } from "../lib/yard/config";
+import { RULES_VERSION, WINDOWS } from "../lib/yard/config";
+import { VISIT_POOL } from "../lib/yard/pool";
 import { dayKeyOf, windowAt, windowLenMin, windowStart } from "../lib/yard/time";
 
 // 结算确定性：整个 Gameplay Simulation 最基础的一条 CI（14 §九 评审指定）。
@@ -58,17 +59,28 @@ describe("窗口结算确定性（核心 CI）", () => {
 });
 
 describe("组合层与稀疏度（16/22 红线的干跑面）", () => {
+  const OLD_SNAPSHOT = [...SNAPSHOT, { slotKey: "tree", itemKey: "old_crate" }]; // 含 old 标签：老怪的硬条件满足
+
   it("solitary 猫永不与他猫同窗（Composition 层）", () => {
-    const solitaryIds = new Set(POOL_V0.filter((c) => c.solitary).map((c) => c.catId));
+    const solitaryIds = new Set(VISIT_POOL.filter((c) => c.solitary).map((c) => c.catId));
     expect(solitaryIds.size).toBeGreaterThan(0);
     for (let d = 1; d <= 60; d++) {
       const dayKey = `2027${String(100 + d).slice(1)}01`.slice(0, 8);
       for (const w of WINDOWS) {
-        const r = settleWindowPure(input({ dayKey: `${dayKey}${d}`.slice(0, 8), windowIndex: w.index, yardId: `yard-${d}` }));
+        const r = settleWindowPure(input({ dayKey: `${dayKey}${d}`.slice(0, 8), windowIndex: w.index, yardId: `yard-${d}`, snapshot: OLD_SNAPSHOT }));
         if (r.visits.some((v) => solitaryIds.has(v.catId))) {
           expect(r.visits.length).toBe(1);
         }
         expect(r.visits.length).toBeLessThanOrEqual(2); // 每窗上限（22 §一）
+      }
+    }
+  });
+
+  it("YardWorldFacts 硬条件：院内无 old 物件，老怪永不出现（Eligibility=0）", () => {
+    for (let d = 1; d <= 80; d++) {
+      for (const w of [9, 10, 11, 12]) {
+        const r = settleWindowPure(input({ dayKey: `202801${String(10 + (d % 20))}`.slice(0, 8), windowIndex: w, yardId: `yard-hc-${d}` }));
+        expect(r.visits.some((v) => v.catId === "npc-laoguai")).toBe(false);
       }
     }
   });
