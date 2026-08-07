@@ -465,6 +465,10 @@ export async function releaseCat(formData: FormData) {
       }
       await tx.catVisit.deleteMany({ where: { catId: cat.id } });
       await tx.catOpportunityState.deleteMany({ where: { catId: cat.id } });
+      // Birth Canon 与经历层（用户猫一般不建档，同样按不变量全覆盖）
+      await tx.catProfile.deleteMany({ where: { catId: cat.id } });
+      await tx.sealedCatCanon.deleteMany({ where: { catId: cat.id } });
+      await tx.lifeImprint.deleteMany({ where: { catId: cat.id } });
       // 有外键约束的子表先删，最后删猫
       await tx.diaryEntry.deleteMany({ where: { catId: cat.id } });
       await tx.storyline.deleteMany({ where: { catId: cat.id } });
