@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { hashSeed, mulberry32, pick, weightedPick } from "../sim/rng";
+import { eligibilityAt } from "../sim/itinerary";
 import {
   DEFAULT_TRACE, IDLE_BEHAVIORS, ITEMS, ITEM_TRACES, PREF, RULES_VERSION, SLOTS,
   WEATHER_DIST,
@@ -116,11 +117,12 @@ export function settleWindowPure(input: SettleInput): SettleResult {
   }
   for (const cat of VISIT_POOL) {
     if (visits.length >= PREF.maxVisitsPerWindow) break;
-    // Eligibility（01 §九 v0.2）：活跃窗（行程近似）+ YardWorldFacts 硬条件——
-    // 读的是"窗口起点院内客观存在的物件标签"，不是用户操作流；
-    // Ineligible 有世界理由，Eligible 未命中不补理由（01 冻结）。
-    if (!cat.windows.includes(input.windowIndex)) continue; // reason: 行程不在此窗
-    if (cat.requiresItemTag && !snapshotTags.has(cat.requiresItemTag)) continue; // reason: 硬条件不满足
+    // Eligibility（01 §九 冻结）：行程派生器裁决（Whereabouts/CurrentActivity/可达性）
+    // + YardWorldFacts 硬条件。Ineligible 有世界理由；Eligible 未命中不补理由。
+    // 行程与未来岛闻共用 itineraryFor 同一事实源（验收④）。
+    const el = eligibilityAt(cat.catId, input.dayKey, input.rulesVersion, input.windowIndex, lenMin);
+    if (!el.eligible) continue; // el.reasonCode = on_duty | resting | too_far_this_window
+    if (cat.requiresItemTag && !snapshotTags.has(cat.requiresItemTag)) continue; // reason: 硬条件不满足（YardWorldFacts）
     // Composition 层（22 §四）：solitary 猫独占本窗
     if (cat.solitary && visits.length > 0) continue;
     if (visits.some((v) => VISIT_POOL.find((p) => p.catId === v.catId)?.solitary)) continue;
@@ -136,7 +138,9 @@ export function settleWindowPure(input: SettleInput): SettleResult {
     if (rng() >= p) continue;
 
     const spot = pickSpot(rng, cat, input.snapshot);
-    const arriveMin = Math.floor(rng() * Math.max(1, lenMin - 20));
+    // 到达不早于最早可达（占住的事收尾 + 路程——验收③的正向面）
+    const floorMin = Math.min(el.earliestArriveMin, Math.max(1, lenMin - 25));
+    const arriveMin = floorMin + Math.floor(rng() * Math.max(1, lenMin - 20 - floorMin));
     const stay = 10 + Math.floor(rng() * 80);
     const leaveMin = Math.min(lenMin, arriveMin + stay);
     const behaviors = [pick(rng, cat.behaviors)];
