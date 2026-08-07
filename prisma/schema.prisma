@@ -571,3 +571,49 @@ model CatOpportunityState {
 
   @@id([catId, yardId])
 }
+
+// ============================================================
+// 09 v2.1 Birth Canon 落库（2026-08-08）。三条纪律：
+// ① Baseline 永不 UPDATE（Effective=Baseline⊕LifeImprint 运行时派生，永不写回）；
+// ② PROFILE_VERSION 与玩法 RULES_VERSION 生命周期分离——调 Visit 权重
+//    不应导致"同一只猫重新出生"；
+// ③ approvedAt 是 Gate C 闸门：null=候选，逐只人工终审通过前不得进正式池。
+
+model CatProfile {
+  catId             String    @id
+  profileVersion    String // 生成算法版本（lib/sim/profile.ts PROFILE_VERSION）
+  rarity            String // COMMON | UNCOMMON | RARE | VERY_RARE | SPECIAL（候选值，终审于 22 Cat Sheet）
+  corePreference    Json // { favor: {tag: strength}, avoid: [tag] }
+  lifePatternSeed   Json // { windows: [], weatherNote?, routeNote }
+  discoveryTrait    Json // { stayTendency, traceBias }（与稀缺档正交，17）
+  behaviorSignature Json // string[]（canon 来源）
+  socialSeed        Json // { friends: [], avoids: [], note }
+  leaveStyle        Json // { freq, min, max }（与稀缺档无函数关系，19 正交）
+  overrides         Json // Override[]：{feature, value, source, reason}——无 source 的覆写不合法（09 §二）
+  approvedAt        DateTime? // Gate C：人工终审通过时间
+  createdAt         DateTime
+}
+
+// 谜的第二类（09 §四）：世界有真相、用户未知——物理隔离，
+// 任何 narration context 默认不读取本表；解封=明确世界事件（权限系统后置）。
+model SealedCatCanon {
+  catId     String   @id
+  content   Json
+  createdAt DateTime
+}
+
+// 经历的叠加层（05 §十）：append-only——禁止 UPDATE 老 Imprint，
+// 修正 = 新事件产生新 Imprint（supersede 或反向 delta）。
+// 每条必须挂 sourceEventIds：指不出出处 = 数据造假。
+model LifeImprint {
+  id                  String   @id
+  catId               String
+  kind                String // context_habit | personality_imprint（白名单，05 §十·10.2）
+  feature             String
+  delta               Float
+  sourceEventIds      String[]
+  supersedesImprintId String?
+  createdAt           DateTime
+
+  @@index([catId])
+}
