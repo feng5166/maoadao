@@ -44,9 +44,19 @@ const CONTENT =
   "白天，普通的晴天。院子里没有猫、没有任何动物、没有人，没有脚印、没有散落的物品、" +
   "没有食盆玩具，空地就是空的。";
 
+// ============ Base LOCK（2026-08-08 创始人 Gate：A/B/C 全过）============
+// 母场景已锁定。用户要形成空间记忆——木屋一直在那里,树一直在那里,门口一直
+// 在那里。后续问题先从 Renderer/VisualConfig/anchor/footprint/overlay 解,
+// 不重画 Base。解锁重生成需创始人拍板:YARD_BASE_UNLOCK=1 + --force 同时给。
+const BASE_LOCKED = true;
+
 async function main() {
   const force = process.argv.includes("--force");
   const out = "public/scenes/yard.jpg";
+  if (BASE_LOCKED && !(force && process.env.YARD_BASE_UNLOCK === "1")) {
+    console.log("Base 已锁定(2026-08-08 Gate)。重生成需创始人拍板:YARD_BASE_UNLOCK=1 npx tsx scripts/yard-scene.ts --force");
+    return;
+  }
   if (!force && fs.existsSync(out)) {
     console.log("yard 已存在（--force 重生成；三测通过锁定后永不轻易重生成）");
     return;

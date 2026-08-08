@@ -55,6 +55,12 @@ export default async function YardPage() {
         </p>
       </header>
 
+      {/* 院子本身（Renderer 第一刀：Base+锚点+猫+痕迹）——功能区文字暂留下方，
+          第二刀把动作收进画面（让功能藏在生活里，但仍然找得到） */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/yard/scene?v=${view.dayKey}-${view.windowIndex}`} alt="院子" className="mt-4 w-full" />
+
+
       {/* 此刻 */}
       <section className="mt-6 border-t border-line pt-4">
         {view.present.length > 0 ? (

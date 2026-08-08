@@ -19,7 +19,7 @@ import type { YardView } from "./view";
 export interface YardVisualConfig {
   sceneKey: string; // Base 母场景资产键（房屋/树/门口/三槽位空间关系）
 }
-export const YARD_VISUAL: YardVisualConfig = { sceneKey: "home_yard" };
+export const YARD_VISUAL: YardVisualConfig = { sceneKey: "yard" }; // public/scenes/yard.jpg（Base LOCK 2026-08-08）
 
 // ---------- 语义模型 ----------
 export type AttentionCenter =

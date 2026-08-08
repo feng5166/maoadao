@@ -188,10 +188,17 @@ Yard 表现层改造等 11 冻结后开工——这是从"系统跑起来"切到
 12.6 管线的语义合成层——注意力中心五档 + 语义节点回溯 + 同状态同语义树 +
 微动不撒谎全部 CI 化）。**母场景 Base：v1 三测 A PASS / B PASS WITH RISK / C HOLD**（记录入
 11 §12.9，验收第四句补入：院子不能为了显得有生活而画得太满）；
-**v2 构图修正版已出**（四处修正——门压低只剩门柱石阶/取消走廊夹墙/
-中央泥地降噪留 Trace 余量/树前静区；public/scenes/yard.jpg）
-待创始人三测复核，通过即锁；锁前 Renderer 不绑定 Base。
-词面终审已随 04 冻结改码。接下来：Base 锁定 → Renderer 接管 Yard 页）
+**v2 终审 A/B/C 全过——Base LOCK（2026-08-08）**，Trace 合法落位规则
+随 C Gate 冻结（区内可读性偏移合法，跨区=改事实；不发光不描边不跳动）。
+**Renderer 第一刀 ✅ 落码**（拍板范围：Base+3 Anchor+Cat+Trace）——
+lib/yard/scene-render.ts 只消费 PresentationModel 语义节点作画，
+锚点/候选点/景深比例手工标定于锁定版 Base；/yard/scene 路由上线
+（flag 内），Yard 页首图接入；三状态验收截图全成立
+（scripts/yard-shots.ts：空院子/棉花+软垫/无猫+一撮毛）；
+物件小图管线开张（scripts/items-art.ts，初始三件已产）。
+词面终审已随 04 冻结改码。
+第二刀：Object interaction → 收下 → 翻册 → 换回来 收进画面——
+纪律：让功能藏在生活里，但仍然找得到）
 ```
 
 纪律照旧：**一篇一议**（点题→立稿→评审→冻结）；多人相关（兴趣组/串门/世界猫跨院）

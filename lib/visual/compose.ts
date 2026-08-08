@@ -26,7 +26,7 @@ function tintLayer(time: SceneTime): Buffer | null {
  *  白猫(毛色≈米白)靠双保险:泛洪不许穿过"梯度屏障"(描边/明暗变化处),
  *  抠完做漏检(保留面积过小=泛洪漏进猫身)——漏了收紧参数重来,再漏就抛错,
  *  上层回落纯场景(宁可没有猫,不要幽灵猫)。 */
-async function makeCutout(pose: Buffer, size = 400): Promise<Buffer> {
+export async function makeCutout(pose: Buffer, size = 400): Promise<Buffer> {
   const { data, info } = await sharp(pose)
     .resize(size, size, { fit: "cover" })
     .removeAlpha()
@@ -148,7 +148,7 @@ async function makeCutout(pose: Buffer, size = 400): Promise<Buffer> {
 
 /** 接地影:猫脚下一枚很淡的椭圆,让它"站在地上"而不是浮着(画面内的绘画语言,不是 UI 阴影)。
  *  径向渐变自带软边,不依赖 SVG filter(librsvg 的 filter 支持不稳) */
-function groundShadow(w: number): Buffer {
+export function groundShadow(w: number): Buffer {
   const h = Math.max(24, Math.round(w * 0.16));
   return Buffer.from(
     `<svg width="${w}" height="${h}"><defs><radialGradient id="g"><stop offset="0" stop-color="rgba(50,42,34,0.26)"/><stop offset="0.7" stop-color="rgba(50,42,34,0.12)"/><stop offset="1" stop-color="rgba(50,42,34,0)"/></radialGradient></defs><ellipse cx="${w / 2}" cy="${h / 2}" rx="${w * 0.46}" ry="${h * 0.42}" fill="url(#g)"/></svg>`,

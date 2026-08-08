@@ -32,7 +32,7 @@ const cat = (visitId: string, catId: string, slotKey: string | null) => ({
   visitId, catId, catName: "一只猫", behavior: "待着", slotKey,
 });
 const mark = (visitId: string) => ({
-  visitId, dayKey: "20260901", windowIndex: 3, traces: ["落了一撮深黑色的毛"], left: { fish: 0, leftText: null }, collected: false,
+  visitId, dayKey: "20260901", windowIndex: 3, slotKey: null, traces: ["落了一撮深黑色的毛"], left: { fish: 0, leftText: null }, collected: false,
 });
 
 describe("注意力中心五档（12.2：事实决定中心）", () => {

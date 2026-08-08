@@ -47,11 +47,13 @@ export interface VisitRecordView {
   left: LeftView;
   collected: boolean;
 }
-/** TRACE_ONLY 视图：结构上就没有 catId/catName 字段（脱敏在类型层锁死） */
+/** TRACE_ONLY 视图：结构上就没有 catId/catName 字段（脱敏在类型层锁死）。
+ *  slotKey 是痕迹落在哪个位置的事实（画在它发生的地方，11 §12.5），非身份信息 */
 export interface TraceMarkView {
   visitId: string;
   dayKey: string;
   windowIndex: number;
+  slotKey: string | null;
   traces: string[];
   left: LeftView;
   collected: boolean;
@@ -203,6 +205,7 @@ export async function getYardView(userId: string, now = new Date()): Promise<Yar
         visitId: v.id,
         dayKey: v.dayKey,
         windowIndex: v.windowIndex,
+        slotKey: v.slotKey,
         traces: arr(v.traces),
         left: leftOf(v),
         collected: v.collectedAt != null,
