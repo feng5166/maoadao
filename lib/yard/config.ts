@@ -105,6 +105,12 @@ export const CLUE_SUPPLY = {
   rumorPageSize: 20, // 岛猫册"有传闻的猫"最多回显条数（呈现参数，非事实截断）
 };
 
+// ---------- Signal 推导阈值（20 心流阶段；阈值归 22，登记于此） ----------
+export const SIGNALS = {
+  outcomesMin: 2, // D2：可区分来访结果的最小种数（observed_multiple_outcomes）
+  targetedAdjustDays: 3, // D5 v0 代理：翻册当日随后发生布置变更的天数（per-cat 条目面落地后升级为"同一目标"口径）
+};
+
 // ---------- 结算运维参数 ----------
 export const SETTLEMENT = {
   // 单次页面加载最多补算多少个窗（长离线防一次补数百窗；最旧优先，余量下次加载续补——

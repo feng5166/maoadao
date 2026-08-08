@@ -522,6 +522,30 @@ model Memento {
   @@index([homeId])
 }
 
+// 观测面 surface 日见事实（20/18：翻册等界面首见——analytics 层，
+// 世界侧（Eligibility/Preference/Director）永不读取，隔离审计看守）
+model SurfaceView {
+  userId  String
+  surface String // cat_book | …
+  dayKey  String // 北京日
+  firstAt DateTime
+
+  @@id([userId, surface, dayKey])
+}
+
+// 20 双层模型的 Signal 缓存：由领域事实推导（Domain Truth → Signal Derivation
+// → Analytics 单向，02 §九），可全量重算——本表是快照不是事实源。
+// Reached 不落库（由 Signal 派生，判定器可迭代）。
+model StageSignal {
+  userId       String
+  signal       String // lib/yard/signals.ts SignalKey
+  firstAt      DateTime // 证据首次成立时刻（取自事实时间轴，非推导时刻）
+  sourceRef    String // 触发事件引用（placement/settlement/observation/… id）
+  logicVersion String // 组合逻辑版本（定义修订后全量重算，历史可比）
+
+  @@id([userId, signal])
+}
+
 // 发放批次哨兵（护栏①）：初始资产恰好一份——不靠先查再插，靠唯一冲突收敛
 model HomeGrant {
   homeId    String

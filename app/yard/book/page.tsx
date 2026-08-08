@@ -8,6 +8,7 @@ import { getViewerId } from "@/lib/identity";
 import { buildCatBook } from "@/lib/yard/book";
 import { ensureRumorSupply } from "@/lib/yard/clues";
 import { yardGameplayEnabled } from "@/lib/yard/flags";
+import { recordSurfaceView } from "@/lib/yard/signals";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function CatBookPage() {
   // Director 时机：翻册子这一刻，今天的传闻（如果有）落到你的册上——
   // 只把既有世界事实按时机露出来，不创造世界事实（lib/yard/clues.ts 四红线）
   await ensureRumorSupply(uid);
+  await recordSurfaceView(uid, "cat_book"); // 观测面事实（20 D3/D5 推导用；世界侧永不读）
   const book = await buildCatBook(uid);
 
   return (
