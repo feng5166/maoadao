@@ -18,6 +18,7 @@ import path from "node:path";
 import sharp, { type OverlayOptions } from "sharp";
 import { groundShadow, makeCutout } from "../visual/compose";
 import { hashSeed, mulberry32 } from "../sim/rng";
+import { NPC_CATS } from "../sim/npcs";
 import { buildPresentation, YARD_VISUAL, type YardPresentationModel } from "./present";
 import type { YardView } from "./view";
 
@@ -76,6 +77,25 @@ export function spotFor(zone: ZoneKey, kind: "cat" | "trace", ref: string): Spot
   return spots[Math.floor(rng() * spots.length)];
 }
 
+/** 各 zone 的亮面候选（catSpots 下标）——深色猫避暗只影响这里的取子集，
+ *  永不跨区、永不反写事实（第二刀红线：避暗只能影响合法绘制点） */
+const BRIGHT_CAT_SPOTS: Record<ZoneKey, number[]> = {
+  eaves: [0, 1],
+  tree: [1], // 远离树干深部
+  clearing: [0, 1, 2],
+};
+
+export function isDarkCat(catId: string): boolean {
+  const a = NPC_CATS.find((n) => n.id === catId)?.appearance ?? "";
+  return /纯黑|黑猫|黑色/.test(a);
+}
+
+export function catSpotFor(zone: ZoneKey, ref: string, dark: boolean): Spot {
+  const pool = dark ? BRIGHT_CAT_SPOTS[zone].map((i) => ZONES[zone].catSpots[i]) : ZONES[zone].catSpots;
+  const rng = mulberry32(hashSeed("yard-spot", zone, "cat", ref));
+  return pool[Math.floor(rng() * pool.length)];
+}
+
 // ---------- 痕迹小件（v0 手绘 SVG；不发光不描边不跳动） ----------
 const INK = "rgba(96,80,64,0.42)";
 
@@ -107,6 +127,36 @@ function furTuft(w: number, tint: string): Buffer {
       stroke("M26,50 C40,38 56,34 70,40", 4.4, 0.42) +
       stroke("M36,52 C48,44 60,44 72,48", 3.6, 0.36) +
       stroke("M30,42 C40,32 50,30 58,32", 3, 0.3) +
+      `</svg>`,
+  );
+}
+
+/** 留物小堆：几条小鱼干（19 世界语言"走的时候留下的"——不是掉落图标）。
+ *  可读性只靠尺寸/明度/手绘墨线（画里的线条,不是发光描边——C Gate 可读性门） */
+function fishPile(w: number): Buffer {
+  const h = Math.round(w * 0.55);
+  const body = "rgba(122,104,76,0.72)";
+  const ink = "rgba(78,64,46,0.6)";
+  const fish = (cx: number, cy: number, s: number, rot: number) =>
+    `<g transform="translate(${cx},${cy}) rotate(${rot})">` +
+    `<ellipse cx="0" cy="0" rx="${s}" ry="${s * 0.34}" fill="${body}" stroke="${ink}" stroke-width="1.6"/>` +
+    `<path d="M${s * 0.85},0 L${s * 1.3},${-s * 0.3} L${s * 1.3},${s * 0.3} Z" fill="${body}" stroke="${ink}" stroke-width="1.4"/>` +
+    `<circle cx="${-s * 0.55}" cy="${-s * 0.06}" r="1.4" fill="${ink}"/>` +
+    `</g>`;
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" viewBox="0 0 100 55">` +
+      fish(36, 20, 18, -12) + fish(58, 32, 16, 10) + fish(42, 40, 14, -3) +
+      `</svg>`,
+  );
+}
+
+/** 留物小件：一样被留下的小东西（木料/零件/纪念物的通用小包形——具体名字在词面里说） */
+function parcelMark(w: number): Buffer {
+  const h = Math.round(w * 0.7);
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" viewBox="0 0 100 70">` +
+      `<rect x="28" y="26" width="44" height="30" rx="4" fill="rgba(150,122,86,0.7)" stroke="rgba(86,68,48,0.6)" stroke-width="2"/>` +
+      `<path d="M28,41 h44 M50,26 v30" stroke="rgba(86,68,48,0.55)" stroke-width="2.6"/>` +
       `</svg>`,
   );
 }
@@ -162,23 +212,39 @@ export async function renderYardScene(view: YardView, assets: SceneAssets): Prom
     layers.push({ input: scaled, left, top });
   }
 
-  // Trace 层：毛/爪印小件，合法落位（区内候选，不跨区）
+  // Trace 层：毛/爪印/留物小件，合法落位（区内候选，不跨区）
   for (const node of model.nodes.filter((n) => n.layer === "trace")) {
     const visitId = node.sourceRef.replace("visit:", "");
     const mark = view.traceMarks.find((t) => t.visitId === visitId);
-    if (!mark) continue;
-    const zone = zoneOfSlot(mark.slotKey);
+    const record = view.records.find((r) => r.visitId === visitId);
+    const slotKey = mark?.slotKey ?? record?.slotKey ?? null;
+    const zone = zoneOfSlot(slotKey);
     const spot = spotFor(zone, "trace", node.sourceRef);
-    const fur = mark.traces.find((t) => t.includes("毛"));
     const w = Math.round(W * 0.085); // 可读性靠尺寸与落位,不靠描边发光（C Gate 可读性门）
-    const svg = fur ? furTuft(w, furTintOf(fur)) : pawMarks(w);
-    const png = await sharp(svg).png().toBuffer();
-    const meta = await sharp(png).metadata();
-    layers.push({
-      input: png,
-      left: Math.round(W * spot.x - (meta.width ?? w) / 2),
-      top: Math.round(H * spot.y - (meta.height ?? w) / 2),
-    });
+
+    const svgs: Buffer[] = [];
+    if (mark && !node.key.startsWith("left:")) {
+      const fur = mark.traces.find((t) => t.includes("毛"));
+      svgs.push(fur ? furTuft(w, furTintOf(fur)) : pawMarks(w));
+    }
+    // 未收的留物画在同一处（收下动作贴着它）
+    const left = (mark ?? record)?.left;
+    const collected = (mark ?? record)?.collected ?? true;
+    if (node.key.startsWith("left:") || (mark && left?.leftText && !collected)) {
+      if (left?.leftText) svgs.push(left.fish > 0 ? fishPile(Math.round(w * 1.15)) : parcelMark(Math.round(w * 0.95)));
+    }
+
+    let dy = 0;
+    for (const svg of svgs) {
+      const png = await sharp(svg).png().toBuffer();
+      const meta = await sharp(png).metadata();
+      layers.push({
+        input: png,
+        left: Math.round(W * spot.x - (meta.width ?? w) / 2) + dy * 6,
+        top: Math.round(H * spot.y - (meta.height ?? w) / 2) + dy * Math.round(w * 0.45),
+      });
+      dy += 1;
+    }
   }
 
   // Cat 层：抠图入画 + 接地影（在场才画——模型里有节点就是世界说它在）
@@ -195,7 +261,8 @@ export async function renderYardScene(view: YardView, assets: SceneAssets): Prom
       continue;
     }
     const zone = zoneOfSlot(p.slotKey);
-    const spot = (p.slotKey && objectSpots.get(p.slotKey)) || spotFor(zone, "cat", node.sourceRef);
+    // 避暗（第二刀红线）：深色猫只在亮面候选里取点——事实 zone 不变,只挑合法绘制点
+    const spot = (p.slotKey && objectSpots.get(p.slotKey)) || catSpotFor(zone, node.sourceRef, isDarkCat(p.catId));
     const targetH = Math.round(H * ZONES[zone].catScale);
     const scaled = await sharp(cutout).resize({ height: targetH }).png().toBuffer();
     const meta = await sharp(scaled).metadata();

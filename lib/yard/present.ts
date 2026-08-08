@@ -84,6 +84,10 @@ export function buildPresentation(view: YardView, cfg: YardVisualConfig): YardPr
   for (const t of [...view.traceMarks].sort((a, b) => a.visitId.localeCompare(b.visitId))) {
     nodes.push({ layer: "trace", key: t.traces[0] ?? "痕迹", sourceRef: `visit:${t.visitId}` });
   }
+  // 未收的留物也是院里的事实（画在它发生的地方——收下动作贴着它）
+  for (const r of [...view.records].filter((x) => x.left.leftText && !x.collected).sort((a, b) => a.visitId.localeCompare(b.visitId))) {
+    nodes.push({ layer: "trace", key: `left:${r.left.leftText}`, sourceRef: `visit:${r.visitId}` });
+  }
   for (const p of [...view.present].sort((a, b) => a.visitId.localeCompare(b.visitId))) {
     nodes.push({ layer: "cat", key: p.catId, sourceRef: `visit:${p.visitId}` });
   }

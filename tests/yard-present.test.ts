@@ -63,6 +63,32 @@ describe("注意力中心五档（12.2：事实决定中心）", () => {
     expect(m.attention).toEqual({ kind: "traces", refs: ["visit:v9"] });
   });
 
+  it("未收留物是院里的事实：进 trace 层语义节点（收下动作贴着它）", () => {
+    const m = buildPresentation(
+      baseView({
+        records: [{
+          visitId: "r1", catId: "npc-mianhua", catName: "棉花", dayKey: "20260901", windowIndex: 2,
+          slotKey: "eaves", behaviors: ["打盹"], traces: [], left: { fish: 3, leftText: "3条小鱼干" }, collected: false,
+        }],
+      }),
+      YARD_VISUAL,
+    );
+    const node = m.nodes.find((n) => n.layer === "trace" && n.sourceRef === "visit:r1");
+    expect(node).toBeTruthy();
+    expect(node!.key).toBe("left:3条小鱼干");
+    // 收下之后不再是院里的东西
+    const m2 = buildPresentation(
+      baseView({
+        records: [{
+          visitId: "r1", catId: "npc-mianhua", catName: "棉花", dayKey: "20260901", windowIndex: 2,
+          slotKey: "eaves", behaviors: ["打盹"], traces: [], left: { fish: 3, leftText: "3条小鱼干" }, collected: true,
+        }],
+      }),
+      YARD_VISUAL,
+    );
+    expect(m2.nodes.some((n) => n.sourceRef === "visit:r1")).toBe(false);
+  });
+
   it("无猫无痕 → 院子本身（安静合法，模型里没有任何找补节点）", () => {
     const m = buildPresentation(baseView(), YARD_VISUAL);
     expect(m.attention).toEqual({ kind: "yard", refs: [] });

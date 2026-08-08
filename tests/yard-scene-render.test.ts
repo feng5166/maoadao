@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ZONES, spotFor, zoneOfSlot, furTintOf, type ZoneKey } from "../lib/yard/scene-render";
+import { ZONES, catSpotFor, isDarkCat, spotFor, zoneOfSlot, furTintOf, type ZoneKey } from "../lib/yard/scene-render";
 
 // Renderer 第一刀 CI（11 §12.9 C Gate 附带规则）：
 // Trace 合法落位——绘制位置必须在其事实区域 footprint 内，允许区内可读性偏移，
@@ -28,6 +28,19 @@ describe("合法落位规则（C Gate）", () => {
         expect(pool).toContainEqual(a); // 树下的爪印挪不去屋檐下
       }
     }
+  });
+
+  it("避暗红线（第二刀）：深色猫只挑亮面候选,但永不跨区、永不出 zone 候选集", () => {
+    expect(isDarkCat("npc-wuya")).toBe(true); // 纯黑猫
+    expect(isDarkCat("npc-mianhua")).toBe(false);
+    for (const zone of Object.keys(ZONES) as ZoneKey[]) {
+      for (const ref of ["visit:a", "visit:b", "visit:c"]) {
+        const dark = catSpotFor(zone, ref, true);
+        expect(ZONES[zone].catSpots).toContainEqual(dark); // 仍是本 zone 的合法绘制点
+      }
+    }
+    // 树区亮面 = 远离树干深部的那个候选
+    expect(catSpotFor("tree", "visit:x", true)).toEqual(ZONES.tree.catSpots[1]);
   });
 
   it("zone 由事实槽位决定：eaves/tree 各归各，其余归 clearing", () => {

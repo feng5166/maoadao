@@ -62,6 +62,22 @@ async function main() {
         }],
       }),
     ],
+    [
+      "4-record-left",
+      baseView({
+        records: [{
+          visitId: "shot-v3", catId: "npc-tangyuan", catName: "汤圆", dayKey: "20260808", windowIndex: 3,
+          slotKey: "eaves", behaviors: ["翻个身，换个方向继续睡"], traces: ["垫子上多了一个浅浅的窝"],
+          left: { fish: 4, leftText: "4条小鱼干" }, collected: false,
+        }],
+      }),
+    ],
+    [
+      "5-dark-cat-tree",
+      baseView({
+        present: [{ visitId: "shot-v4", catId: "npc-wuya", catName: "一只猫", behavior: "只在墙头停一停", slotKey: "tree" }],
+      }),
+    ],
   ];
 
   for (const [name, view] of states) {
@@ -78,3 +94,4 @@ main()
     process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());
+// （第二刀补充状态在 main 内联注册,见 states 数组——本注释防止误删）

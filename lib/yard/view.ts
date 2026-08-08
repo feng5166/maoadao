@@ -42,6 +42,7 @@ export interface VisitRecordView {
   catName: string;
   dayKey: string;
   windowIndex: number;
+  slotKey: string | null; // 留物躺在哪个位置的事实（画在它发生的地方）
   behaviors: string[];
   traces: string[];
   left: LeftView;
@@ -193,6 +194,7 @@ export async function getYardView(userId: string, now = new Date()): Promise<Yar
         catName: nameOf.get(v.catId) ?? "一只猫",
         dayKey: v.dayKey,
         windowIndex: v.windowIndex,
+        slotKey: v.slotKey,
         behaviors: arr(v.behaviors),
         traces: arr(v.traces),
         left: leftOf(v),
