@@ -8,7 +8,7 @@ import { getViewerId } from "@/lib/identity";
 import { yardGameplayEnabled } from "@/lib/yard/flags";
 import { getYardView } from "@/lib/yard/view";
 import { WINDOWS } from "@/lib/yard/config";
-import { claimYardAction, collectVisitAction, placeItemAction, removeItemAction } from "./actions";
+import { buyItemAction, claimYardAction, collectVisitAction, placeItemAction, removeItemAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,7 @@ export default async function YardPage() {
     );
   }
 
-  const uncollected = [...view.records, ...view.traceMarks].filter((r) => r.fish > 0 && !r.collected);
+  const uncollected = [...view.records, ...view.traceMarks].filter((r) => r.left.leftText && !r.collected);
 
   return (
     <main className="mx-auto max-w-xl px-5 py-8">
@@ -51,6 +51,7 @@ export default async function YardPage() {
         <h1 className="font-title text-2xl">我的院子</h1>
         <p className="mt-1 text-sm opacity-70">
           {segmentName(view.windowIndex)}，{view.weather}。小鱼干 ×{view.fish}
+          {view.materials.map((m) => ` · ${m.name} ×${m.qty}`).join("")}
         </p>
       </header>
 
@@ -75,10 +76,10 @@ export default async function YardPage() {
             {view.records.map((r) => (
               <li key={r.visitId} className="font-diary text-sm">
                 {segmentName(r.windowIndex)}，{r.catName}来过——{r.behaviors.join("，")}。
-                {r.fish > 0 && (r.collected ? <span className="opacity-60">（那几条小鱼干收好了）</span> : (
+                {r.left.leftText && (r.collected ? <span className="opacity-60">（留下的东西收好了）</span> : (
                   <form action={collectVisitAction} className="inline">
                     <input type="hidden" name="visitId" value={r.visitId} />
-                    <span>走的时候留下了{r.fish}条小鱼干。</span>
+                    <span>走的时候留下了{r.left.leftText}。</span>
                     <button type="submit" className="underline underline-offset-4">收下</button>
                   </form>
                 ))}
@@ -96,10 +97,10 @@ export default async function YardPage() {
             {view.traceMarks.map((t) => (
               <li key={t.visitId} className="font-diary text-sm">
                 {segmentName(t.windowIndex)}的事：{t.traces.join("，")}。
-                {t.fish > 0 && (t.collected ? <span className="opacity-60">（地上的小鱼干收好了）</span> : (
+                {t.left.leftText && (t.collected ? <span className="opacity-60">（留下的东西收好了）</span> : (
                   <form action={collectVisitAction} className="inline">
                     <input type="hidden" name="visitId" value={t.visitId} />
-                    <span>地上还留着{t.fish}条小鱼干。</span>
+                    <span>地上还留着{t.left.leftText}。</span>
                     <button type="submit" className="underline underline-offset-4">收下</button>
                   </form>
                 ))}
@@ -146,6 +147,26 @@ export default async function YardPage() {
           ))}
         </ul>
         {view.ownedIdle.length === 0 && <p className="mt-3 text-sm opacity-60">手边的东西都摆出去了。</p>}
+      </section>
+
+      {/* 杂货铺（第一个 Sink，19：钱只买可能性）——价格是世界事实 */}
+      <section className="mt-6 border-t border-line pt-4">
+        <h2 className="text-sm opacity-60">杂货铺捎来的单子</h2>
+        <ul className="mt-2 space-y-2">
+          {view.shop.map((s) => (
+            <li key={s.itemKey} className="flex items-baseline justify-between text-sm">
+              <span>{s.itemName}<span className="pl-2 opacity-60">{s.price}条小鱼干</span></span>
+              {view.fish >= s.price ? (
+                <form action={buyItemAction} className="inline">
+                  <input type="hidden" name="itemKey" value={s.itemKey} />
+                  <button type="submit" className="underline underline-offset-4">换回来</button>
+                </form>
+              ) : (
+                <span className="opacity-40">还差{s.price - view.fish}条</span>
+              )}
+            </li>
+          ))}
+        </ul>
       </section>
 
       {uncollected.length === 0 && view.present.length === 0 && view.records.length === 0 && view.traceMarks.length === 0 && (

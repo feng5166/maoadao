@@ -88,7 +88,7 @@ describe.skipIf(!TEST_DB_READY)("视图：暴露与脱敏（Case A / Case B）",
     const rec = view!.records.find((r) => r.visitId === full.id);
     expect(rec).toBeTruthy();
     expect(rec!.catName).toBe("棉花");
-    expect(rec!.fish).toBe(5);
+    expect(rec!.left).toEqual({ fish: 5, leftText: "5条小鱼干" });
 
     // Case B：只有痕迹——序列化整块认知层数据，不得出现 catId 字段或真实 id
     const mark = view!.traceMarks.find((t) => t.visitId === traceOnly.id);
@@ -132,7 +132,7 @@ describe.skipIf(!TEST_DB_READY)("collect：只确认既有 entitlement（约束�
     const { full, traceOnly, future } = await injectVisits(yardId, now);
 
     const r1 = await collectVisit(uid, full.id, now);
-    expect(r1).toEqual({ ok: true, fish: 5 });
+    expect(r1).toEqual({ ok: true, left: { fish: 5, material: undefined, memento: undefined } });
     const r2 = await collectVisit(uid, full.id, now);
     expect(r2).toEqual({ ok: false, reason: "already" });
 

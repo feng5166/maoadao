@@ -15,7 +15,8 @@
 // 的用户动作后置）。
 
 import { prisma } from "../db";
-import { CLUE_SUPPLY } from "./config";
+import { CLUE_SUPPLY, MEMENTOS } from "./config";
+import { dayKeyOf } from "./time";
 
 export interface ConfirmedCatEntry {
   catId: string;
@@ -40,11 +41,18 @@ export interface EvidenceClusterView {
   firstDayKey: string;
   lastDayKey: string;
 }
+/** 纪念物条目（18 收集四层之④；19 P0：不进经济，只进历史/收藏） */
+export interface MementoEntry {
+  id: string;
+  text: string; // "一份卷起来的旧日报"（世界语言；不点名是谁留的——是谁留的属于你见没见过它）
+  gotDayKey: string;
+}
 export interface CatBook {
   confirmedCount: number; // "已认识 N 只"= 经历总结，合法（18）
   confirmed: ConfirmedCatEntry[];
   rumors: RumorEntry[];
   evidence: EvidenceClusterView[];
+  mementos: MementoEntry[];
 }
 
 export const bandOf = (windowIndex: number): "夜里" | "白天" => (windowIndex >= 10 || windowIndex === 12 ? "夜里" : "白天");
@@ -141,5 +149,16 @@ export async function buildCatBook(userId: string): Promise<CatBook> {
   });
   const rumors: RumorEntry[] = sightings.map((r) => ({ id: r.id, text: r.text, heardDayKey: r.dayKey }));
 
-  return { confirmedCount: confirmed.length, confirmed, rumors, evidence };
+  // 纪念物：留下的东西不消失也不花掉（19 P0）——按获得时间倒序
+  const home = await prisma.home.findUnique({ where: { userId }, select: { id: true } });
+  const mementoDef = new Map(MEMENTOS.map((m) => [m.key, m]));
+  const mementoRows = home
+    ? await prisma.memento.findMany({ where: { homeId: home.id }, orderBy: { acquiredAt: "desc" } })
+    : [];
+  const mementos: MementoEntry[] = mementoRows.map((m) => {
+    const d = mementoDef.get(m.mementoKey);
+    return { id: m.id, text: d ? `${d.article}${d.name}` : "一样留下的东西", gotDayKey: dayKeyOf(m.acquiredAt) };
+  });
+
+  return { confirmedCount: confirmed.length, confirmed, rumors, evidence, mementos };
 }

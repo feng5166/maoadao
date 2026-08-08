@@ -13,8 +13,8 @@
 
 import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
-import { ITEMS, SETTLEMENT, SLOTS } from "./config";
-import { ensureWindowSettled, weatherOf } from "./settle";
+import { ITEMS, MATERIALS, MEMENTOS, SETTLEMENT, SLOTS } from "./config";
+import { ensureWindowSettled, weatherOf, type LeftBehind } from "./settle";
 import { startedWindowsBetween, windowAt } from "./time";
 
 export interface YardSlotView {
@@ -31,6 +31,11 @@ export interface PresentCatView {
   behavior: string;
   slotKey: string | null;
 }
+/** 留物的呈现（世界语言）：null = 没留东西；collect 按钮以 leftText 为准 */
+export interface LeftView {
+  fish: number;
+  leftText: string | null; // "3条小鱼干" / "一块好木料" / "一份卷起来的旧日报"
+}
 export interface VisitRecordView {
   visitId: string;
   catId: string;
@@ -39,7 +44,7 @@ export interface VisitRecordView {
   windowIndex: number;
   behaviors: string[];
   traces: string[];
-  fish: number;
+  left: LeftView;
   collected: boolean;
 }
 /** TRACE_ONLY 视图：结构上就没有 catId/catName 字段（脱敏在类型层锁死） */
@@ -48,17 +53,19 @@ export interface TraceMarkView {
   dayKey: string;
   windowIndex: number;
   traces: string[];
-  fish: number;
+  left: LeftView;
   collected: boolean;
 }
 export interface YardView {
   yardId: string;
   fish: number;
+  materials: Array<{ key: string; name: string; qty: number }>; // 岛材钱包（19 三类之二）
   weather: string;
   dayKey: string;
   windowIndex: number;
   slots: YardSlotView[];
   ownedIdle: Array<{ itemKey: string; itemName: string; count: number }>;
+  shop: Array<{ itemKey: string; itemName: string; price: number }>; // 第一个 Sink：小鱼干→新物件
   present: PresentCatView[];
   records: VisitRecordView[];
   traceMarks: TraceMarkView[];
@@ -89,9 +96,10 @@ export async function getYardView(userId: string, now = new Date()): Promise<Yar
   await ensurePastWindowsSettled(yard.id, yard.createdAt, now);
 
   const current = windowAt(now);
-  const [placements, owned, settlements] = await Promise.all([
+  const [placements, owned, materials, settlements] = await Promise.all([
     prisma.placement.findMany({ where: { yardId: yard.id, removedAt: null }, orderBy: { placedAt: "asc" } }),
     prisma.ownedItem.findMany({ where: { homeId: home.id } }),
+    prisma.homeMaterial.findMany({ where: { homeId: home.id } }),
     prisma.windowSettlement.findMany({
       where: { yardId: yard.id },
       include: { visits: true },
@@ -124,12 +132,32 @@ export async function getYardView(userId: string, now = new Date()): Promise<Yar
   const ownedCount = new Map<string, number>();
   for (const o of owned) ownedCount.set(o.itemKey, (ownedCount.get(o.itemKey) ?? 0) + 1);
 
-  const fishOf = (v: { leftBehind: unknown }) => Number((v.leftBehind as { fish?: number } | null)?.fish ?? 0);
+  // 留物 → 世界语言（三类：鱼干/岛材/纪念物）
+  const materialDef = new Map(MATERIALS.map((m) => [m.key, m]));
+  const mementoDef = new Map(MEMENTOS.map((m) => [m.key, m]));
+  const leftOf = (v: { leftBehind: unknown }): LeftView => {
+    const raw = (v.leftBehind ?? {}) as Partial<LeftBehind>;
+    const fish = Number(raw.fish ?? 0);
+    if (fish > 0) return { fish, leftText: `${fish}条小鱼干` };
+    if (raw.material) {
+      const d = materialDef.get(raw.material.key);
+      return { fish: 0, leftText: d ? `${d.article}${d.name}` : "一样岛上的材料" };
+    }
+    if (raw.memento) {
+      const d = mementoDef.get(raw.memento.key);
+      return { fish: 0, leftText: d ? `${d.article}${d.name}` : "一样留下的东西" };
+    }
+    return { fish: 0, leftText: null };
+  };
   const arr = (x: unknown): string[] => (Array.isArray(x) ? (x as string[]) : []);
 
   return {
     yardId: yard.id,
     fish: home.fish,
+    materials: materials
+      .filter((m) => m.qty > 0)
+      .map((m) => ({ key: m.materialKey, name: materialDef.get(m.materialKey)?.name ?? m.materialKey, qty: m.qty }))
+      .sort((a, b) => a.key.localeCompare(b.key)),
     weather: weatherOf(current.dayKey),
     dayKey: current.dayKey,
     windowIndex: current.windowIndex,
@@ -146,6 +174,8 @@ export async function getYardView(userId: string, now = new Date()): Promise<Yar
     ownedIdle: [...ownedCount.entries()]
       .map(([itemKey, count]) => ({ itemKey, itemName: itemName(itemKey) ?? itemKey, count: count - (placedCount.get(itemKey) ?? 0) }))
       .filter((o) => o.count > 0),
+    // 货架 = 22 账本里有价的物件（价格是世界事实,不因用户状态变化）
+    shop: ITEMS.filter((i) => i.price != null).map((i) => ({ itemKey: i.key, itemName: i.name, price: i.price as number })),
     present: present.map((v) => ({
       visitId: v.id,
       catId: v.catId,
@@ -163,7 +193,7 @@ export async function getYardView(userId: string, now = new Date()): Promise<Yar
         windowIndex: v.windowIndex,
         behaviors: arr(v.behaviors),
         traces: arr(v.traces),
-        fish: fishOf(v),
+        left: leftOf(v),
         collected: v.collectedAt != null,
       })),
     // 脱敏：字段级排除——这里绝不携带 catId/catName/behaviors
@@ -174,7 +204,7 @@ export async function getYardView(userId: string, now = new Date()): Promise<Yar
         dayKey: v.dayKey,
         windowIndex: v.windowIndex,
         traces: arr(v.traces),
-        fish: fishOf(v),
+        left: leftOf(v),
         collected: v.collectedAt != null,
       })),
   };

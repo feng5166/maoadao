@@ -12,6 +12,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
 import { ITEMS, SLOTS, WINDOWS } from "./config";
+import type { LeftBehind } from "./settle";
 import { dayKeyOf, windowStart } from "./time";
 
 export class YardError extends Error {}
@@ -59,7 +60,7 @@ export async function placeItem(userId: string, slotKey: string, itemKey: string
     });
     // 世界侧生效点：只算不存——快照按 placedAt 时间锚定，effectiveFrom 供 UI 表达
     return { effectiveFrom: nextWindowAfter(now) };
-  }, { timeout: 15000 });
+  }, { timeout: 15000, maxWait: 10000 }); // 跨洋链路:连接等待也放宽(承 claim 口径)
 }
 
 export async function removeItem(userId: string, slotKey: string, now = new Date()) {
@@ -71,7 +72,7 @@ export async function removeItem(userId: string, slotKey: string, now = new Date
   return { effectiveFrom: nextWindowAfter(now) };
 }
 
-export type CollectResult = { ok: true; fish: number } | { ok: false; reason: "already" | "not_yet" };
+export type CollectResult = { ok: true; left: LeftBehind } | { ok: false; reason: "already" | "not_yet" };
 
 export async function collectVisit(userId: string, visitId: string, now = new Date()): Promise<CollectResult> {
   const { home, yard } = await yardOf(userId);
@@ -79,16 +80,52 @@ export async function collectVisit(userId: string, visitId: string, now = new Da
     const visit = await tx.catVisit.findUnique({ where: { id: visitId } });
     if (!visit || visit.yardId !== yard.id) throw new YardError("院子里没有这个");
     if (visit.leaveAt.getTime() > now.getTime()) return { ok: false, reason: "not_yet" }; // 它还在——东西是走的时候留下的
-    const fish = Number((visit.leftBehind as { fish?: number } | null)?.fish ?? 0);
+    const raw = (visit.leftBehind ?? {}) as Partial<LeftBehind>;
+    const left: LeftBehind = { fish: Number(raw.fish ?? 0), material: raw.material, memento: raw.memento };
     // 幂等入账：条件更新抢 claim，输家不再记账（并发/重放安全）
     const claimed = await tx.catVisit.updateMany({
       where: { id: visitId, collectedAt: null },
       data: { collectedAt: now },
     });
     if (claimed.count === 0) return { ok: false, reason: "already" };
-    if (fish > 0) {
-      await tx.home.update({ where: { id: home.id }, data: { fish: { increment: fish } } });
+    if (left.fish > 0) {
+      await tx.home.update({ where: { id: home.id }, data: { fish: { increment: left.fish } } });
     }
-    return { ok: true, fish };
-  }, { timeout: 15000 });
+    if (left.material) {
+      await tx.homeMaterial.upsert({
+        where: { homeId_materialKey: { homeId: home.id, materialKey: left.material.key } },
+        update: { qty: { increment: left.material.qty }, updatedAt: now },
+        create: { homeId: home.id, materialKey: left.material.key, qty: left.material.qty, updatedAt: now },
+      });
+    }
+    if (left.memento) {
+      // 纪念物（19 P0）：只进历史/收藏,挂来访溯源;本文件不存在任何消耗它的路径
+      await tx.memento.create({
+        data: { id: `mm-${randomUUID().slice(0, 12)}`, homeId: home.id, mementoKey: left.memento.key, sourceVisitId: visit.id, acquiredAt: now },
+      });
+    }
+    return { ok: true, left };
+  }, { timeout: 15000, maxWait: 10000 }); // 跨洋链路:连接等待也放宽(承 claim 口径)
+}
+
+export type BuyResult = { ok: true; fish: number } | { ok: false; reason: "not_enough" };
+
+/** 第一个 Sink（19）：小鱼干 → 新物件。条件扣款抢余额,并发下鱼干永不为负 */
+export async function buyItem(userId: string, itemKey: string, now = new Date()): Promise<BuyResult> {
+  const item = ITEMS.find((i) => i.key === itemKey);
+  if (!item || item.price == null) throw new YardError("店里没有这样东西");
+  const { home } = await yardOf(userId);
+  const price = item.price;
+  return prisma.$transaction(async (tx) => {
+    const paid = await tx.home.updateMany({
+      where: { id: home.id, fish: { gte: price } },
+      data: { fish: { decrement: price } },
+    });
+    if (paid.count === 0) return { ok: false, reason: "not_enough" };
+    await tx.ownedItem.create({
+      data: { id: randomUUID(), homeId: home.id, itemKey, source: "purchase", acquiredAt: now },
+    });
+    const after = await tx.home.findUniqueOrThrow({ where: { id: home.id }, select: { fish: true } });
+    return { ok: true, fish: after.fish };
+  }, { timeout: 15000, maxWait: 10000 }); // 跨洋链路:连接等待也放宽(承 claim 口径)
 }

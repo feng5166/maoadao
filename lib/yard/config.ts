@@ -3,7 +3,7 @@
 // 改数值 = 改这里 + 在 22 §八 留实验记录。任何数值/规则变更必须递增 RULES_VERSION——
 // 历史结算事实带着当时的版本（14 §九 护栏②），昨天的世界永不被今天的数值重算。
 
-export const RULES_VERSION = "yard-v0.4.0"; // v0.4.0：TRACE_ONLY 附毛色痕（证据簇研究素材，06 §九/18；22 §八 已留记录）
+export const RULES_VERSION = "yard-v0.5.0"; // v0.5.0：Leave Behind 三类资源（鱼干/岛材/纪念物）——material 猫留材料 qty=1、memento 猫留纪念物（22 §八 已留记录）
 
 // ---------- 时间结构（22 §一）：13 窗/日 ----------
 // 06:00 起每 90 分钟 ×12（index 0-11）+ 深夜长窗 00:00–06:00（index 12，夜行猫主场）
@@ -52,6 +52,38 @@ export const ITEMS: ItemDef[] = [
 ];
 export const INITIAL_ITEMS = ["cardboard_box", "old_cushion", "water_basin"]; // 初始三件（14 §九②）
 export const INITIAL_GRANT_BATCH = "initial";
+
+// ---------- 三类资源（19 §一；2026-08-08 拍板） ----------
+// 小鱼干 = 通用软货币（Home.fish）；岛材 = 可消耗的特殊材料（HomeMaterial，
+// Sink 后续格接特殊交换/制作）；纪念物 = 不可消费，只进历史/收藏（Memento）。
+// 纪念物红线（19 P0）：无价格、无任何消耗路径——有故事意义的实体永不被经济吞掉。
+export interface MaterialDef {
+  key: string;
+  name: string;
+  article: string; // 量词（世界语言呈现："一块好木料"）
+}
+export const MATERIALS: MaterialDef[] = [
+  { key: "good_timber", name: "好木料", article: "一块" },
+  { key: "oiled_gear", name: "上了油的小零件", article: "一个" },
+];
+export interface MementoDef {
+  key: string;
+  name: string;
+  article: string;
+}
+export const MEMENTOS: MementoDef[] = [
+  { key: "odd_find", name: "叫不上名字的东西", article: "一样" }, // 斗斗秘密基地的宝贝——有故事意义，判纪念物
+  { key: "old_newspaper", name: "卷起来的旧日报", article: "一份" }, // 信息载体，判纪念物（"读报=线索载体"为候补，不进 Sink）
+];
+
+// 特殊留物映射（22 账本镜像；canon 出处 = profile.ts leave.material 各条 override）
+// material 类留 qty=1（"偶尔留下一块好木料"的物性——不用 leaveMin/Max 的鱼干口径）
+export const SPECIAL_LEAVES: Record<string, { type: "material" | "memento"; key: string }> = {
+  "npc-tudou": { type: "material", key: "good_timber" },
+  "npc-yantai": { type: "material", key: "oiled_gear" },
+  "npc-doudou": { type: "memento", key: "odd_find" },
+  "npc-xiaomei": { type: "memento", key: "old_newspaper" },
+};
 
 // ---------- Preference 合成初值（22 §四） ----------
 export const PREF = {

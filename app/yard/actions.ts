@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { ensureViewerId, getViewerId } from "@/lib/identity";
 import { claimYard } from "@/lib/yard/claim";
-import { collectVisit, placeItem, removeItem } from "@/lib/yard/commands";
+import { buyItem, collectVisit, placeItem, removeItem } from "@/lib/yard/commands";
 import { yardGameplayEnabled } from "@/lib/yard/flags";
 
 async function assertFlag(uid: string | null): Promise<string> {
@@ -43,5 +43,13 @@ export async function removeItemAction(formData: FormData) {
 export async function collectVisitAction(formData: FormData) {
   const uid = await assertFlag(await getViewerId());
   await collectVisit(uid, String(formData.get("visitId") ?? ""));
+  revalidatePath("/yard");
+}
+
+export async function buyItemAction(formData: FormData) {
+  const uid = await assertFlag(await getViewerId());
+  const itemKey = String(formData.get("itemKey") ?? "");
+  if (!itemKey) return;
+  await buyItem(uid, itemKey); // not_enough 静默返回:货架旁有余额,页面刷新即一致
   revalidatePath("/yard");
 }

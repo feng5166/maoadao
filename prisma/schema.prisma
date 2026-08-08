@@ -499,6 +499,29 @@ model OwnedItem {
   @@index([homeId])
 }
 
+// 岛材钱包（19 三类资源之二，08-08 拍板：小鱼干=通用软货币 / 岛材=可消耗特殊材料 /
+// 纪念物=不可消费）。岛材的 Sink（特殊交换/制作）后续格接；本表只是钱包。
+model HomeMaterial {
+  homeId      String
+  materialKey String // lib/yard/config.ts MATERIALS（单一数据源）
+  qty         Int      @default(0)
+  updatedAt   DateTime
+
+  @@id([homeId, materialKey])
+}
+
+// 纪念物（19 P0：不可逆生活记忆不得进入经济 Sink）——无价格、无消耗路径，
+// 只进历史/收藏；每件挂 sourceVisitId 溯源（指不出出处 = 数据造假，05/06 同族）。
+model Memento {
+  id            String   @id
+  homeId        String
+  mementoKey    String // lib/yard/config.ts MEMENTOS（单一数据源）
+  sourceVisitId String?
+  acquiredAt    DateTime
+
+  @@index([homeId])
+}
+
 // 发放批次哨兵（护栏①）：初始资产恰好一份——不靠先查再插，靠唯一冲突收敛
 model HomeGrant {
   homeId    String

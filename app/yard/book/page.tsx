@@ -74,6 +74,17 @@ export default async function CatBookPage() {
         )}
       </section>
 
+      {book.mementos.length > 0 && (
+        <section className="mt-6 border-t border-line pt-4">
+          <h2 className="text-sm opacity-60">留下来的东西</h2>
+          <ul className="mt-2 space-y-2">
+            {book.mementos.map((m) => (
+              <li key={m.id} className="font-diary text-sm">{m.text}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <p className="mt-8 border-t border-line pt-4 text-sm">
         <Link href="/yard" className="underline underline-offset-4 opacity-70">回院子</Link>
       </p>

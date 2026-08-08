@@ -11,7 +11,7 @@ import { hashSeed, mulberry32, pick, weightedPick } from "../sim/rng";
 import { eligibilityAt } from "../sim/itinerary";
 import {
   DEFAULT_TRACE, IDLE_BEHAVIORS, ITEMS, ITEM_TRACES, PREF, RULES_VERSION, SLOTS,
-  WEATHER_DIST,
+  SPECIAL_LEAVES, WEATHER_DIST,
 } from "./config";
 import { VISIT_POOL, type VisitPoolCat } from "./pool";
 import { windowLenMin, windowStart } from "./time";
@@ -28,6 +28,12 @@ export interface SettleInput {
   snapshot: SnapshotEntry[];
   weather: string;
 }
+/** Leave Behind 三类结构（19，08-08 拍板）：鱼干=软货币 / 岛材=材料 / 纪念物=只进历史 */
+export interface LeftBehind {
+  fish: number;
+  material?: { key: string; qty: number };
+  memento?: { key: string };
+}
 export interface VisitDraft {
   catId: string;
   slotKey: string | null;
@@ -35,7 +41,7 @@ export interface VisitDraft {
   arriveMin: number;
   leaveMin: number;
   behaviors: string[];
-  fish: number;
+  leftBehind: LeftBehind;
   traces: string[];
   visibility: "FULL_RECORD" | "TRACE_ONLY";
 }
@@ -145,7 +151,14 @@ export function settleWindowPure(input: SettleInput): SettleResult {
     const leaveMin = Math.min(lenMin, arriveMin + stay);
     const behaviors = [pick(rng, cat.behaviors)];
     if (rng() < 0.5) behaviors.push(pick(rng, IDLE_BEHAVIORS)); // L3 无用层供给（16 §五）
-    const fish = rng() < cat.leaveChance ? cat.leaveMin + Math.floor(rng() * (cat.leaveMax - cat.leaveMin + 1)) : 0;
+    // Leave Behind（19 三类）：material 猫留材料 qty=1，memento 猫留纪念物，其余留鱼干
+    const leftBehind: LeftBehind = { fish: 0 };
+    if (rng() < cat.leaveChance) {
+      const special = SPECIAL_LEAVES[cat.catId];
+      if (special?.type === "material") leftBehind.material = { key: special.key, qty: 1 };
+      else if (special?.type === "memento") leftBehind.memento = { key: special.key };
+      else leftBehind.fish = cat.leaveMin + Math.floor(rng() * (cat.leaveMax - cat.leaveMin + 1));
+    }
     const traces = [spot ? (ITEM_TRACES[spot.itemKey] ?? DEFAULT_TRACE) : DEFAULT_TRACE];
     // Disclosure（22 §四）：每猫 traceBias 承担差异；稀缺档不得进入本公式
     const shortStay = stay < 15;
@@ -156,7 +169,7 @@ export function settleWindowPure(input: SettleInput): SettleResult {
     const visibility = rng() < traceP ? "TRACE_ONLY" : "FULL_RECORD";
     // 难确认型的研究素材（17 §六：TRACE_ONLY 是素材不是惩罚；06 §九：线索可推理不点名）
     if (visibility === "TRACE_ONLY") traces.push(cat.furTrace);
-    visits.push({ catId: cat.catId, slotKey: spot?.slotKey ?? null, itemKey: spot?.itemKey ?? null, arriveMin, leaveMin, behaviors, fish, traces, visibility });
+    visits.push({ catId: cat.catId, slotKey: spot?.slotKey ?? null, itemKey: spot?.itemKey ?? null, arriveMin, leaveMin, behaviors, leftBehind, traces, visibility });
   }
   return { seed, visits };
 }
@@ -214,7 +227,7 @@ export async function ensureWindowSettled(yardId: string, dayKey: string, window
             arriveAt: new Date(startAt.getTime() + v.arriveMin * 60_000),
             leaveAt: new Date(startAt.getTime() + v.leaveMin * 60_000),
             behaviors: v.behaviors as unknown as Prisma.InputJsonValue,
-            leftBehind: { fish: v.fish } as unknown as Prisma.InputJsonValue,
+            leftBehind: v.leftBehind as unknown as Prisma.InputJsonValue,
             traces: v.traces as unknown as Prisma.InputJsonValue,
             visibility: v.visibility,
             rulesVersion: RULES_VERSION,
