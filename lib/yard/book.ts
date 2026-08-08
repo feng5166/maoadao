@@ -15,6 +15,7 @@
 // 的用户动作后置）。
 
 import { prisma } from "../db";
+import { CLUE_SUPPLY } from "./config";
 
 export interface ConfirmedCatEntry {
   catId: string;
@@ -46,8 +47,10 @@ export interface CatBook {
   evidence: EvidenceClusterView[];
 }
 
-const bandOf = (windowIndex: number): "夜里" | "白天" => (windowIndex >= 10 || windowIndex === 12 ? "夜里" : "白天");
+export const bandOf = (windowIndex: number): "夜里" | "白天" => (windowIndex >= 10 || windowIndex === 12 ? "夜里" : "白天");
 const FUR_MARK = "毛"; // 毛色痕识别（trace 文本约定，pool.furTrace 产出）
+/** 簇的可见特征键（clues.ts 与本文件同键——传闻要接得上用户已经在追的那团未知） */
+export const furKeyOf = (traces: string[]): string => traces.find((t) => t.includes(FUR_MARK)) ?? "没留下毛";
 
 interface EvidenceItem {
   visitId: string;
@@ -61,7 +64,7 @@ export function clusterEvidence(items: EvidenceItem[]): EvidenceClusterView[] {
   const map = new Map<string, { band: "夜里" | "白天"; traits: Set<string>; days: string[]; count: number }>();
   for (const it of items) {
     const band = bandOf(it.windowIndex);
-    const fur = it.traces.find((t) => t.includes(FUR_MARK)) ?? "没留下毛";
+    const fur = furKeyOf(it.traces);
     const key = `${band}|${fur}`;
     const cur = map.get(key) ?? { band, traits: new Set<string>(), days: [], count: 0 };
     for (const t of it.traces) cur.traits.add(t);
@@ -128,8 +131,15 @@ export async function buildCatBook(userId: string): Promise<CatBook> {
     traces: arr(o.visit.traces),
   })));
 
-  // 传闻：结构就位，供给=线索投放器（Director，后续格）——18"已知未知"须有认知来源
-  const rumors: RumorEntry[] = [];
+  // 传闻：由线索投放器落库的 RumorSighting 回显（lib/yard/clues.ts）——
+  // 只读 text/dayKey；sourceRefs（世界层溯源）与 clueKey（内含内部 id）
+  // 永不进入认知层视图，条目 id 用不透明行 id（CI：泄漏审计）
+  const sightings = await prisma.rumorSighting.findMany({
+    where: { userId },
+    orderBy: { heardAt: "desc" },
+    take: CLUE_SUPPLY.rumorPageSize,
+  });
+  const rumors: RumorEntry[] = sightings.map((r) => ({ id: r.id, text: r.text, heardDayKey: r.dayKey }));
 
   return { confirmedCount: confirmed.length, confirmed, rumors, evidence };
 }

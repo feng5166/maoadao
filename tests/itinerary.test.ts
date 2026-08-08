@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { auditVisitAgainstItinerary, eligibilityAt, itineraryBlockAt, itineraryFor } from "../lib/sim/itinerary";
 import { CANON } from "../lib/sim/profile";
@@ -108,7 +109,7 @@ describe("验收④：结算与叙事共用同一事实源", () => {
   });
 
   it("行程派生器不读偏好/affinity/用户数据（01 禁读清单，静态看守）", () => {
-    const src = require("node:fs").readFileSync("lib/sim/itinerary.ts", "utf8");
+    const src = readFileSync("lib/sim/itinerary.ts", "utf8");
     for (const banned of ["corePreference", "Affinity", "fish", "yardAccess", "userId"]) {
       expect(src).not.toContain(banned);
     }

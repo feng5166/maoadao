@@ -31,18 +31,29 @@ const LEAVE_FREQ_CHANCE: Record<DerivedProfile["leaveStyle"]["freq"], number> = 
   low: 0.3,
 };
 
-/** appearance → 毛色痕（确定性文本派生；顺序敏感：组合色在单色前） */
+/** appearance → 毛色词（确定性文本派生；顺序敏感：组合色在单色前） */
+const FUR_RULES: Array<[string, string]> = [
+  ["奶牛", "黑白相间的毛"], ["黑白", "黑白相间的毛"], ["三花", "三色的毛"],
+  ["橘白", "橘白相间的毛"], ["银", "银灰色的毛"], ["奶白", "奶白色的毛"],
+  ["雪白", "雪白的毛"], ["白色", "白色的毛"], ["纯黑", "深黑色的毛"],
+  ["黑猫", "黑色的毛"], ["黑色", "黑色的毛"], ["橘", "橘色的毛"],
+  ["浅灰", "浅灰色的毛"], ["灰色", "灰色的毛"], ["棕色", "棕色的毛"],
+  ["狸花", "带斑纹的毛"], ["虎斑", "虎斑纹的毛"],
+];
+const furWordOf = (appearance: string): string | null => {
+  for (const [k, v] of FUR_RULES) if (appearance.includes(k)) return v;
+  return null;
+};
+
 export function furTraceOf(appearance: string): string {
-  const rules: Array<[string, string]> = [
-    ["奶牛", "黑白相间的毛"], ["黑白", "黑白相间的毛"], ["三花", "三色的毛"],
-    ["橘白", "橘白相间的毛"], ["银", "银灰色的毛"], ["奶白", "奶白色的毛"],
-    ["雪白", "雪白的毛"], ["白色", "白色的毛"], ["纯黑", "深黑色的毛"],
-    ["黑猫", "黑色的毛"], ["黑色", "黑色的毛"], ["橘", "橘色的毛"],
-    ["浅灰", "浅灰色的毛"], ["灰色", "灰色的毛"], ["棕色", "棕色的毛"],
-    ["狸花", "带斑纹的毛"], ["虎斑", "虎斑纹的毛"],
-  ];
-  for (const [k, v] of rules) if (appearance.includes(k)) return `落了一撮${v}`;
-  return "落了一撮说不上颜色的毛";
+  const w = furWordOf(appearance);
+  return w ? `落了一撮${w}` : "落了一撮说不上颜色的毛";
+}
+
+/** 线索用外形形容（"一只黑白相间的猫"）——毛色是合法公共世界事实（01 §九 可知性） */
+export function furDescOf(appearance: string): string {
+  const w = furWordOf(appearance);
+  return w ? w.replace(/毛$/, "") : "没看真切的";
 }
 
 function toPoolCat(p: DerivedProfile): VisitPoolCat {

@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getViewerId } from "@/lib/identity";
 import { buildCatBook } from "@/lib/yard/book";
+import { ensureRumorSupply } from "@/lib/yard/clues";
 import { yardGameplayEnabled } from "@/lib/yard/flags";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,9 @@ export default async function CatBookPage() {
   const user = uid ? await prisma.user.findUnique({ where: { id: uid }, select: { yardAccess: true } }) : null;
   if (!uid || !yardGameplayEnabled(user)) notFound();
 
+  // Director 时机：翻册子这一刻，今天的传闻（如果有）落到你的册上——
+  // 只把既有世界事实按时机露出来，不创造世界事实（lib/yard/clues.ts 四红线）
+  await ensureRumorSupply(uid);
   const book = await buildCatBook(uid);
 
   return (

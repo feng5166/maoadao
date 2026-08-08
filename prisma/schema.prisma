@@ -617,3 +617,20 @@ model LifeImprint {
 
   @@index([catId])
 }
+
+// 传闻是个人认知事实（18 认知镜像）：A 听说过 ≠ B 知道——按 userId 隔离。
+// 每条必须挂非空 sourceRefs（事实源：canon.* / itinerary 事实 / 本人 TRACE 观察）——
+// 无源传闻 = 伪造世界事实（06 §九）。unique(userId, clueKey) 是重复投放的收敛点。
+model RumorSighting {
+  id         String   @id
+  userId     String
+  clueKey    String // 线索身份：同一条线索对同一用户至多落一条
+  sourceType String // PUBLIC | TRACE | CANON（三来源白名单，lib/yard/clues.ts）
+  sourceRefs Json // string[] 非空；世界层溯源，永不序列化给用户（TraceFact/TraceView 拆分）
+  text       String
+  dayKey     String // 听说那天（北京日）
+  heardAt    DateTime
+
+  @@unique([userId, clueKey])
+  @@index([userId])
+}

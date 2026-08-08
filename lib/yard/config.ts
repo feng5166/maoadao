@@ -67,6 +67,12 @@ export const PREF = {
   trace: { base: 0.2, shortStay: 0.25, longStay: -0.15, cap: 0.75 }, // Disclosure；稀缺档不得进入本公式（22 修订②）
 };
 
+// ---------- 线索投放（Clue Supply，06 §九 供给面；lib/yard/clues.ts） ----------
+export const CLUE_SUPPLY = {
+  maxPerDay: 1, // Director 时机纪律：每人每个北京日至多听到一条传闻（pacing 归 22）
+  rumorPageSize: 20, // 岛猫册"有传闻的猫"最多回显条数（呈现参数，非事实截断）
+};
+
 // ---------- 结算运维参数 ----------
 export const SETTLEMENT = {
   // 单次页面加载最多补算多少个窗（长离线防一次补数百窗；最旧优先，余量下次加载续补——
