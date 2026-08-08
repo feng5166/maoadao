@@ -140,7 +140,7 @@ export default async function YardPage() {
                       </option>
                     ))}
                   </select>
-                  <button type="submit" className="underline underline-offset-4">摆放</button>
+                  <button type="submit" className="underline underline-offset-4">摆上</button>
                 </form>
               )}
             </li>

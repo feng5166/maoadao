@@ -49,7 +49,7 @@ export default async function CatBookPage() {
       </section>
 
       <section className="mt-6 border-t border-line pt-4">
-        <h2 className="text-sm opacity-60">有传闻的猫</h2>
+        <h2 className="text-sm opacity-60">岛上听来的</h2>
         {book.rumors.length > 0 ? (
           <ul className="mt-2 space-y-2">
             {book.rumors.map((r) => (
