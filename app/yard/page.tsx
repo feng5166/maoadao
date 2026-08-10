@@ -17,6 +17,7 @@ import { getYardView, type YardView } from "@/lib/yard/view";
 import { WINDOWS } from "@/lib/yard/config";
 import { spotFor, zoneOfSlot } from "@/lib/yard/scene-render";
 import { SubmitButton } from "@/components/SubmitButton";
+import { YardBreeze } from "@/components/YardBreeze";
 import { buyItemAction, claimYardAction, collectVisitAction, placeItemAction, removeItemAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -138,6 +139,12 @@ export default async function YardPage() {
           alt="院子"
           className="w-full"
         />
+
+        {/* 首摆可发现性(W01):院子还没有过任何生活时,一片叶子被风吹过中央空地——
+            一次,很短;环境在动,不是系统在喊(创始人预案唯一授权形态) */}
+        {view.slots.every((s) => !s.itemKey) && view.present.length === 0 && view.records.length === 0 && view.traceMarks.length === 0 && (
+          <YardBreeze x={spotFor("clearing", "cat", "slot:clearing").x} y={spotFor("clearing", "cat", "slot:clearing").y} />
+        )}
 
         {view.slots.map((s) => (
           <SlotHotspot key={s.slotKey} view={view} slotKey={s.slotKey} />
