@@ -4,7 +4,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { getViewerId } from "@/lib/identity";
-import { getViewerCat } from "@/lib/queries";
+import { prisma } from "@/lib/db";
 import { beijingHour } from "@/lib/moments";
 import { HeaderCta } from "@/components/HeaderCta";
 import { NightLamp } from "@/components/NightLamp";
@@ -18,14 +18,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "猫啊岛",
-  description: "领养一只会记住你、自己生活、还会交朋友的猫。",
+  description: "在猫啊岛有一个自己的院子。摆下点什么，偶尔会有猫按自己的性子来看看。",
 };
 
 // 导航按钮单独成组件挂 Suspense：查询不阻塞页面外壳的首字节（跨洋链路下体感差异明显）
-// 渲染交给 HeaderCta（客户端）：在 /adopt 流程里不再显示「去码头接它」
+// 2.1 翻转:唯一主身份信号 = hasYard(14 §九 红线③)
 async function NavCatButton() {
-  const myCat = await getViewerCat(await getViewerId()).catch(() => null);
-  return <HeaderCta hasCat={Boolean(myCat)} />;
+  const uid = await getViewerId().catch(() => null);
+  const home = uid ? await prisma.home.findUnique({ where: { userId: uid }, select: { yard: { select: { id: true } } } }).catch(() => null) : null;
+  return <HeaderCta hasYard={Boolean(home?.yard)} />;
 }
 
 export default async function RootLayout({

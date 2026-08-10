@@ -300,9 +300,7 @@ export function D0Player({
         return;
       }
       track(mode === "skip" ? "d0_skip" : "d0_complete", { flowVersion: FLOW_VERSION });
-      // 改名兼容(保留一个版本周期):旧看板统计的是 d0_to_d1,断掉会让 D0 完成率
-      // 在上线当天凭空归零。两个名字都发,取其一即可,不要相加
-      if (mode === "complete") track("d0_to_d1", { flowVersion: FLOW_VERSION, legacyAliasOf: "d0_complete" });
+      // 2.1 翻转(14 §九):d0_to_yard 替代 d0_to_d1,flowVersion=d0_v3 起新旧数据不混
       // D0 的去向落成长效标记:下次不再重播(走完与跳过都不播,但数据分得开)。
       // 失败静默——大不了下次再看一遍 D0,不该挡住去见猫
       void fetch("/api/d0/complete", {

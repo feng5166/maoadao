@@ -5,15 +5,15 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Track } from "@/components/Track";
 import { recoverByCode } from "@/lib/account-actions";
 import { getViewerId } from "@/lib/identity";
-import { getViewerCat } from "@/lib/queries";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// 回到猫啊岛(doc/20):邮箱+密码跨设备登录。已有猫的设备直接回 /my-cat。
+// 回到猫啊岛(doc/20):邮箱+密码跨设备登录。已是岛民(hasYard)的设备直接回 /yard。
 export default async function LoginPage() {
   const viewerId = await getViewerId();
-  const cat = await getViewerCat(viewerId);
-  if (cat) redirect("/my-cat");
+  const home = viewerId ? await prisma.home.findUnique({ where: { userId: viewerId }, select: { yard: { select: { id: true } } } }) : null;
+  if (home?.yard) redirect("/yard");
 
   return (
     <div className="mx-auto max-w-sm py-8">

@@ -1,9 +1,8 @@
-// 院子玩法 Capability Flag（doc2.0/14 §九 护栏③）。
-// 默认关：新表/新 API/新结算器上线后不改变线上世界；内部测试账号先开（User.yardAccess）。
-// 全量开启 = 设 YARD_GAMEPLAY_ENABLED=1，且必须与 D0 尾部换轨（script.ts 三处 + 路由）
-// 同一个提交——在那之前旧 /adopt 链路保持默认在线。
+// 院子玩法 Capability(doc2.0/14 §九 护栏③ → 2026-08-09 翻转拍板:默认开)。
+// D0 尾部换轨与本开关同一提交翻转,避免半翻转状态(创始人拍板)。
+// 紧急回退:设 YARD_GAMEPLAY_DISABLED=1(仅运维开关,不再有灰度语义)。
 
-export function yardGameplayEnabled(user?: { yardAccess?: boolean } | null): boolean {
-  if (process.env.YARD_GAMEPLAY_ENABLED === "1") return true;
-  return Boolean(user?.yardAccess);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- 兼容既有调用签名(翻转后参数不再参与判定)
+export function yardGameplayEnabled(_user?: { yardAccess?: boolean } | null): boolean {
+  return process.env.YARD_GAMEPLAY_DISABLED !== "1";
 }

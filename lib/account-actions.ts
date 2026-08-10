@@ -60,7 +60,7 @@ export async function recoverByCode(formData: FormData) {
   jar.set("maoadao_uid", user.id, { httpOnly: true, sameSite: "lax", secure: true, maxAge: 60 * 60 * 24 * 365, path: "/" });
   await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
   await track("recover_success", { method: "code" });
-  redirect("/my-cat");
+  redirect("/"); // 2.1 翻转:身份动作后回首页,由 hasYard 分流(不再假设有猫)
 }
 
 // ============ 邮箱验证(doc/20 §八 铁律)============
@@ -333,7 +333,7 @@ export async function loginWithPassword(formData: FormData): Promise<{ ok: boole
       await sendEmail(email, "猫啊岛:有新设备登录了你的账户", newDeviceLoginEmailHtml(ua)).catch(() => false);
     });
   }
-  redirect("/my-cat");
+  redirect("/"); // 2.1 翻转:身份动作后回首页,由 hasYard 分流(不再假设有猫)
 }
 
 /** 踢出其他设备:作废本账户除当前会话外的全部会话 */

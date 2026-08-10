@@ -1,4 +1,4 @@
-// D0 剧本配置(doc2.0/14 v2 冻结 + doc2.0/15 秒级分镜表)。
+// D0 剧本配置(doc2.0/14 v3 冻结 + doc2.0/15 秒级分镜表+§七 处置四表)。
 // 文案全部走这里,不散进组件——上线前整体过 04 语言防火墙(负面词典扫描)。
 // 结构对应五幕状态机:ENTER→ARRIVAL→ISLAND_ALIVE→QIZAI_LIFE→EMPTY_HOME→IDEA_RESONANCE→D1_GATE。
 // 红线(doc2.0/14 §五):永不宣布/无步骤条/七仔不看镜头/S6 轻触无奖励/禁 emoji/老用户不重放。
@@ -27,7 +27,7 @@ export interface D0Screen {
 }
 
 /** 心流版本:以后 D0 再调整改这里,分析不必再靠提交时间切数据 */
-export const FLOW_VERSION = "d0_v2";
+export const FLOW_VERSION = "d0_v3"; // v3:S8 三行换轨/S10 进院子(14 v3 冻结,2026-08-09 翻转)
 
 /** S6 轻触(D0 唯一交互)的配置:不点则 8s 后浮现下一步点按区(可被略过,不强制) */
 export const TOUCH = {
@@ -113,7 +113,8 @@ export const D0_SCREENS: D0Screen[] = [
     img: "/d0/s8.jpg",
     video: "/d0/s8-loop.mp4",
     // 体验承诺三行(现在时;结构 aha 锚)
-    lines: ["在这里，会有一只猫慢慢认识你。", "岛上每天都发生一点小事。", "你留下的东西，会被记得。"],
+    // 体验承诺三行(14 v3 终审冻结版:位置/条件权/不由你决定)
+    lines: ["这个院子，以后就是你的。", "摆下点什么，偶尔会有猫按自己的性子来看看。", "你不在的时候，这里也会发生一点事。"],
     ambient: "wind.mp3",
     enterEvent: "d0_act_4",
   },
@@ -129,8 +130,8 @@ export const D0_SCREENS: D0Screen[] = [
     act: "D1_GATE",
     img: "/d0/s10.jpg",
     video: "/d0/s10-loop.mp4",
-    lines: ["它往回走，经过空小屋时停了一下，朝门口那枚瓶盖看了一眼。", "然后回头看了看你，往码头去了。", "岛的另一头，有一只猫还不知道会遇见你。"],
-    button: "去见它",
+    lines: ["它往回走，经过小屋时停了一下，朝门口那枚瓶盖看了一眼。", "然后回头看了看你，往码头去了。", "它回码头去了。院门虚掩着——这里，以后就是你的地方。"],
+    button: "进院子",
     ambient: "sea-gulls.mp3",
     // 到达闸门 ≠ 完成:d0_complete 归「去见它」那一下(D0Player.finish),
     // 这里只记"走到了最后一屏"——两者之差就是站在门口没进去的人
@@ -138,8 +139,8 @@ export const D0_SCREENS: D0Screen[] = [
   },
 ];
 
-/** S1 右下唯一跳过口(doc2.0/15 状态机:ARRIVAL → D1_GATE 直通,记 d0_skip) */
-export const SKIP_LABEL = "直接去见它";
+/** S1 右下唯一跳过口(跳过的只是电影,不是身份建立——skip 同走 claimYard,14 §九②) */
+export const SKIP_LABEL = "直接去院子";
 
 /** 心流用图统一出口:开了国内 CDN 取 OSS 上的 WebP,否则走 Next 图片优化器
  *  (2026-08-05 起原图不再直出;2026-08-06 起优先国内直连,见 lib/assets.ts)。

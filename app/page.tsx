@@ -7,7 +7,7 @@ import { resolveMotion } from "@/lib/visual/motion";
 import { StayTrack } from "@/components/StayTrack";
 import { Track } from "@/components/Track";
 import { getViewerId } from "@/lib/identity";
-import { describeAffinity, getCatNameIndex, getCatState, getHomeShowcase, getIslandNewsWithCats, getViewerCat } from "@/lib/queries";
+import { getCatNameIndex, getHomeShowcase, getIslandNewsWithCats } from "@/lib/queries";
 import { beijingHour, currentSegment, nowLine } from "@/lib/moments";
 import { factSummary } from "@/lib/sim/engine";
 import { petLine } from "@/lib/handbook";
@@ -21,33 +21,28 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// 首页 = 猫啊岛的一扇窗(首页改版第一轮):先看到岛上此刻正在发生的事,再决定去接猫/找猫。
-// 不再是产品介绍页——"原来岛上现在真的有一只猫在生活"才是 Aha。
-// 新老分流:未领养 = 今日值班猫在码头等你;已领养 = 自己的猫此刻在干嘛。
+// 首页 = 猫啊岛的一扇窗(2.1 翻转,2026-08-09):先看到岛上此刻正在发生的事,再决定上岛。
+// 分流唯一主身份信号 = hasYard(14 §九 红线③:hasCat 转 backend-only,永不再参与路由)。
+// 新访客 = 值班猫在码头 + 上岛看看;岛民 = 回院子。
 
 // 值班猫候选:社交型 NPC(每天换一只,明天再来是另一只——活感的最便宜来源)
 const DUTY_POOL = ["npc-mianhua", "npc-juzi", "npc-bingfen", "npc-xiaomei", "npc-heidou", "npc-lingdang"];
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ ticket?: string }> }) {
   const viewerId = await getViewerId();
-  const [myCat, { world, npcs, totalCats, sampleDiary }, newsRaw, catIndex] = await Promise.all([
-    getViewerCat(viewerId),
+  const [myHome, { world, npcs, totalCats, sampleDiary }, newsRaw, catIndex] = await Promise.all([
+    viewerId
+      ? prisma.home.findUnique({ where: { userId: viewerId }, select: { yard: { select: { id: true } } } })
+      : Promise.resolve(null),
     getHomeShowcase(),
     getIslandNewsWithCats(6),
     getCatNameIndex(),
   ]);
-  const [todayEvents, myState, myRels] = await Promise.all([
-    prisma.event.findMany({
-      where: { day: world.day },
-      select: { id: true, catId: true, segment: true, type: true, outcome: true, data: true, targetId: true, isMain: true, contentValue: true },
-    }),
-    myCat ? getCatState(myCat.id) : Promise.resolve(null),
-    myCat
-      ? prisma.relationship.findMany({ where: { OR: [{ catAId: myCat.id }, { catBId: myCat.id }] } })
-      : Promise.resolve([]),
-  ]);
-  const affinityWith = new Map<string, number>();
-  for (const r of myRels) affinityWith.set(r.catAId === myCat?.id ? r.catBId : r.catAId, r.affinity);
+  const hasYard = Boolean(myHome?.yard);
+  const todayEvents = await prisma.event.findMany({
+    where: { day: world.day },
+    select: { id: true, catId: true, segment: true, type: true, outcome: true, data: true, targetId: true, isMain: true, contentValue: true },
+  });
 
   const news = newsRaw.filter((n) => !n.content.includes("向借钱")).slice(0, 3);
   const nameOf = new Map(catIndex.map((c) => [c.id, { name: c.name }]));
@@ -57,18 +52,16 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const raining = world.weather === "雨";
 
   // 船票上下文:带票来的人和陌生访客是两种人——首屏必须认出来。
-  // 分流优先级:自己的猫 > 船票 > 普通访客(已经是岛民的人不再被当受邀者招呼)
-  const ticketLook = myCat ? { state: "none" as const } : await lookupTicket((await searchParams).ticket);
+  // 分流优先级:岛民(hasYard) > 船票 > 普通访客(已经是岛民的人不再被当受邀者招呼)
+  const ticketLook = hasYard ? { state: "none" as const } : await lookupTicket((await searchParams).ticket);
   const invited = ticketLook.state === "valid" ? ticketLook : null;
   // 用过 ≠ 查无此票:对一张根本不存在的票说"已经有人用过了"是在编造事实(doc/04)
   const badTicket = ticketLook.state === "spent" ? "spent" : ticketLook.state === "unknown" ? "unknown" : null;
 
-  // 三个信号拆开(2026-08-06 拍板):来过 / 看完 D0 / 有猫。五态判定,四种表现——
-  // 看完与主动跳过在页面上是同一屏,只在埋点里分得开。
-  // 优先级:自己的猫 > 船票 > 看完/跳过 D0 > 来过 > 第一次。
-  // 船票高于 D0 态只管首屏怎么招呼;要不要重播 D0 由 /adopt 自己读 disposition 决定。
+  // 三个信号拆开(2026-08-06 拍板,2.1 换轨):来过 / 看完 D0 / 有院子。
+  // 优先级:岛民(hasYard) > 船票 > 看完/跳过 D0 > 来过 > 第一次。
   const { visited, d0 } = await readVisitState();
-  const landingState = myCat
+  const landingState = hasYard
     ? "RESIDENT"
     : invited
       ? "VALID_TICKET"
@@ -96,22 +89,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const dutyId = dutyPoolPresent.length > 0 ? pick(mulberry32(hashSeed(world.day, "dock-duty")), dutyPoolPresent) : npcs[0]?.id;
   const dutyCat = npcs.find((n) => n.id === dutyId) ?? null;
 
-  // ---- 已领养首屏:自己的猫此刻在干嘛(与 /my-cat 同一套事实) ----
-  const heroCat = myCat ?? dutyCat;
-  let heroNow: string | null = null;
-  if (myCat) {
-    const mine = todayEvents.filter((e) => e.catId === myCat.id);
-    const ev =
-      mine.find((e) => e.type === "arrival_home") ??
-      mine.find((e) => e.type === "arrival") ??
-      (seg ? (mine.find((e) => e.segment === seg && e.isMain) ?? mine.find((e) => e.segment === seg) ?? null) : null);
-    heroNow = nowLine(
-      myCat.name,
-      ev ? { type: ev.type, data: ev.data as Record<string, unknown>, targetName: ev.targetId ? nameOf.get(ev.targetId)?.name : null } : null,
-      hour,
-      myState?.location,
-    );
-  }
+  // 首屏主角恒为世界(值班猫)——岛民的院子内容在 /yard 自己的画面里
+  const heroCat = dutyCat;
 
   // ---- 岛上此刻:三件真实发生的事(NPC,当前时段;夜里改"今晚"过去时) ----
   const npcMainToday = todayEvents
@@ -140,7 +119,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           {
             name: "landing_view",
             props: {
-              hasCat: Boolean(myCat),
+              hasYard,
               seg: seg ?? "night",
               viewerState: landingState,
               d0Disposition: d0 ? d0.toUpperCase() : "NONE",
@@ -176,21 +155,22 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <PetCat
               id={heroCat.id}
               portraitUrl={heroCat.portraitUrl}
-              line={petLine(heroCat.id, world.day, myCat ? myState?.mood : undefined)}
+              line={petLine(heroCat.id, world.day)}
             />
           )}
         </LivingImage>
 
-        {myCat ? (
+        {hasYard ? (
           <>
-            {/* 已领养:自己的猫是首屏主角 */}
-            <h1 className="font-title mt-6 text-2xl font-bold leading-relaxed">{heroNow}</h1>
+            {/* 岛民:回院子(院子内容在 /yard 的画面里,首页不复述) */}
+            <h1 className="font-title mt-6 text-2xl font-bold leading-relaxed">
+              你在岛上的院子，门还虚掩着。
+            </h1>
             <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-              {night ? "今天的日记已经写好,压在门口的石头下。" : "它的一天正在进行——这会儿过去,正赶得上。"}
+              {night ? "夜里的院子也会有动静。" : "回去看看——说不定有谁来过。"}
             </p>
-            <Link href="/my-cat" className="stamp-btn mt-6 inline-flex items-center gap-2">
-              <CatAvatar id={myCat.id} size={26} portraitUrl={myCat.portraitUrl} crop="head" />
-              上岛找它
+            <Link href="/yard" className="stamp-btn mt-6 inline-block">
+              回院子
             </Link>
           </>
         ) : invited ? (
@@ -217,17 +197,16 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </>
         ) : seenD0 ? (
           <>
-            {/* 状态 3:走完(或主动跳过)D0,还没接猫。文案严格接 S10 的冻结事实——
-                七仔是自己回码头了,没有"送你到村口";也不说"属于你的猫"(关系还没建立) */}
+            {/* 状态 3:走完(或主动跳过)D0,还没进院子。文案接 S10 v3 冻结事实 */}
             <h1 className="font-title mt-6 text-2xl font-bold leading-relaxed">
               那只带路的猫，已经回码头去了。
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-              岛的另一头，那只猫还不知道会遇见你。
+              院门虚掩着——这里，以后就是你的地方。
             </p>
             <div className="mt-6 flex items-center justify-center gap-4">
               <Link href="/adopt" className="stamp-btn inline-block">
-                继续往岛里走
+                进院子
               </Link>
               <a href="#now" className="text-sm text-sea-deep hover:text-brick">
                 先看看岛上 ↓
@@ -264,7 +243,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               </p>
             )}
             <p className="mt-2 text-xs text-ink-faint">
-              已经有猫?<Link href="/login" className="text-sea-deep hover:text-brick">回到岛上</Link>
+              已经是岛民?<Link href="/login" className="text-sea-deep hover:text-brick">回到岛上</Link>
             </p>
           </>
         ) : (
@@ -275,18 +254,18 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 ? "这张船票，已经有人用过了。"
                 : badTicket === "unknown"
                   ? "这张船票，登记处查不到。"
-                  : "有一只猫，正在岛上等你。"}
+                  : "这座岛上的猫，各过各的日子。"}
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-ink-soft">
               {badTicket === "spent"
                 ? "一张票只带得动一个人。想上岛，找个岛上的人再要一张。"
                 : badTicket === "unknown"
                   ? "老章翻了两遍册子，没有这个号。找给你票的人再要一次。"
-                  : "它会记住你，也会在你离开后继续生活。"}
+                  : "岛上有个院子空着。住下的人，会慢慢认识它们。"}
             </p>
             <div className="mt-6 flex items-center justify-center gap-4">
               <Link href="/adopt" className="stamp-btn inline-block">
-                去码头接它
+                上岛看看
               </Link>
               <a href="#now" className="text-sm text-sea-deep hover:text-brick">
                 先看看岛上 ↓
@@ -339,12 +318,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 ev ? { type: ev.type, data: ev.data as Record<string, unknown>, targetName: ev.targetId ? nameOf.get(ev.targetId)?.name : null } : null,
                 hour,
               ).replace(/^现在/, "").replace(/^，/, "");
-              const aff = affinityWith.get(c.id);
-              const relLine = myCat
-                ? aff !== undefined
-                  ? `和${myCat.name}:${describeAffinity(aff)}`
-                  : `和${myCat.name}还没打过照面`
-                : (c.bio ?? "").split(/[。!！]/)[0];
+              const relLine = (c.bio ?? "").split(/[。!！]/)[0];
               return (
                 <Link key={c.id} href={`/cats/${c.id}`} className="neighbor-card group text-center">
                   <div className="mx-auto w-fit transition-transform duration-200 group-hover:-translate-y-1">
@@ -361,7 +335,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             })}
           </div>
           <p className="mt-1 text-center text-xs text-ink-faint">
-            {myCat ? "都是它的邻居——点开认识一下" : "他们都已经在岛上住下了，就等一位新邻居"}
+            {hasYard ? "都住在离你院子不远的地方" : "他们都已经在岛上住下了，就等一位新邻居"}
           </p>
         </div>
       )}
@@ -423,20 +397,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </div>
       )}
 
-      {/* 收尾才解释:看过真实内容后,这三句是总结不是教育 */}
-      {!myCat && (
+      {/* 收尾才解释:看过真实内容后,这三句是总结不是教育(2.1 换轨:院子承诺) */}
+      {!hasYard && (
         <div>
           <hr className="paper-rule" />
           <p className="mt-6 text-center text-xs tracking-widest text-ink-faint">你刚才看到的，就是它们的日常</p>
           <div className="mt-5 grid grid-cols-1 gap-6 text-center sm:grid-cols-3">
             {[
-              { img: "/scenes/reef.jpg", title: "它会自己生活", text: "钓鱼、赶集、串门——你不在的时候，它的一天照常发生。" },
-              { img: "/scenes/home.jpg", title: "它会记住你", text: "你留下的话它都记得，第二天会告诉你听没听、为什么。" },
-              { img: "/scenes/lighthouse.jpg", title: "它每天带回新的故事", text: "岛上有秘密，也有普通的日子。每天早上八点更新。" },
+              { img: "/scenes/reef.jpg", title: "它们会自己生活", text: "钓鱼、赶集、串门——你不在的时候，岛上的一天照常发生。" },
+              { img: "/scenes/yard.jpg", title: "你会有自己的院子", text: "摆下点什么，偶尔会有猫按自己的性子来看看。" },
+              { img: "/scenes/lighthouse.jpg", title: "你会慢慢认识这座岛", text: "谁常来、谁少见、谁只在夜里走动——都要靠你自己弄清。" },
             ].map((s) => (
               <div key={s.title} className="scene-float">
-                <div className="overflow-hidden rounded-lg border border-line">
-                  <SceneImage src={s.img} width={1099} height={628} sizes="(max-width: 640px) 100vw, 245px" className="w-full" />
+                {/* 统一裁成横幅比例:院子母场景是竖图,居中裁到空地段 */}
+                <div className="aspect-[1099/628] overflow-hidden rounded-lg border border-line">
+                  <SceneImage src={s.img} width={1099} height={628} sizes="(max-width: 640px) 100vw, 245px" className="h-full w-full object-cover" />
                 </div>
                 <h2 className="font-title mt-3 font-bold">{s.title}</h2>
                 <p className="mt-1 text-xs leading-relaxed text-ink-soft">{s.text}</p>
@@ -445,7 +420,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </div>
           <p className="mt-8 text-center">
             <Link href="/adopt" className="stamp-btn inline-block">
-              去码头接它
+              上岛看看
             </Link>
           </p>
         </div>
