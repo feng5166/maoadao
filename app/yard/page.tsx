@@ -14,7 +14,7 @@ import { prisma } from "@/lib/db";
 import { getViewerId } from "@/lib/identity";
 import { yardGameplayEnabled } from "@/lib/yard/flags";
 import { getYardView, type YardView } from "@/lib/yard/view";
-import { WINDOWS } from "@/lib/yard/config";
+import { SLOTS, WINDOWS } from "@/lib/yard/config";
 import { spotFor, zoneOfSlot } from "@/lib/yard/scene-render";
 import { SubmitButton } from "@/components/SubmitButton";
 import { YardBreeze } from "@/components/YardBreeze";
@@ -103,6 +103,10 @@ export default async function YardPage() {
     );
   }
 
+  // 还没开始生活的院子(14 §九②:三件东西可见地堆在门口,点选即摆)
+  const virgin =
+    view.slots.every((s) => !s.itemKey) && view.present.length === 0 && view.records.length === 0 && view.traceMarks.length === 0;
+
   // 留物与痕迹的热点（收下贴着东西本身）
   const collectables = [
     ...view.traceMarks.map((t) => ({
@@ -123,6 +127,11 @@ export default async function YardPage() {
           {segmentName(view.windowIndex)}，{view.weather}。小鱼干 ×{view.fish}
           {view.materials.map((m) => ` · ${m.name} ×${m.qty}`).join("")}
         </p>
+        {virgin && (
+          <p className="font-diary mt-2 text-sm">
+            带上岛的三样东西还堆在门口，一件都没找到位置。
+          </p>
+        )}
       </header>
 
       {/* 院子本身：默认只有生活；靠近对象才有动作；做完退回生活。
@@ -144,6 +153,31 @@ export default async function YardPage() {
             一次,很短;环境在动,不是系统在喊(创始人预案唯一授权形态) */}
         {view.slots.every((s) => !s.itemKey) && view.present.length === 0 && view.records.length === 0 && view.traceMarks.length === 0 && (
           <YardBreeze x={spotFor("clearing", "cat", "slot:clearing").x} y={spotFor("clearing", "cat", "slot:clearing").y} />
+        )}
+
+        {virgin && view.ownedIdle.length > 0 && (
+          <Hotspot x={0.59} y={0.878} label="门口的东西" resetKey={`pile:${view.ownedIdle.length}`}>
+            <p className="font-title text-xs tracking-widest opacity-60">门口</p>
+            <p className="font-diary mt-1.5">带来的东西堆在这儿。挑一样，给它找个位置。</p>
+            <div className="mt-2 space-y-2 border-t border-line pt-2">
+              {view.ownedIdle.map((o) => (
+                <div key={o.itemKey}>
+                  <p className="font-diary">{o.itemName}</p>
+                  <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs">
+                    {SLOTS.map((sl) => (
+                      <form key={sl.key} action={placeItemAction} className="inline">
+                        <input type="hidden" name="slotKey" value={sl.key} />
+                        <input type="hidden" name="itemKey" value={o.itemKey} />
+                        <SubmitButton pendingText="……" className="underline decoration-line underline-offset-4 hover:decoration-current">
+                          {sl.name}
+                        </SubmitButton>
+                      </form>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Hotspot>
         )}
 
         {view.slots.map((s) => (

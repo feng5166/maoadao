@@ -219,6 +219,26 @@ export async function renderYardScene(view: YardView, assets: SceneAssets): Prom
     layers.push({ input: png, left: Math.round(W * BOTTLECAP_SPOT.x - w / 2), top: Math.round(H * BOTTLECAP_SPOT.y - w / 2) });
   }
 
+  // 手边层（14 §九② 冻结:三件初始物件"可见地放在手边,还没找到位置"）——
+  // 院子还没有过任何生活时,带来的东西就堆在门口台阶边;首摆后这堆就散了
+  const virgin =
+    view.slots.every((s) => !s.itemKey) && view.present.length === 0 && view.records.length === 0 && view.traceMarks.length === 0;
+  if (virgin && view.ownedIdle.length > 0) {
+    const pileSpots: Spot[] = [{ x: 0.585, y: 0.868 }, { x: 0.645, y: 0.888 }, { x: 0.535, y: 0.895 }];
+    const pile = view.ownedIdle.slice(0, 3);
+    for (let i = 0; i < pile.length; i++) {
+      const sprite = await itemSprite(pile[i].itemKey);
+      if (!sprite) continue;
+      const targetH = Math.round(H * 0.052);
+      const scaled = await sharp(sprite).resize({ height: targetH }).png().toBuffer();
+      const meta = await sharp(scaled).metadata();
+      const cw = meta.width ?? targetH;
+      const spot = pileSpots[i];
+      layers.push({ input: groundShadow(cw), left: Math.round(W * spot.x - cw / 2), top: Math.round(H * spot.y - Math.round(cw * 0.08)) });
+      layers.push({ input: scaled, left: Math.round(W * spot.x - cw / 2), top: Math.round(H * spot.y - targetH) });
+    }
+  }
+
   // Object 层：语义节点 → 物件小图（缺资产先不画，槽位永不画发光框）
   const objectSpots = new Map<string, Spot>(); // slotKey → 落点（猫用物件时共享：睡在垫子上，不是垫子旁）
   for (const node of model.nodes.filter((n) => n.layer === "object")) {
