@@ -9,15 +9,16 @@ import { usePathname } from "next/navigation";
 export function HeaderCta({ hasYard }: { hasYard: boolean }) {
   const pathname = usePathname();
 
+  // 路径判定放最前:layout 跨软导航不重取,hasYard 可能是进门前的旧值——
+  // 站在院子里/码头上时,无论身份信号新旧都不出路牌(走查修正 2026-08-09)
+  if (pathname.startsWith("/yard") || pathname.startsWith("/adopt")) return null;
   if (hasYard) {
-    if (pathname.startsWith("/yard")) return null;
     return (
       <Link href="/yard" className="stamp-btn px-4 py-1.5 text-sm">
         回院子
       </Link>
     );
   }
-  if (pathname.startsWith("/adopt")) return null;
   return (
     <Link href="/adopt" className="stamp-btn px-4 py-1.5 text-sm">
       上岛看看

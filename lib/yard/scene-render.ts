@@ -161,6 +161,25 @@ function parcelMark(w: number): Buffer {
   );
 }
 
+/** 台阶上那枚瓶盖（14 §九② 冻结：claimYard 初始状态的一部分——七仔留下的,
+ *  你院子的第一个痕迹;纪念性、不可收、不占槽。每座院子都有(建院正典事实,
+ *  正典源=D0 S10 与建院本身,不走 CatVisit 节点);D0→Yard 连续感道具 */
+function bottlecap(w: number): Buffer {
+  const h = w;
+  const teeth = Array.from({ length: 10 }, (_, i) => {
+    const a = (i / 10) * Math.PI * 2;
+    return `${50 + Math.cos(a) * 46},${50 + Math.sin(a) * 46}`;
+  }).join(" ");
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" viewBox="0 0 100 100">` +
+      `<polygon points="${teeth}" fill="rgba(178,148,92,0.9)" stroke="rgba(96,76,48,0.75)" stroke-width="3"/>` +
+      `<circle cx="50" cy="50" r="34" fill="rgba(214,186,128,0.95)" stroke="rgba(96,76,48,0.5)" stroke-width="2.5"/>` +
+      `<circle cx="42" cy="42" r="7" fill="rgba(255,244,214,0.7)"/>` +
+      `</svg>`,
+  );
+}
+const BOTTLECAP_SPOT: Spot = { x: 0.47, y: 0.925 }; // 门口台阶上（Base LOCK 版手工标定）
+
 /** 毛色痕文本 → 绒毛颜色（世界语言里的可见特征，pool.furTraceOf 同源词面） */
 export function furTintOf(traceText: string): string {
   if (traceText.includes("黑")) return "rgba(58,54,52,1)";
@@ -192,6 +211,13 @@ export async function renderYardScene(view: YardView, assets: SceneAssets): Prom
   const model: YardPresentationModel = buildPresentation(view, YARD_VISUAL);
   const baseFile = path.join(process.cwd(), "public", "scenes", `${model.base.sceneKey}.jpg`);
   const layers: OverlayOptions[] = [];
+
+  // 建院纪念层：台阶上那枚瓶盖（14 §九②）——每座院子的第一个痕迹
+  {
+    const w = Math.round(W * 0.032);
+    const png = await sharp(bottlecap(w)).png().toBuffer();
+    layers.push({ input: png, left: Math.round(W * BOTTLECAP_SPOT.x - w / 2), top: Math.round(H * BOTTLECAP_SPOT.y - w / 2) });
+  }
 
   // Object 层：语义节点 → 物件小图（缺资产先不画，槽位永不画发光框）
   const objectSpots = new Map<string, Spot>(); // slotKey → 落点（猫用物件时共享：睡在垫子上，不是垫子旁）

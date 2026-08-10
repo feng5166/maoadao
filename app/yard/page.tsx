@@ -31,9 +31,11 @@ function segmentName(windowIndex: number): string {
 }
 
 /** 场景内热点（details：收起=只有生活，展开=最小动作词，完成即退回） */
-function Hotspot({ x, y, label, children }: { x: number; y: number; label: string; children: React.ReactNode }) {
+function Hotspot({ x, y, label, resetKey, children }: { x: number; y: number; label: string; resetKey?: string; children: React.ReactNode }) {
+  // resetKey=内容签名:动作完成(摆上/收起/收下)后状态变 → details 重挂即收起——
+  // "动作完成,UI 退回生活"(第二刀红线①;RSC diff 会保留 open 的 DOM 态,须重挂)
   return (
-    <details className="absolute" style={{ left: `${x * 100}%`, top: `${y * 100}%` }}>
+    <details key={resetKey} className="absolute" style={{ left: `${x * 100}%`, top: `${y * 100}%` }}>
       <summary aria-label={label} className="block h-12 w-12 -translate-x-1/2 -translate-y-1/2 cursor-pointer list-none rounded-full [&::-webkit-details-marker]:hidden" />
       <div className="note-slip absolute left-1/2 z-10 w-44 -translate-x-1/2 p-2 text-sm">{children}</div>
     </details>
@@ -45,7 +47,7 @@ function SlotHotspot({ view, slotKey }: { view: YardView; slotKey: string }) {
   if (!slot) return null;
   const spot = spotFor(zoneOfSlot(slotKey), "cat", `slot:${slotKey}`);
   return (
-    <Hotspot x={spot.x} y={spot.y} label={slot.slotName}>
+    <Hotspot x={spot.x} y={spot.y} label={slot.slotName} resetKey={`${slotKey}:${slot.itemKey ?? "empty"}`}>
       <p className="font-title">{slot.slotName}</p>
       {slot.itemName ? (
         <>
@@ -139,7 +141,7 @@ export default async function YardPage() {
         {collectables.map((c) => {
           const spot = spotFor(zoneOfSlot(c.slotKey), "trace", `visit:${c.visitId}`);
           return (
-            <Hotspot key={c.visitId} x={spot.x} y={spot.y} label="地上的东西">
+            <Hotspot key={c.visitId} x={spot.x} y={spot.y} label="地上的东西" resetKey={`${c.visitId}:${c.collected}`}>
               <p className="font-diary">{c.line}。</p>
               {c.left.leftText && !c.collected && (
                 <form action={collectVisitAction} className="mt-1">
