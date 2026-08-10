@@ -117,10 +117,20 @@ export default async function YardPage() {
         </p>
       </header>
 
-      {/* 院子本身：默认只有生活；靠近对象才有动作；做完退回生活 */}
+      {/* 院子本身：默认只有生活；靠近对象才有动作；做完退回生活。
+          ?v= 携带画面语义指纹（同语义同 URL——收下/摆放后 URL 变,浏览器缓存不吃变化） */}
       <div className="relative mt-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/yard/scene?v=${view.dayKey}-${view.windowIndex}`} alt="院子" className="w-full" />
+        <img
+          src={`/yard/scene?v=${[
+            view.dayKey, view.windowIndex,
+            view.slots.map((s) => s.itemKey ?? "-").join("."),
+            view.present.length,
+            collectables.filter((c) => !c.collected).length,
+          ].join("-")}`}
+          alt="院子"
+          className="w-full"
+        />
 
         {view.slots.map((s) => (
           <SlotHotspot key={s.slotKey} view={view} slotKey={s.slotKey} />

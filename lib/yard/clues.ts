@@ -106,7 +106,7 @@ export function buildTraceCandidates(obs: TraceObsLite[], corroborationDayKey: s
     if (fur === "没留下毛") continue; // 没有可指认特征的动静，先不添传闻
     const band = bandOf(o.windowIndex);
     const key = `${band}|${fur}`;
-    const g = groups.get(key) ?? { band, fur, visitIds: [], catCounts: new Map() };
+    const g = groups.get(key) ?? { band, fur, visitIds: [] as string[], catCounts: new Map<string, number>() };
     g.visitIds.push(o.visitId);
     g.catCounts.set(o.catId, (g.catCounts.get(o.catId) ?? 0) + 1);
     groups.set(key, g);
