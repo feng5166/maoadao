@@ -114,4 +114,15 @@ describe("验收④：结算与叙事共用同一事实源", () => {
       expect(src).not.toContain(banned);
     }
   });
+
+  it("21 §1.1 红线：per-yard CatVisit 路径不得 UPDATE 全局行程/位置状态（静态看守）", () => {
+    // CatVisit 是院子局部事实,不反写 Global Whereabouts;也不许出现"全局位置表"雏形
+    for (const file of ["lib/yard/settle.ts", "lib/yard/commands.ts", "lib/yard/view.ts", "lib/yard/claim.ts"]) {
+      // 只审代码路径,注释里引用规则名合法
+      const code = readFileSync(file, "utf8").replace(/\/\/[^\n]*/g, "").replace(/\/\*[\s\S]*?\*\//g, "");
+      expect(code, file).not.toMatch(/prisma\.cat(State)?\.(update|upsert|create)/);
+      expect(code, file).not.toMatch(/(tx|prisma)\.cat(State)?\.(update|upsert)/);
+      expect(code.toLowerCase(), file).not.toContain("whereabouts");
+    }
+  });
 });
