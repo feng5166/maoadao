@@ -14,6 +14,7 @@ import { prisma } from "../db";
 import { ITEMS, SLOTS, WINDOWS } from "./config";
 import type { LeftBehind } from "./settle";
 import { dayKeyOf, windowStart } from "./time";
+import { ensureWelcomeVisit } from "./welcome";
 
 export class YardError extends Error {}
 
@@ -60,7 +61,11 @@ export async function placeItem(userId: string, slotKey: string, itemKey: string
     });
     // 世界侧生效点：只算不存——快照按 placedAt 时间锚定，effectiveFrom 供 UI 表达
     return { effectiveFrom: nextWindowAfter(now) };
-  }, { timeout: 15000, maxWait: 10000 }); // 跨洋链路:连接等待也放宽(承 claim 口径)
+  }, { timeout: 15000, maxWait: 10000 }).then(async (r) => {
+    // 欢迎结算(16/14 §九②):首摆 3-5 分钟内第一位客人到;幂等,失败不挡摆放
+    await ensureWelcomeVisit(home.id, yard.id, itemKey, now).catch((e) => console.error("[welcome]", e instanceof Error ? e.message : e));
+    return r;
+  });
 }
 
 export async function removeItem(userId: string, slotKey: string, now = new Date()) {

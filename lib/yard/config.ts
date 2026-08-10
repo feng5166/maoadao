@@ -111,6 +111,16 @@ export const SIGNALS = {
   targetedAdjustDays: 3, // D5 v0 代理：翻册当日随后发生布置变更的天数（per-cat 条目面落地后升级为"同一目标"口径）
 };
 
+// ---------- 欢迎结算（16/14 §九②,20 唯一白名单事件;参数登记=22 账本镜像） ----------
+export const WELCOME = {
+  delayMinMin: 3, // 首摆后 3-5 分钟内,第一位客人到（首个 session 走完 摆→等→发现）
+  delayMaxMin: 5,
+  stayMinMin: 18,
+  stayMaxMin: 35,
+  fishMin: 1,
+  fishMax: 2,
+};
+
 // ---------- 结算运维参数 ----------
 export const SETTLEMENT = {
   // 单次页面加载最多补算多少个窗（长离线防一次补数百窗；最旧优先，余量下次加载续补——
