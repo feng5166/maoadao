@@ -6,7 +6,9 @@ import { useEffect, useRef } from "react";
 // 拇指(或鼠标)落在哪儿都能接着看——原先只有画面和旁白那两块能点,四周留白全是死区,
 // 够那行小字太费劲。让开三样:页头页脚(那儿的灯、海螺、备案号点了该干原来的事)、
 // 真正的交互件(按钮/输入/链接)、正在选的文字。
-const INTERACTIVE = "a,button,input,textarea,select,label,summary,video,[role=button],[contenteditable=true]";
+// video 不排除(2026-08-09 走查修正):D0 的视频是无控件装饰循环,占满画面——
+// 排除它会让"点一下画面,接着走"的提示变成谎话(点画面死区,只有下方文字区能点)
+const INTERACTIVE = "a,button,input,textarea,select,label,summary,[role=button],[contenteditable=true]";
 
 // 连点保护:热区变大之后,一次手抖的双击会整拍跳过去(故事拍是不可回退的)
 const COOLDOWN_MS = 350;
