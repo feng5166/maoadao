@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import { D0Player, D0_RESUME_KEY } from "./D0Player";
 import { FLOW_VERSION } from "@/lib/d0/script";
@@ -24,10 +24,12 @@ export function AdoptFlow({
 }) {
   const seenD0 = Boolean(d0Disposition) && !forceD0;
   const entering = useRef(false);
+  const [going, setGoing] = useState(false);
 
   const goYard = () => {
     if (entering.current) return;
     entering.current = true;
+    setGoing(true);
     track("d0_to_yard", { flowVersion: FLOW_VERSION });
     void enterYardAction(ticket ?? null);
   };
@@ -42,7 +44,10 @@ export function AdoptFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (seenD0) return null; // 正在去院子的路上
+  // 去院子的路上:安静的一句,不是加载动画(跨境往返有两三秒,不能黑屏干等)
+  if (going || seenD0) {
+    return <p className="py-28 text-center font-diary text-ink-soft">往院子去……</p>;
+  }
 
   return <D0Player ticket={ticket} replay={forceD0} onDone={goYard} />;
 }

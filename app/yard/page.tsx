@@ -16,6 +16,7 @@ import { yardGameplayEnabled } from "@/lib/yard/flags";
 import { getYardView, type YardView } from "@/lib/yard/view";
 import { WINDOWS } from "@/lib/yard/config";
 import { spotFor, zoneOfSlot } from "@/lib/yard/scene-render";
+import { SubmitButton } from "@/components/SubmitButton";
 import { buyItemAction, claimYardAction, collectVisitAction, placeItemAction, removeItemAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ function Hotspot({ x, y, label, resetKey, children }: { x: number; y: number; la
   return (
     <details key={resetKey} className="absolute" style={{ left: `${x * 100}%`, top: `${y * 100}%` }}>
       <summary aria-label={label} className="block h-12 w-12 -translate-x-1/2 -translate-y-1/2 cursor-pointer list-none rounded-full [&::-webkit-details-marker]:hidden" />
-      <div className="note-slip absolute left-1/2 z-10 w-44 -translate-x-1/2 p-2 text-sm">{children}</div>
+      <div className="note-slip absolute left-1/2 z-10 w-52 -translate-x-1/2 p-3 text-sm leading-relaxed">{children}</div>
     </details>
   );
 }
@@ -48,29 +49,33 @@ function SlotHotspot({ view, slotKey }: { view: YardView; slotKey: string }) {
   const spot = spotFor(zoneOfSlot(slotKey), "cat", `slot:${slotKey}`);
   return (
     <Hotspot x={spot.x} y={spot.y} label={slot.slotName} resetKey={`${slotKey}:${slot.itemKey ?? "empty"}`}>
-      <p className="font-title">{slot.slotName}</p>
+      <p className="font-title text-xs tracking-widest opacity-60">{slot.slotName}</p>
       {slot.itemName ? (
-        <>
-          <p className="font-diary mt-1">摆着{slot.itemName}{slot.placedThisWindow && "（刚摆下）"}。</p>
-          <form action={removeItemAction} className="mt-1">
+        <div className="mt-1.5 flex items-baseline justify-between gap-2">
+          <span className="font-diary">摆着{slot.itemName}{slot.placedThisWindow && "（刚摆下）"}。</span>
+          <form action={removeItemAction}>
             <input type="hidden" name="slotKey" value={slotKey} />
-            <button type="submit" className="underline underline-offset-4">收起</button>
+            <SubmitButton pendingText="……" className="underline underline-offset-4">收起</SubmitButton>
           </form>
-        </>
+        </div>
       ) : (
-        <p className="font-diary mt-1">这里空着。</p>
+        <p className="font-diary mt-1.5">这里空着。</p>
       )}
       {view.ownedIdle.length > 0 && (
-        <form action={placeItemAction} className="mt-2 flex items-center gap-2">
-          <input type="hidden" name="slotKey" value={slotKey} />
-          <select name="itemKey" className="border-b border-line bg-transparent py-0.5 outline-none" defaultValue="">
-            <option value="" disabled>挑一样摆上</option>
+        <div className="mt-2 border-t border-line pt-2">
+          <p className="text-xs opacity-60">{slot.itemName ? "换一样上来" : "手边的东西，点一样摆上"}</p>
+          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1.5">
             {view.ownedIdle.map((o) => (
-              <option key={o.itemKey} value={o.itemKey}>{o.itemName}{o.count > 1 ? ` ×${o.count}` : ""}</option>
+              <form key={o.itemKey} action={placeItemAction} className="inline">
+                <input type="hidden" name="slotKey" value={slotKey} />
+                <input type="hidden" name="itemKey" value={o.itemKey} />
+                <SubmitButton pendingText="……" className="font-diary underline decoration-line underline-offset-4 hover:decoration-current">
+                  {o.itemName}{o.count > 1 ? ` ×${o.count}` : ""}
+                </SubmitButton>
+              </form>
             ))}
-          </select>
-          <button type="submit" className="underline underline-offset-4">{slot.itemName ? "换上" : "摆上"}</button>
-        </form>
+          </div>
+        </div>
       )}
     </Hotspot>
   );
@@ -91,7 +96,7 @@ export default async function YardPage() {
         <form action={claimYardAction} className="note-slip mt-6 p-4">
           <label className="block text-sm" htmlFor="ticket">船票</label>
           <input id="ticket" name="ticket" required placeholder="BOAT-…" className="mt-2 w-full border-b border-line bg-transparent py-1 font-mono text-sm outline-none" />
-          <button type="submit" className="stamp-btn mt-4">进院子</button>
+          <SubmitButton pendingText="进院子……" className="stamp-btn mt-4">进院子</SubmitButton>
         </form>
       </main>
     );
@@ -147,7 +152,7 @@ export default async function YardPage() {
                 <form action={collectVisitAction} className="mt-1">
                   <input type="hidden" name="visitId" value={c.visitId} />
                   <span className="font-diary">留着{c.left.leftText}。</span>
-                  <button type="submit" className="pl-1 underline underline-offset-4">收下</button>
+                  <SubmitButton pendingText="……" className="pl-1 underline underline-offset-4">收下</SubmitButton>
                 </form>
               )}
             </Hotspot>
@@ -171,7 +176,7 @@ export default async function YardPage() {
                 {view.fish >= s.price ? (
                   <form action={buyItemAction} className="inline">
                     <input type="hidden" name="itemKey" value={s.itemKey} />
-                    <button type="submit" className="underline underline-offset-4">换回来</button>
+                    <SubmitButton pendingText="……" className="underline underline-offset-4">换回来</SubmitButton>
                   </form>
                 ) : (
                   <span className="opacity-40">还差{s.price - view.fish}条</span>
